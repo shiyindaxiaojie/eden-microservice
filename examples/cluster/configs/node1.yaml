@@ -1,0 +1,8 @@
+mode: "ap"
+node_id: "node-1"
+http_addr: ":8500"
+raft_addr: ""
+data_dir: "./data/node1"
+seeds:
+  - "http://127.0.0.1:8501"
+  - "http://127.0.0.1:8502"
