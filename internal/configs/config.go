@@ -13,10 +13,33 @@ type Config struct {
 	Mode     string   `mapstructure:"mode"` // "ap" or "cp"
 	HTTPAddr string   `mapstructure:"http_addr"`
 	RaftAddr string   `mapstructure:"raft_addr"`
-	DataDir  string   `mapstructure:"data_dir"`
-	Join     string   `mapstructure:"join"` // seed node to join
-	Seeds    []string `mapstructure:"seeds"` // seed node list for AP mode
+	DataDir    string   `mapstructure:"data_dir"`
+	Datacenter string   `mapstructure:"datacenter"`
+	Join       string   `mapstructure:"join"`  // seed node to join
+	Seeds      []string `mapstructure:"seeds"` // seed node list for AP mode
+	Auth       Auth     `mapstructure:"auth"`
 }
+
+type Auth struct {
+	JWT struct {
+		Enabled bool   `mapstructure:"enabled"`
+		Secret  string `mapstructure:"secret"`
+	} `mapstructure:"jwt"`
+	APIKey struct {
+		Enabled bool     `mapstructure:"enabled"`
+		Keys    []string `mapstructure:"keys"`
+	} `mapstructure:"api_key"`
+	Users []UserConfig `mapstructure:"users"`
+}
+
+type UserConfig struct {
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	Nickname string `mapstructure:"nickname"`
+	Remark   string `mapstructure:"remark"`
+	Role     string `mapstructure:"role"` // "admin", "viewer"
+}
+
 
 // LoadConfig loads configuration from yaml file and environment variables.
 func LoadConfig(path string) (*Config, error) {
@@ -35,6 +58,15 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("http_addr", ":8500")
 	viper.SetDefault("raft_addr", "127.0.0.1:7000")
 	viper.SetDefault("data_dir", "./data")
+	viper.SetDefault("datacenter", "dc1")
+	viper.SetDefault("auth.jwt.enabled", false)
+	viper.SetDefault("auth.jwt.secret", "eden-jwt-secret")
+	viper.SetDefault("auth.api_key.enabled", false)
+	viper.SetDefault("auth.api_key.keys", []string{"eden-default-key"})
+	// Default user if none provided
+	viper.SetDefault("auth.users", []map[string]string{
+		{"username": "admin", "password": "admin", "role": "admin"},
+	})
 	viper.SetDefault("join", "")
 
 	if err := viper.ReadInConfig(); err != nil {

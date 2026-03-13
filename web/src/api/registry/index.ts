@@ -32,6 +32,8 @@ export interface ClusterStats {
   health_rate: number
   is_leader: boolean
   leader_addr: string
+  memory_usage: number
+  mode: 'ap' | 'cp'
 }
 
 export interface RegistryEvent {

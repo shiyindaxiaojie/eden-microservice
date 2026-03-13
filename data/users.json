@@ -1,0 +1,20 @@
+{
+  "users": {
+    "admin": {
+      "username": "admin",
+      "password": "$2a$10$Ymej0fZCQOuxlmhB0nQiaeJazyGp8pbx2mXVw8ogMHDtaI8Evosvu",
+      "nickname": "管理员",
+      "remark": "最高权限",
+      "role": "admin",
+      "is_builtin": true
+    },
+    "guest": {
+      "username": "guest",
+      "password": "$2a$10$NnORr5BcNtJPcaftaRWPD.f2IqbnB6jCgtQod1yNe8.CPIBCwZiFa",
+      "nickname": "游客",
+      "remark": "只读权限",
+      "role": "viewer",
+      "is_builtin": true
+    }
+  }
+}

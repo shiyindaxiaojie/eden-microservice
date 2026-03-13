@@ -15,9 +15,14 @@ import (
 type CommandType string
 
 const (
-	CmdRegister   CommandType = "register"
-	CmdDeregister CommandType = "deregister"
-	CmdHeartbeat  CommandType = "heartbeat"
+	CmdRegister      CommandType = "register"
+	CmdDeregister    CommandType = "deregister"
+	CmdHeartbeat     CommandType = "heartbeat"
+	CmdAddAPIKey     CommandType = "add_api_key"
+	CmdDeleteAPIKey  CommandType = "delete_api_key"
+	CmdAddUser       CommandType = "add_user"
+	CmdDeleteUser    CommandType = "delete_user"
+	CmdSetMode       CommandType = "set_mode"
 )
 
 // Command represents a Raft log command.
@@ -26,6 +31,11 @@ type Command struct {
 	Instance    *model.Instance `json:"instance,omitempty"`
 	ServiceName string          `json:"service_name,omitempty"`
 	InstanceID  string          `json:"instance_id,omitempty"`
+	APIKey      *model.APIKey   `json:"api_key,omitempty"`
+	User        *model.User     `json:"user,omitempty"`
+	Key         string          `json:"key,omitempty"`      // for delete operations
+	Username    string          `json:"username,omitempty"` // for delete operations
+	Mode        string          `json:"mode,omitempty"`     // for set_mode
 }
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
@@ -56,14 +66,24 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 	case CmdHeartbeat:
 		ok := f.registry.Heartbeat(cmd.ServiceName, cmd.InstanceID)
 		return ok
+	case CmdAddAPIKey:
+		f.registry.AddAPIKey(cmd.APIKey)
+		return nil
+	case CmdDeleteAPIKey:
+		f.registry.DeleteAPIKey(cmd.Key)
+		return nil
+	case CmdAddUser:
+		f.registry.AddUser(cmd.User)
+		return nil
+	case CmdDeleteUser:
+		f.registry.DeleteUser(cmd.Username)
+		return nil
+	case CmdSetMode:
+		f.registry.SetMode(cmd.Mode)
+		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
 	}
-}
-
-// snapshotData is the serializable form of the registry for Raft snapshots.
-type snapshotData struct {
-	Services map[string][]*model.Instance `json:"services"`
 }
 
 // Snapshot returns a snapshot of the FSM state.
@@ -75,22 +95,21 @@ func (f *FSM) Snapshot() (hraft.FSMSnapshot, error) {
 // Restore restores the FSM from a snapshot.
 func (f *FSM) Restore(rc io.ReadCloser) error {
 	defer rc.Close()
-	var sd snapshotData
+	var sd store.SnapshotData
 	if err := json.NewDecoder(rc).Decode(&sd); err != nil {
 		return err
 	}
-	f.registry.Restore(sd.Services)
+	f.registry.Restore(&sd)
 	return nil
 }
 
 // fsmSnapshot implements raft.FSMSnapshot.
 type fsmSnapshot struct {
-	data map[string][]*model.Instance
+	data *store.SnapshotData
 }
 
 func (s *fsmSnapshot) Persist(sink hraft.SnapshotSink) error {
-	sd := snapshotData{Services: s.data}
-	b, err := json.Marshal(sd)
+	b, err := json.Marshal(s.data)
 	if err != nil {
 		sink.Cancel()
 		return err

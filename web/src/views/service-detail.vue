@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getServiceInstances, deregisterInstance, type Instance } from '../api/registry'
+import { useI18n } from '../utils/i18n'
 
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const serviceName = ref(route.params.name as string)
 const instances = ref<Instance[]>([])
 const loading = ref(true)
+const userRole = ref(localStorage.getItem('user_role') || 'admin')
+const canManage = computed(() => userRole.value === 'admin' || userRole.value === 'developer')
 
 async function fetchInstances() {
   loading.value = true
@@ -24,7 +28,7 @@ async function fetchInstances() {
 
 function formatTime(ts: string) {
   if (!ts) return '-'
-  return new Date(ts).toLocaleString('zh-CN')
+  return new Date(ts).toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US')
 }
 
 function formatMeta(meta: Record<string, string>) {
@@ -35,12 +39,16 @@ function formatMeta(meta: Record<string, string>) {
 async function handleDeregister(inst: Instance) {
   try {
     await ElMessageBox.confirm(
-      `确定要注销实例 ${inst.host}:${inst.port}？此操作不可撤销。`,
-      '注销确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+      t.value.detail.deregisterConfirm.replace('{addr}', `${inst.host}:${inst.port}`),
+      t.value.detail.deregisterTitle,
+      { 
+        confirmButtonText: t.value.common.confirm, 
+        cancelButtonText: t.value.common.cancel, 
+        type: 'warning' 
+      }
     )
     await deregisterInstance(inst.service_name, inst.id)
-    ElMessage.success('实例已注销')
+    ElMessage.success(t.value.detail.deregisterSuccess)
     fetchInstances()
   } catch {
     // cancelled
@@ -55,45 +63,45 @@ onMounted(fetchInstances)
     <!-- Back -->
     <div style="margin-bottom: 20px;">
       <el-button text @click="router.push('/services')" style="color: var(--text-secondary)">
-        <el-icon><ArrowLeft /></el-icon> 返回服务列表
+        <el-icon><ArrowLeft /></el-icon> {{ t.detail.backToServices }}
       </el-button>
       <el-button text @click="fetchInstances" style="color: var(--text-secondary); margin-left: 8px;">
-        <el-icon><Refresh /></el-icon> 刷新
+        <el-icon><Refresh /></el-icon> {{ t.common.refresh }}
       </el-button>
     </div>
 
     <h3 class="section-title" style="margin-bottom: 16px;">
-      服务: <span style="color: var(--accent-blue);">{{ serviceName }}</span>
-      <el-tag size="small" effect="dark" style="margin-left: 12px;">{{ instances.length }} 个实例</el-tag>
+      {{ t.services.service }}: <span style="color: var(--accent-blue);">{{ serviceName }}</span>
+      <el-tag size="small" effect="dark" style="margin-left: 12px;">{{ instances.length }} {{ t.detail.instanceCount }}</el-tag>
     </h3>
 
     <div class="glass-table-wrapper">
       <el-table :data="instances" v-loading="loading" height="100%" style="width: 100%">
-        <el-table-column label="实例 ID" prop="id" min-width="160" />
-        <el-table-column label="地址" min-width="160">
+        <el-table-column :label="t.detail.instanceId" prop="id" min-width="160" />
+        <el-table-column :label="t.common.address" min-width="160">
           <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
         </el-table-column>
-        <el-table-column label="状态" min-width="100">
+        <el-table-column :label="t.detail.healthStatus" min-width="100">
           <template #default="{ row }">
-            <el-tag v-if="row.status === 'passing'" type="success" size="small" effect="dark">健康</el-tag>
-            <el-tag v-else type="danger" size="small" effect="dark">不健康</el-tag>
+            <el-tag v-if="row.status === 'passing'" type="success" size="small" effect="dark">{{ t.services.healthy }}</el-tag>
+            <el-tag v-else type="danger" size="small" effect="dark">{{ t.common.warning }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="权重" prop="weight" min-width="80" />
-        <el-table-column label="元数据" min-width="200">
+        <el-table-column :label="t.common.weight" prop="weight" min-width="80" />
+        <el-table-column :label="t.common.metadata" min-width="200">
           <template #default="{ row }">
             <span style="font-size: 12px; color: var(--text-muted);">{{ formatMeta(row.metadata) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="最后心跳" min-width="180">
+        <el-table-column :label="t.detail.lastHeartbeat" min-width="180">
           <template #default="{ row }">{{ formatTime(row.last_heartbeat) }}</template>
         </el-table-column>
-        <el-table-column label="注册时间" min-width="180">
+        <el-table-column :label="t.detail.registeredAt" min-width="180">
           <template #default="{ row }">{{ formatTime(row.registered_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column v-if="canManage" :label="t.common.actions" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button type="danger" size="small" text @click="handleDeregister(row)">注销</el-button>
+            <el-button type="danger" size="small" text @click="handleDeregister(row)">{{ t.detail.deregister }}</el-button>
           </template>
         </el-table-column>
       </el-table>

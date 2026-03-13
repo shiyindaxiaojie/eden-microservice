@@ -1,7 +1,11 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -15,16 +19,295 @@ type Registry struct {
 	events    []*model.Event
 	eventSeq  uint64
 	maxEvents int
+
+	// Metadata for Auth/RBAC and Settings
+	apiKeys  map[string]*model.APIKey
+	users    map[string]*model.User
+	mode     string // "ap" or "cp"
+	dataPath string
 }
 
-// NewRegistry creates a new empty registry.
-func NewRegistry() *Registry {
-	return &Registry{
+// NewRegistry creates a new registry with persistence path.
+func NewRegistry(dataPath string) *Registry {
+	r := &Registry{
 		services:  make(map[string]map[string]*model.Instance),
 		events:    make([]*model.Event, 0, 1024),
-		maxEvents: 10000,
+		maxEvents: 1000,
+		apiKeys:   make(map[string]*model.APIKey),
+		users:     make(map[string]*model.User),
+		mode:      "ap", // default
+		dataPath:  dataPath,
+	}
+	r.loadAll()
+	return r
+}
+
+func (r *Registry) loadAll() {
+	if r.dataPath == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.loadServicesLocked()
+	r.loadEventsLocked()
+	r.loadUsersLocked()
+	r.loadSettingsLocked()
+}
+
+func (r *Registry) loadServicesLocked() {
+	file := filepath.Join(r.dataPath, "services.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	var services map[string][]*model.Instance
+	if err := json.Unmarshal(data, &services); err == nil {
+		r.services = make(map[string]map[string]*model.Instance, len(services))
+		for name, list := range services {
+			m := make(map[string]*model.Instance, len(list))
+			for _, inst := range list {
+				m[inst.ID] = inst
+			}
+			r.services[name] = m
+		}
 	}
 }
+
+func (r *Registry) loadEventsLocked() {
+	file := filepath.Join(r.dataPath, "events.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	if err := json.Unmarshal(data, &r.events); err == nil {
+		for _, evt := range r.events {
+			if evt.ID > r.eventSeq {
+				r.eventSeq = evt.ID
+			}
+		}
+	}
+}
+
+func (r *Registry) loadUsersLocked() {
+	file := filepath.Join(r.dataPath, "users.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	var meta struct {
+		Users map[string]*model.User `json:"users"`
+	}
+	if err := json.Unmarshal(data, &meta); err == nil {
+		if meta.Users != nil {
+			r.users = meta.Users
+		}
+	}
+}
+
+// SeedBuiltInUsers injects users from the config into the registry.
+// If a user doesn't exist, it adds them. It also updates IsBuiltIn flags.
+func (r *Registry) SeedBuiltInUsers(users []model.User) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	changed := false
+	for _, u := range users {
+		u := u // copy
+		u.IsBuiltIn = true
+		
+		existing, ok := r.users[u.Username]
+		if !ok {
+			r.users[u.Username] = &u
+			changed = true
+		} else {
+			// Update existing built-in users if password or role changed
+			if existing.Password != u.Password || existing.Role != u.Role || !existing.IsBuiltIn {
+				existing.Password = u.Password
+				existing.Role = u.Role
+				existing.IsBuiltIn = true
+				changed = true
+			}
+		}
+	}
+	
+	if changed {
+		r.saveUsersLocked()
+	}
+}
+
+func (r *Registry) loadSettingsLocked() {
+	file := filepath.Join(r.dataPath, "settings.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	var meta struct {
+		APIKeys map[string]*model.APIKey `json:"api_keys"`
+		Mode    string                   `json:"mode"`
+	}
+	if err := json.Unmarshal(data, &meta); err == nil {
+		if meta.APIKeys != nil {
+			r.apiKeys = meta.APIKeys
+		}
+		if meta.Mode != "" {
+			r.mode = meta.Mode
+		}
+	}
+}
+
+func (r *Registry) saveServicesLocked() {
+	if r.dataPath == "" {
+		return
+	}
+	os.MkdirAll(r.dataPath, 0755)
+	file := filepath.Join(r.dataPath, "services.json")
+	// Convert to slice format for snapshot-like json
+	services := make(map[string][]*model.Instance, len(r.services))
+	for name, m := range r.services {
+		list := make([]*model.Instance, 0, len(m))
+		for _, inst := range m {
+			list = append(list, inst)
+		}
+		services[name] = list
+	}
+	data, _ := json.MarshalIndent(services, "", "  ")
+	_ = os.WriteFile(file, data, 0644)
+}
+
+func (r *Registry) saveEventsLocked() {
+	if r.dataPath == "" {
+		return
+	}
+	os.MkdirAll(r.dataPath, 0755)
+	file := filepath.Join(r.dataPath, "events.json")
+	data, _ := json.MarshalIndent(r.events, "", "  ")
+	_ = os.WriteFile(file, data, 0644)
+}
+
+func (r *Registry) saveUsersLocked() {
+	if r.dataPath == "" {
+		return
+	}
+	os.MkdirAll(r.dataPath, 0755)
+	file := filepath.Join(r.dataPath, "users.json")
+	meta := struct {
+		Users map[string]*model.User `json:"users"`
+	}{
+		Users: r.users,
+	}
+	data, _ := json.MarshalIndent(meta, "", "  ")
+	_ = os.WriteFile(file, data, 0644)
+}
+
+func (r *Registry) saveSettingsLocked() {
+	if r.dataPath == "" {
+		return
+	}
+	os.MkdirAll(r.dataPath, 0755)
+	file := filepath.Join(r.dataPath, "settings.json")
+	meta := struct {
+		APIKeys map[string]*model.APIKey `json:"api_keys"`
+		Mode    string                   `json:"mode"`
+	}{
+		APIKeys: r.apiKeys,
+		Mode:    r.mode,
+	}
+	data, _ := json.MarshalIndent(meta, "", "  ")
+	_ = os.WriteFile(file, data, 0644)
+}
+
+// ---------- API Key Management ----------
+
+func (r *Registry) AddAPIKey(key *model.APIKey) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.apiKeys[key.Key] = key
+	r.saveSettingsLocked()
+}
+
+func (r *Registry) DeleteAPIKey(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.apiKeys, key)
+	r.saveSettingsLocked()
+}
+
+func (r *Registry) ListAPIKeys() []*model.APIKey {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	now := time.Now().Unix()
+	keys := make([]*model.APIKey, 0, len(r.apiKeys))
+	for _, k := range r.apiKeys {
+		cp := *k
+		if cp.ExpiresAt > 0 && now > cp.ExpiresAt {
+			cp.Status = "expired"
+		} else {
+			cp.Status = "active"
+		}
+		keys = append(keys, &cp)
+	}
+	return keys
+}
+
+func (r *Registry) GetAPIKey(key string) (*model.APIKey, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	k, ok := r.apiKeys[key]
+	return k, ok
+}
+
+// ---------- User Management ----------
+
+func (r *Registry) AddUser(u *model.User) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.users[u.Username] = u
+	r.saveUsersLocked()
+}
+
+func (r *Registry) DeleteUser(username string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.users, username)
+	r.saveUsersLocked()
+}
+
+func (r *Registry) ListUsers() []*model.User {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	users := make([]*model.User, 0, len(r.users))
+	for _, u := range r.users {
+		users = append(users, u)
+	}
+	return users
+}
+
+func (r *Registry) GetUser(username string) (*model.User, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	u, ok := r.users[username]
+	return u, ok
+}
+
+// ---------- Mode Management ----------
+
+func (r *Registry) SetMode(mode string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if mode != "ap" && mode != "cp" {
+		return
+	}
+	r.mode = mode
+	r.saveSettingsLocked()
+}
+
+func (r *Registry) GetMode() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.mode
+}
+
 
 // Register adds or updates an instance.
 func (r *Registry) Register(inst *model.Instance) {
@@ -45,6 +328,7 @@ func (r *Registry) Register(inst *model.Instance) {
 	}
 
 	r.services[inst.ServiceName][inst.ID] = inst
+	r.saveServicesLocked()
 	r.appendEventLocked("register", inst.ServiceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "instance registered")
 }
 
@@ -69,6 +353,7 @@ func (r *Registry) Deregister(serviceName, instanceID string) bool {
 		delete(r.services, serviceName)
 	}
 
+	r.saveServicesLocked()
 	r.appendEventLocked("deregister", serviceName, addr, "instance deregistered")
 	return true
 }
@@ -163,6 +448,7 @@ type Stats struct {
 	InstanceCount int     `json:"instance_count"`
 	HealthyCount  int     `json:"healthy_count"`
 	HealthRate    float64 `json:"health_rate"`
+	MemoryUsage   uint64  `json:"memory_usage"`
 }
 
 func (r *Registry) Stats() Stats {
@@ -182,6 +468,10 @@ func (r *Registry) Stats() Stats {
 	if s.InstanceCount > 0 {
 		s.HealthRate = float64(s.HealthyCount) / float64(s.InstanceCount) * 100
 	}
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	s.MemoryUsage = ms.Alloc
 	return s
 }
 
@@ -232,36 +522,81 @@ func (r *Registry) GetEvents(limit int) []*model.Event {
 	return result
 }
 
-// Snapshot returns a deep copy of all instances (used by Raft snapshots).
-func (r *Registry) Snapshot() map[string][]*model.Instance {
+// SnapshotData represents the full state for Raft/Persistence.
+type SnapshotData struct {
+	Services map[string][]*model.Instance `json:"services"`
+	APIKeys  map[string]*model.APIKey     `json:"api_keys"`
+	Users    map[string]*model.User       `json:"users"`
+	Mode     string                       `json:"mode"`
+}
+
+// Snapshot returns a deep copy of all data.
+func (r *Registry) Snapshot() *SnapshotData {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	snap := make(map[string][]*model.Instance, len(r.services))
+	snap := &SnapshotData{
+		Services: make(map[string][]*model.Instance, len(r.services)),
+		APIKeys:  make(map[string]*model.APIKey, len(r.apiKeys)),
+		Users:    make(map[string]*model.User, len(r.users)),
+		Mode:     r.mode,
+	}
+
 	for name, instances := range r.services {
 		list := make([]*model.Instance, 0, len(instances))
 		for _, inst := range instances {
 			cp := *inst
 			list = append(list, &cp)
 		}
-		snap[name] = list
+		snap.Services[name] = list
 	}
+
+	for k, v := range r.apiKeys {
+		cp := *v
+		snap.APIKeys[k] = &cp
+	}
+	for k, v := range r.users {
+		cp := *v
+		snap.Users[k] = &cp
+	}
+
 	return snap
 }
 
 // Restore replaces the registry from snapshot data.
-func (r *Registry) Restore(data map[string][]*model.Instance) {
+func (r *Registry) Restore(data *SnapshotData) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.services = make(map[string]map[string]*model.Instance, len(data))
-	for name, instances := range data {
+	r.services = make(map[string]map[string]*model.Instance, len(data.Services))
+	for name, instances := range data.Services {
 		m := make(map[string]*model.Instance, len(instances))
 		for _, inst := range instances {
 			m[inst.ID] = inst
 		}
 		r.services[name] = m
 	}
+
+	if data.APIKeys != nil {
+		r.apiKeys = data.APIKeys
+	} else {
+		r.apiKeys = make(map[string]*model.APIKey)
+	}
+
+	if data.Users != nil {
+		r.users = data.Users
+	} else {
+		r.users = make(map[string]*model.User)
+	}
+
+	if data.Mode != "" {
+		r.mode = data.Mode
+	}
+
+	r.saveServicesLocked()
+	r.saveEventsLocked()
+	r.saveUsersLocked()
+	r.saveSettingsLocked()
 }
 
 func (r *Registry) appendEventLocked(eventType, service, instance, message string) {
@@ -279,4 +614,5 @@ func (r *Registry) appendEventLocked(eventType, service, instance, message strin
 	if len(r.events) > r.maxEvents {
 		r.events = r.events[len(r.events)-r.maxEvents:]
 	}
+	r.saveEventsLocked()
 }

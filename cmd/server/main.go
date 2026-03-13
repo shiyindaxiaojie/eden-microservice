@@ -15,8 +15,11 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/configs"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/handler"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/health"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	raftpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/raft"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -85,45 +88,72 @@ func main() {
 	log.Printf("  Data Dir  : %s", cfg.DataDir)
 
 	// 2. Create Registry Store
-	registry := store.NewRegistry()
+	registry := store.NewRegistry(cfg.DataDir)
 
-	// 3. Setup Consistency Mode
+	// Seed built-in users from config
+	var builtInUsers []model.User
+	for _, uc := range cfg.Auth.Users {
+		// Frontend will send SHA256 of the password
+		sha256Pwd := utils.HashSHA256(uc.Password)
+		// We store it as bcrypt(SHA256(password))
+		hashed, err := bcrypt.GenerateFromPassword([]byte(sha256Pwd), bcrypt.DefaultCost)
+		finalPwd := sha256Pwd
+		if err == nil {
+			finalPwd = string(hashed)
+		}
+		
+		builtInUsers = append(builtInUsers, model.User{
+			Username: uc.Username,
+			Password: finalPwd,
+			Nickname: uc.Nickname,
+			Remark:   uc.Remark,
+			Role:     uc.Role,
+		})
+	}
+	registry.SeedBuiltInUsers(builtInUsers)
+
+	// 3. Setup Consistency Mode (Initialize BOTH for online switching)
 	var cpNode *raftpkg.Node
 	var apNode *ap.Node
 
-	if cfg.Mode == "cp" {
-		log.Printf("  Raft Addr : %s", cfg.RaftAddr)
-		log.Printf("  Bootstrap : %v", *bootstrap)
-		raftCfg := raftpkg.Config{
-			NodeID:    cfg.NodeID,
-			BindAddr:  cfg.RaftAddr,
-			DataDir:   cfg.DataDir,
-			Bootstrap: *bootstrap,
-		}
-		cpNode, err = raftpkg.NewNode(raftCfg, registry)
-		if err != nil {
-			log.Fatalf("Failed to start Raft node: %v", err)
-		}
-
-		if cfg.Join != "" {
-			go func() {
-				time.Sleep(3 * time.Second)
-				joinURL := fmt.Sprintf("%s/v1/cluster/join", cfg.Join)
-				body := fmt.Sprintf(`{"node_id":"%s","address":"%s"}`, cfg.NodeID, cfg.RaftAddr)
-				resp, err := http.Post(joinURL, "application/json", strings.NewReader(body))
-				if err != nil {
-					log.Printf("Failed to join CP cluster: %v", err)
-					return
-				}
-				resp.Body.Close()
-				log.Printf("Joined CP cluster via %s", cfg.Join)
-			}()
-		}
-	} else {
-		// AP mode
-		log.Printf("  AP Seeds  : %v", cfg.Seeds)
-		apNode = ap.NewNode(cfg, registry)
+	// Always setup CP (Raft)
+	log.Printf("  Raft Addr : %s", cfg.RaftAddr)
+	log.Printf("  Bootstrap : %v", *bootstrap)
+	raftCfg := raftpkg.Config{
+		NodeID:    cfg.NodeID,
+		BindAddr:  cfg.RaftAddr,
+		DataDir:   cfg.DataDir,
+		Bootstrap: *bootstrap,
 	}
+	cpNode, err = raftpkg.NewNode(raftCfg, registry)
+	if err != nil {
+		log.Fatalf("Failed to start Raft node: %v", err)
+	}
+
+	if cfg.Join != "" {
+		go func() {
+			time.Sleep(3 * time.Second)
+			joinURL := fmt.Sprintf("%s/v1/cluster/join", cfg.Join)
+			body := fmt.Sprintf(`{"node_id":"%s","address":"%s"}`, cfg.NodeID, cfg.RaftAddr)
+			resp, err := http.Post(joinURL, "application/json", strings.NewReader(body))
+			if err != nil {
+				log.Printf("Failed to join CP cluster: %v", err)
+				return
+			}
+			resp.Body.Close()
+			log.Printf("Joined CP cluster via %s", cfg.Join)
+		}()
+	}
+
+	// Always setup AP (Gossip/HTTP)
+	log.Printf("  AP Seeds  : %v", cfg.Seeds)
+	apNode = ap.NewNode(cfg, registry)
+
+	// Set initial mode from config if metadata doesn't have it
+	if registry.GetMode() == "" {
+		registry.SetMode(cfg.Mode)
+	}
+	log.Printf("  Active Mode: %s", strings.ToUpper(registry.GetMode()))
 
 	// 4. Start Health Checker
 	checker := health.NewChecker(registry, *ttl, 10*time.Second)

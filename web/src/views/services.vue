@@ -2,7 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getServices, type ServiceSummary } from '../api/registry'
+import { useI18n } from '../utils/i18n'
 
+const { t } = useI18n()
 const router = useRouter()
 const services = ref<ServiceSummary[]>([])
 const search = ref('')
@@ -49,7 +51,7 @@ onMounted(fetchServices)
     <div class="search-bar">
       <el-input
         v-model="search"
-        placeholder="搜索服务名称..."
+        :placeholder="t.services.searchPlaceholder"
         size="large"
         clearable
         prefix-icon="Search"
@@ -59,7 +61,7 @@ onMounted(fetchServices)
     <!-- Empty -->
     <div v-if="!loading && filtered.length === 0" class="empty-state">
       <el-icon><Grid /></el-icon>
-      <p>暂无服务注册</p>
+      <p>{{ t.services.noServices }}</p>
     </div>
 
     <!-- Service Cards -->
@@ -73,8 +75,8 @@ onMounted(fetchServices)
       >
         <div class="svc-name">{{ svc.name }}</div>
         <div class="svc-stats">
-          <span><el-icon><Monitor /></el-icon> {{ svc.instance_count }} 实例</span>
-          <span><el-icon><CircleCheck /></el-icon> {{ svc.healthy_count }} 健康</span>
+          <span><el-icon><Monitor /></el-icon> {{ svc.instance_count }} {{ t.services.instances }}</span>
+          <span><el-icon><CircleCheck /></el-icon> {{ svc.healthy_count }} {{ t.services.healthy }}</span>
         </div>
         <div class="health-bar">
           <div

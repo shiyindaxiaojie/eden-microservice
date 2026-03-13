@@ -17,6 +17,7 @@ type Instance struct {
 	Host        string            `json:"host"`
 	Port        int               `json:"port"`
 	Weight      int               `json:"weight"`
+	Datacenter  string            `json:"dc"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 	Status      HealthStatus      `json:"status"`
 	LastHeartbeat time.Time       `json:"last_heartbeat"`
