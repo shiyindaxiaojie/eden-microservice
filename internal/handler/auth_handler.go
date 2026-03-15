@@ -2,12 +2,15 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type contextKey string
@@ -229,4 +232,50 @@ func (h *Handler) GenerateToken(userID, role string) (string, error) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(h.config.Auth.JWT.Secret))
+}
+
+// handleLogin authenticates a user and returns a JWT token.
+func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	log.Printf("[Auth] Login attempt: %s", req.Username)
+
+	// Look up user in dynamic registry storage or built-in seeded configs
+	if user, ok := h.registry.GetUser(req.Username); ok {
+		// The client sends SHA256(password). We compare this hash against our stored hash.
+		// Our stored hash is either:
+		// 1. bcrypt(SHA256(password)) -> Handled by CompareHashAndPassword
+		// 2. SHA256(password)         -> Handled by direct comparison (legacy/startup seed)
+		err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+		if err == nil || user.Password == req.Password {
+			token, err := h.GenerateToken(user.Username, user.Role)
+			if err != nil {
+				httpError(w, http.StatusInternalServerError, "failed to generate token")
+				return
+			}
+			nickname := user.Nickname
+			if nickname == "" {
+				nickname = user.Username
+			}
+			jsonOK(w, map[string]string{
+				"token":    token,
+				"role":     user.Role,
+				"nickname": nickname,
+			})
+			return
+		}
+	}
+
+	httpError(w, http.StatusUnauthorized, "invalid credentials")
 }

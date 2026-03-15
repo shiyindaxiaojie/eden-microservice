@@ -570,3 +570,50 @@ html, body, #app {
   background: var(--accent-blue);
 }
 
+
+/* IP Address Styling - Premium Version */
+.ip-address {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: rgba(59, 130, 246, 0.06);
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 0.85em;
+  color: var(--accent-blue);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.ip-address:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.15);
+}
+
+.ip-address::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--accent-blue);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-blue);
+  display: inline-block;
+}
+
+[data-theme="light"] .ip-address {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.1);
+}
+
+[data-theme="light"] .ip-address::before {
+  background: #3b82f6;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+}

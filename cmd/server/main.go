@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/ap"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/configs"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
+	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/handler"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/health"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
-	raftpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/raft"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/pkg/crypto"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -38,10 +38,10 @@ func main() {
 	flag.Parse()
 
 	// 1. Load configuration
-	cfg, err := configs.LoadConfig(*cfgFile)
+	cfg, err := config.LoadConfig(*cfgFile)
 	if err != nil {
 		log.Printf("Failed to load config file: %v. Using defaults/env/flags.", err)
-		cfg = &configs.Config{
+		cfg = &config.Config{
 			NodeID:   "node-1",
 			Mode:     "ap",
 			HTTPAddr: ":8500",
@@ -94,7 +94,7 @@ func main() {
 	var builtInUsers []model.User
 	for _, uc := range cfg.Auth.Users {
 		// Frontend will send SHA256 of the password
-		sha256Pwd := utils.HashSHA256(uc.Password)
+		sha256Pwd := crypto.HashSHA256(uc.Password)
 		// We store it as bcrypt(SHA256(password))
 		hashed, err := bcrypt.GenerateFromPassword([]byte(sha256Pwd), bcrypt.DefaultCost)
 		finalPwd := sha256Pwd
@@ -113,19 +113,19 @@ func main() {
 	registry.SeedBuiltInUsers(builtInUsers)
 
 	// 3. Setup Consistency Mode (Initialize BOTH for online switching)
-	var cpNode *raftpkg.Node
+	var cpNode *cp.Node
 	var apNode *ap.Node
 
 	// Always setup CP (Raft)
 	log.Printf("  Raft Addr : %s", cfg.RaftAddr)
 	log.Printf("  Bootstrap : %v", *bootstrap)
-	raftCfg := raftpkg.Config{
+	raftCfg := cp.Config{
 		NodeID:    cfg.NodeID,
 		BindAddr:  cfg.RaftAddr,
 		DataDir:   cfg.DataDir,
 		Bootstrap: *bootstrap,
 	}
-	cpNode, err = raftpkg.NewNode(raftCfg, registry)
+	cpNode, err = cp.NewNode(raftCfg, registry)
 	if err != nil {
 		log.Fatalf("Failed to start Raft node: %v", err)
 	}

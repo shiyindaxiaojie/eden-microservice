@@ -99,7 +99,7 @@ onMounted(fetchUsers)
         <el-table-column :label="t.rbac.actions" width="150" align="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="handleShowEdit(row)">{{ t.common.edit }}</el-button>
-            <el-button type="danger" link @click="deleteUser(row.username)">{{ t.common.delete }}</el-button>
+            <el-button v-if="!row.is_builtin" type="danger" link @click="deleteUser(row.username)">{{ t.common.delete }}</el-button>
           </template>
         </el-table-column>
       </el-table>

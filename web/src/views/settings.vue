@@ -81,14 +81,20 @@ async function fetchMode() {
 }
 
 async function handleModeChange(targetMode: string) {
+  if (currentMode.value === targetMode) return
+  
   modeLoading.value = true
   try {
+    // API expecting mode as a query parameter
     await api.post(`/v1/settings/mode?mode=${targetMode}`)
     ElMessage.success(t.value.settings.switchSuccess)
-    fetchMode()
+    currentMode.value = targetMode // Optimistic update
+    // No need to fetchMode immediately as we just set it, 
+    // but good to keep for verification if desired
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Switch failed')
-    fetchMode() 
+    const errorMsg = e.response?.data?.error || 'Switch failed'
+    ElMessage.error(errorMsg)
+    fetchMode() // Revert to server state on error
   } finally {
     modeLoading.value = false
   }
@@ -189,7 +195,7 @@ onMounted(() => {
               </el-tag>
             </div>
             
-            <div class="mode-options">
+            <div class="mode-options" v-loading="modeLoading">
               <div 
                 class="mode-opt" 
                 :class="{ active: currentMode === 'ap' }"

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { getClusterMembers, getClusterStats, type ClusterMember, type ClusterStats } from '../api/registry'
 import { useI18n } from '../utils/i18n'
-import { Connection, SuccessFilled, Position, Cpu, Guide } from '@element-plus/icons-vue'
+import { Guide } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const members = ref<ClusterMember[]>([])
@@ -98,7 +98,7 @@ onMounted(fetchCluster)
         <el-table-column :label="t.cluster.nodeId" prop="id" min-width="200" />
         <el-table-column :label="t.cluster.raftAddr" prop="address" min-width="200">
           <template #default="{ row }">
-            <code class="addr-code">{{ row.address }}</code>
+            <span class="ip-address">{{ row.address }}</span>
           </template>
         </el-table-column>
         <el-table-column :label="t.cluster.role" min-width="120">
@@ -189,13 +189,6 @@ onMounted(fetchCluster)
   color: var(--accent-green);
 }
 
-.addr-code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  background: var(--bg-glass);
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-}
 
 .glass-card {
   backdrop-filter: blur(20px);

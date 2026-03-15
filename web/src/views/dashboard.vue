@@ -74,7 +74,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Leader Info -->
     <div v-if="stats" style="margin-bottom: 24px; font-size: 13px; color: var(--text-secondary);">
       <el-tag v-if="stats.is_leader" type="success" size="small" effect="dark">{{ t.dashboard.isLeader }}</el-tag>
       <el-tag v-else type="info" size="small" effect="dark">{{ t.dashboard.leaderAddr }}: {{ stats.leader_addr || t.common.unknown }}</el-tag>

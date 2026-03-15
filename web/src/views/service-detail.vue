@@ -79,7 +79,7 @@ onMounted(fetchInstances)
       <el-table :data="instances" v-loading="loading" height="100%" style="width: 100%">
         <el-table-column :label="t.detail.instanceId" prop="id" min-width="160" />
         <el-table-column :label="t.common.address" min-width="160">
-          <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
+          <template #default="{ row }"><span class="ip-address">{{ row.host }}:{{ row.port }}</span></template>
         </el-table-column>
         <el-table-column :label="t.detail.healthStatus" min-width="100">
           <template #default="{ row }">

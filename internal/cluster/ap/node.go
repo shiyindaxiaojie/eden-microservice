@@ -8,21 +8,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/configs"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
 )
 
 // Node represents an AP mode node that broadcasts changes to seed peers.
 type Node struct {
-	Config   *configs.Config
+	Config   *config.Config
 	Registry *store.Registry
 	client   *http.Client
 	peerMap  sync.Map // string (addr) -> bool
 }
 
 // NewNode creates an AP mode node.
-func NewNode(cfg *configs.Config, registry *store.Registry) *Node {
+func NewNode(cfg *config.Config, registry *store.Registry) *Node {
 	n := &Node{
 		Config:   cfg,
 		Registry: registry,

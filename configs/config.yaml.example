@@ -1,0 +1,44 @@
+# Eden Go Registry Configuration Example
+# Copy this file to config.yaml and modify as needed.
+
+# Unique identifier for this node
+node_id: "node-1"
+
+# Consistency mode: "ap" (eventual consistency) or "cp" (strong consistency via Raft)
+mode: "ap"
+
+# HTTP API listen address
+http_addr: ":8500"
+
+# Raft transport bind address (used in CP mode)
+raft_addr: "127.0.0.1:7000"
+
+# Directory for persistent data (services, events, users, settings, raft logs)
+data_dir: "./data"
+
+# Datacenter name (used for service instance tagging)
+datacenter: "dc1"
+
+# Address of an existing leader node to join in CP mode
+join: ""
+
+# Seed nodes for AP mode broadcasting
+seeds: []
+  # - "http://127.0.0.1:8501"
+  # - "http://127.0.0.1:8502"
+
+# Authentication & Authorization
+auth:
+  jwt:
+    enabled: false
+    secret: "<your-jwt-secret>"
+  api_key:
+    enabled: false
+    keys:
+      - "<your-api-key>"
+  users:
+    - username: "admin"
+      password: "<your-password>"
+      nickname: "Administrator"
+      remark: "Built-in admin user"
+      role: "admin"

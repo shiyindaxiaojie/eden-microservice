@@ -2,11 +2,19 @@
   "users": {
     "admin": {
       "username": "admin",
-      "password": "$2a$10$Ymej0fZCQOuxlmhB0nQiaeJazyGp8pbx2mXVw8ogMHDtaI8Evosvu",
+      "password": "$2a$10$AYvpYXbHxun5UERvWHPGF.E6v4P9RWLaXGjgYFVqMwP1DCJaMOMhW",
       "nickname": "管理员",
       "remark": "最高权限",
       "role": "admin",
       "is_builtin": true
+    },
+    "dev": {
+      "username": "dev",
+      "password": "$2a$10$FSIbQqQoX0hb7kQuk.BiX.PXozxPa2hZ0nMHa1lSM9og4Wx/IThjy",
+      "nickname": "开发者",
+      "remark": "开发人员",
+      "role": "developer",
+      "is_builtin": false
     },
     "guest": {
       "username": "guest",
