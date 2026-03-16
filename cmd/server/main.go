@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
 	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
@@ -40,7 +40,7 @@ func main() {
 	// 1. Load configuration
 	cfg, err := config.LoadConfig(*cfgFile)
 	if err != nil {
-		log.Printf("Failed to load config file: %v. Using defaults/env/flags.", err)
+		logger.Warn("Failed to load config file: %v. Using defaults/env/flags.", err)
 		cfg = &config.Config{
 			NodeID:   "node-1",
 			Mode:     "ap",
@@ -78,14 +78,15 @@ func main() {
 		cfg.Mode = "ap"
 	}
 
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	log.Println("========================================")
-	log.Println("    Eden Go Registry")
-	log.Println("========================================")
-	log.Printf("  Node ID   : %s", cfg.NodeID)
-	log.Printf("  Mode      : %s", strings.ToUpper(cfg.Mode))
-	log.Printf("  HTTP Addr : %s", cfg.HTTPAddr)
-	log.Printf("  Data Dir  : %s", cfg.DataDir)
+	// Initialize Logger from config
+	logger.Init(convertToLoggerConfig(cfg.Log))
+	logger.Info("========================================")
+	logger.Info("    Eden Go Registry")
+	logger.Info("========================================")
+	logger.Info("  Node ID   : %s", cfg.NodeID)
+	logger.Info("  Mode      : %s", strings.ToUpper(cfg.Mode))
+	logger.Info("  HTTP Addr : %s", cfg.HTTPAddr)
+	logger.Info("  Data Dir  : %s", cfg.DataDir)
 
 	// 2. Create Registry Store
 	registry := store.NewRegistry(cfg.DataDir)
@@ -117,8 +118,8 @@ func main() {
 	var apNode *ap.Node
 
 	// Always setup CP (Raft)
-	log.Printf("  Raft Addr : %s", cfg.RaftAddr)
-	log.Printf("  Bootstrap : %v", *bootstrap)
+	logger.Info("  Raft Addr : %s", cfg.RaftAddr)
+	logger.Info("  Bootstrap : %v", *bootstrap)
 	raftCfg := cp.Config{
 		NodeID:    cfg.NodeID,
 		BindAddr:  cfg.RaftAddr,
@@ -127,7 +128,7 @@ func main() {
 	}
 	cpNode, err = cp.NewNode(raftCfg, registry)
 	if err != nil {
-		log.Fatalf("Failed to start Raft node: %v", err)
+		logger.Fatal("Failed to start Raft node: %v", err)
 	}
 
 	if cfg.Join != "" {
@@ -137,23 +138,28 @@ func main() {
 			body := fmt.Sprintf(`{"node_id":"%s","address":"%s"}`, cfg.NodeID, cfg.RaftAddr)
 			resp, err := http.Post(joinURL, "application/json", strings.NewReader(body))
 			if err != nil {
-				log.Printf("Failed to join CP cluster: %v", err)
+				logger.Error("Failed to join CP cluster: %v", err)
 				return
 			}
 			resp.Body.Close()
-			log.Printf("Joined CP cluster via %s", cfg.Join)
+			logger.Info("Joined CP cluster via %s", cfg.Join)
 		}()
 	}
 
 	// Always setup AP (Gossip/HTTP)
-	log.Printf("  AP Seeds  : %v", cfg.Seeds)
+	logger.Info("  AP Seeds  : %v", cfg.Seeds)
 	apNode = ap.NewNode(cfg, registry)
+	// If registry already has seeds, sync them
+	if len(registry.GetSeeds()) == 0 && len(cfg.Seeds) > 0 {
+		registry.SetSeeds(cfg.Seeds)
+	}
+	apNode.SyncSeeds()
 
 	// Set initial mode from config if metadata doesn't have it
 	if registry.GetMode() == "" {
 		registry.SetMode(cfg.Mode)
 	}
-	log.Printf("  Active Mode: %s", strings.ToUpper(registry.GetMode()))
+	logger.Info("  Active Mode: %s", strings.ToUpper(registry.GetMode()))
 
 	// 4. Start Health Checker
 	checker := health.NewChecker(registry, *ttl, 10*time.Second)
@@ -167,9 +173,9 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("HTTP API server listening on %s", cfg.HTTPAddr)
+		logger.Info("HTTP API server listening on %s", cfg.HTTPAddr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", err)
+			logger.Fatal("HTTP server error: %v", err)
 		}
 	}()
 
@@ -177,13 +183,70 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
-	log.Printf("Received signal %v, shutting down...", sig)
+	logger.Info("Received signal %v, shutting down...", sig)
 
 	checker.Stop()
 	if cfg.Mode == "cp" && cpNode != nil {
 		if err := cpNode.Raft.Shutdown().Error(); err != nil {
-			log.Printf("Raft shutdown error: %v", err)
+			logger.Error("Raft shutdown error: %v", err)
 		}
 	}
-	log.Println("Eden Go Registry stopped.")
+	logger.Info("Eden Go Registry stopped.")
+}
+
+func convertToLoggerConfig(lc config.LogConfig) logger.Configuration {
+	var appenders []logger.AppenderConfig
+	for _, a := range lc.Appenders {
+		var rollover *logger.RolloverConfig
+		if a.Rollover != nil {
+			rollover = &logger.RolloverConfig{
+				MaxFile:   a.Rollover.MaxFile,
+				Retention: a.Rollover.Retention,
+			}
+		}
+		appenders = append(appenders, logger.AppenderConfig{
+			Name:        a.Name,
+			Type:        a.Type,
+			Level:       a.Level,
+			Pattern:     a.Pattern,
+			FileName:    a.FileName,
+			FilePattern: a.FilePattern,
+			Filter:      a.Filter,
+			Async:       a.Async,
+			Rollover:    rollover,
+		})
+	}
+
+	var policies *logger.PoliciesConfig
+	if lc.Policies != nil {
+		policies = &logger.PoliciesConfig{}
+		if lc.Policies.CronTriggeringPolicy != nil {
+			policies.CronTriggeringPolicy = &logger.CronPolicyConfig{
+				Schedule: lc.Policies.CronTriggeringPolicy.Schedule,
+			}
+		}
+		if lc.Policies.SizeBasedTriggeringPolicy != nil {
+			policies.SizeBasedTriggeringPolicy = &logger.SizePolicyConfig{
+				Size: lc.Policies.SizeBasedTriggeringPolicy.Size,
+			}
+		}
+	}
+
+	var rollover *logger.RolloverConfig
+	if lc.Rollover != nil {
+		rollover = &logger.RolloverConfig{
+			MaxFile:   lc.Rollover.MaxFile,
+			Retention: lc.Rollover.Retention,
+		}
+	}
+
+	return logger.Configuration{
+		Level:           lc.Level,
+		Format:          lc.Format,
+		Pattern:         lc.Pattern,
+		Policies:        policies,
+		Rollover:        rollover,
+		IncludeLocation: lc.IncludeLocation,
+		Appenders:       appenders,
+	}
 }

@@ -22,9 +22,11 @@ type Registry struct {
 
 	// Metadata for Auth/RBAC and Settings
 	apiKeys  map[string]*model.APIKey
-	users    map[string]*model.User
-	mode     string // "ap" or "cp"
-	dataPath string
+	users       map[string]*model.User
+	mode        string   // "ap" or "cp"
+	environment string   // "standalone" or "cluster"
+	seeds       []string // for AP mode
+	dataPath    string
 }
 
 // NewRegistry creates a new registry with persistence path.
@@ -34,9 +36,11 @@ func NewRegistry(dataPath string) *Registry {
 		events:    make([]*model.Event, 0, 1024),
 		maxEvents: 1000,
 		apiKeys:   make(map[string]*model.APIKey),
-		users:     make(map[string]*model.User),
-		mode:      "ap", // default
-		dataPath:  dataPath,
+		users:       make(map[string]*model.User),
+		mode:        "ap",         // default
+		environment: "standalone", // default
+		seeds:       []string{},
+		dataPath:    dataPath,
 	}
 	r.loadAll()
 	return r
@@ -53,6 +57,7 @@ func (r *Registry) loadAll() {
 	r.loadEventsLocked()
 	r.loadUsersLocked()
 	r.loadSettingsLocked()
+	r.loadNodesLocked()
 }
 
 func (r *Registry) loadServicesLocked() {
@@ -143,8 +148,9 @@ func (r *Registry) loadSettingsLocked() {
 		return
 	}
 	var meta struct {
-		APIKeys map[string]*model.APIKey `json:"api_keys"`
-		Mode    string                   `json:"mode"`
+		APIKeys     map[string]*model.APIKey `json:"api_keys"`
+		Mode        string                   `json:"mode"`
+		Environment string                   `json:"environment"`
 	}
 	if err := json.Unmarshal(data, &meta); err == nil {
 		if meta.APIKeys != nil {
@@ -152,6 +158,27 @@ func (r *Registry) loadSettingsLocked() {
 		}
 		if meta.Mode != "" {
 			r.mode = meta.Mode
+		}
+		if meta.Environment != "" {
+			r.environment = meta.Environment
+		} else {
+			r.environment = "standalone"
+		}
+	}
+}
+
+func (r *Registry) loadNodesLocked() {
+	file := filepath.Join(r.dataPath, "nodes.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	var meta struct {
+		Seeds []string `json:"seeds"`
+	}
+	if err := json.Unmarshal(data, &meta); err == nil {
+		if meta.Seeds != nil {
+			r.seeds = meta.Seeds
 		}
 	}
 }
@@ -207,11 +234,28 @@ func (r *Registry) saveSettingsLocked() {
 	os.MkdirAll(r.dataPath, 0755)
 	file := filepath.Join(r.dataPath, "settings.json")
 	meta := struct {
-		APIKeys map[string]*model.APIKey `json:"api_keys"`
-		Mode    string                   `json:"mode"`
+		APIKeys     map[string]*model.APIKey `json:"api_keys"`
+		Mode        string                   `json:"mode"`
+		Environment string                   `json:"environment"`
 	}{
-		APIKeys: r.apiKeys,
-		Mode:    r.mode,
+		APIKeys:     r.apiKeys,
+		Mode:        r.mode,
+		Environment: r.environment,
+	}
+	data, _ := json.MarshalIndent(meta, "", "  ")
+	_ = os.WriteFile(file, data, 0644)
+}
+
+func (r *Registry) saveNodesLocked() {
+	if r.dataPath == "" {
+		return
+	}
+	os.MkdirAll(r.dataPath, 0755)
+	file := filepath.Join(r.dataPath, "nodes.json")
+	meta := struct {
+		Seeds []string `json:"seeds"`
+	}{
+		Seeds: r.seeds,
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(file, data, 0644)
@@ -307,6 +351,36 @@ func (r *Registry) GetMode() string {
 	defer r.mu.RUnlock()
 	return r.mode
 }
+
+func (r *Registry) SetEnvironment(env string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if env != "standalone" && env != "cluster" {
+		return
+	}
+	r.environment = env
+	r.saveSettingsLocked()
+}
+
+func (r *Registry) GetEnvironment() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.environment
+}
+
+func (r *Registry) SetSeeds(seeds []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.seeds = seeds
+	r.saveNodesLocked()
+}
+
+func (r *Registry) GetSeeds() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.seeds
+}
+
 
 
 // Register adds or updates an instance.
@@ -525,9 +599,11 @@ func (r *Registry) GetEvents(limit int) []*model.Event {
 // SnapshotData represents the full state for Raft/Persistence.
 type SnapshotData struct {
 	Services map[string][]*model.Instance `json:"services"`
-	APIKeys  map[string]*model.APIKey     `json:"api_keys"`
-	Users    map[string]*model.User       `json:"users"`
-	Mode     string                       `json:"mode"`
+	APIKeys     map[string]*model.APIKey     `json:"api_keys"`
+	Users       map[string]*model.User       `json:"users"`
+	Mode        string                       `json:"mode"`
+	Environment string                       `json:"environment"`
+	Seeds       []string                     `json:"seeds"`
 }
 
 // Snapshot returns a deep copy of all data.
@@ -536,10 +612,12 @@ func (r *Registry) Snapshot() *SnapshotData {
 	defer r.mu.RUnlock()
 
 	snap := &SnapshotData{
-		Services: make(map[string][]*model.Instance, len(r.services)),
-		APIKeys:  make(map[string]*model.APIKey, len(r.apiKeys)),
-		Users:    make(map[string]*model.User, len(r.users)),
-		Mode:     r.mode,
+		Services:    make(map[string][]*model.Instance, len(r.services)),
+		APIKeys:     make(map[string]*model.APIKey, len(r.apiKeys)),
+		Users:       make(map[string]*model.User, len(r.users)),
+		Mode:        r.mode,
+		Environment: r.environment,
+		Seeds:       r.seeds,
 	}
 
 	for name, instances := range r.services {
@@ -592,11 +670,18 @@ func (r *Registry) Restore(data *SnapshotData) {
 	if data.Mode != "" {
 		r.mode = data.Mode
 	}
+	if data.Environment != "" {
+		r.environment = data.Environment
+	}
+	if data.Seeds != nil {
+		r.seeds = data.Seeds
+	}
 
 	r.saveServicesLocked()
 	r.saveEventsLocked()
 	r.saveUsersLocked()
 	r.saveSettingsLocked()
+	r.saveNodesLocked()
 }
 
 func (r *Registry) appendEventLocked(eventType, service, instance, message string) {

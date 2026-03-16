@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/shiyindaxiaojie/eden-go-logger"
 )
 
 // Instance model
@@ -23,13 +24,14 @@ type Instance struct {
 const registryURL = "http://127.0.0.1:8500"
 
 func main() {
-	log.Println("=== Service Registration and Discovery Example ===")
+	logger.NewBuilder().AddConsole().Init()
+	logger.Info("=== Service Registration and Discovery Example ===")
 
 	serviceName := "demo-service"
 	instanceID := "demo-service-node-1"
 
 	// 1. Register Service
-	log.Printf("1. Registering instance '%s' for service '%s'...", instanceID, serviceName)
+	logger.Info("1. Registering instance '%s' for service '%s'...", instanceID, serviceName)
 	inst := Instance{
 		ID:          instanceID,
 		ServiceName: serviceName,
@@ -41,49 +43,49 @@ func main() {
 
 	err := registerService(inst)
 	if err != nil {
-		log.Fatalf("Registration failed: %v", err)
+		logger.Fatal("Registration failed: %v", err)
 	}
-	log.Println("Registration successful!")
+	logger.Info("Registration successful!")
 
 	// 2. Discover Service
 	time.Sleep(1 * time.Second)
-	log.Printf("\n2. Discovering service '%s'...", serviceName)
+	logger.Info("\n2. Discovering service '%s'...", serviceName)
 	instances, err := discoverService(serviceName)
 	if err != nil {
-		log.Fatalf("Discovery failed: %v", err)
+		logger.Fatal("Discovery failed: %v", err)
 	}
 	
-	log.Printf("Found %d healthy instances:", len(instances))
+	logger.Info("Found %d healthy instances:", len(instances))
 	for i, instance := range instances {
-		log.Printf("  [%d] ID: %s, Address: %s:%d, Weight: %d", i+1, instance.ID, instance.Host, instance.Port, instance.Weight)
+		logger.Info("  [%d] ID: %s, Address: %s:%d, Weight: %d", i+1, instance.ID, instance.Host, instance.Port, instance.Weight)
 	}
 
 	// 3. Heartbeat
 	time.Sleep(1 * time.Second)
-	log.Printf("\n3. Sending heartbeat for '%s'...", instanceID)
+	logger.Info("\n3. Sending heartbeat for '%s'...", instanceID)
 	err = heartbeatService(serviceName, instanceID)
 	if err != nil {
-		log.Printf("Heartbeat failed: %v", err)
+		logger.Info("Heartbeat failed: %v", err)
 	} else {
-		log.Println("Heartbeat successful!")
+		logger.Info("Heartbeat successful!")
 	}
 
 	// 4. Deregister Service
 	time.Sleep(2 * time.Second)
-	log.Printf("\n4. Deregistering instance '%s'...", instanceID)
+	logger.Info("\n4. Deregistering instance '%s'...", instanceID)
 	err = deregisterService(serviceName, instanceID)
 	if err != nil {
-		log.Fatalf("Deregistration failed: %v", err)
+		logger.Fatal("Deregistration failed: %v", err)
 	}
-	log.Println("Deregistration successful!")
+	logger.Info("Deregistration successful!")
 
 	// 5. Verify Deregistration
 	time.Sleep(1 * time.Second)
-	log.Printf("\n5. Verifying deregistration...")
+	logger.Info("\n5. Verifying deregistration...")
 	instancesAfter, _ := discoverService(serviceName)
-	log.Printf("Found %d instances for '%s' after deregistration.", len(instancesAfter), serviceName)
+	logger.Info("Found %d instances for '%s' after deregistration.", len(instancesAfter), serviceName)
 
-	log.Println("\n=== Example Completed successfully! ===")
+	logger.Info("\n=== Example Completed successfully! ===")
 }
 
 func registerService(inst Instance) error {

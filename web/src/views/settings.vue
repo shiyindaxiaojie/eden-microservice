@@ -33,6 +33,7 @@ const credentialView = ref('grid') // 'grid' | 'list'
 const keys = ref<any[]>([])
 const loading = ref(false)
 const modeLoading = ref(false)
+const currentEnv = ref('standalone')
 const currentMode = ref('ap')
 const showDialog = ref(false)
 const keyForm = ref({ key: '', description: '', expDays: 0 })
@@ -74,9 +75,35 @@ async function fetchKeys() {
 async function fetchMode() {
   try {
     const res = await api.get('/v1/settings/mode')
-    currentMode.value = res.data.mode
+    currentMode.value = res.data.mode || 'ap'
+    currentEnv.value = res.data.env || 'standalone'
   } catch (e) {
     console.error('fetch mode failed', e)
+  }
+}
+
+async function handleEnvChange(targetEnv: string) {
+  if (currentEnv.value === targetEnv) return
+  
+  modeLoading.value = true
+  try {
+    await api.post(`/v1/settings/mode?env=${targetEnv}`)
+    const label = targetEnv === 'cluster' ? t.value.settings.clusterTitle : t.value.settings.singleTitle
+    ElMessage.success(t.value.settings.envSwitchSuccess.replace('{env}', label))
+    
+    // Force local state update immediately to avoid UI lag/flicker
+    currentEnv.value = targetEnv
+    
+    // Wait a bit before fetching to allow backend state to propagate
+    setTimeout(() => {
+      fetchMode()
+    }, 1000)
+  } catch (e: any) {
+    const errorMsg = e.response?.data?.error || 'Switch failed'
+    ElMessage.error(errorMsg)
+    fetchMode()
+  } finally {
+    modeLoading.value = false
   }
 }
 
@@ -85,16 +112,17 @@ async function handleModeChange(targetMode: string) {
   
   modeLoading.value = true
   try {
-    // API expecting mode as a query parameter
     await api.post(`/v1/settings/mode?mode=${targetMode}`)
-    ElMessage.success(t.value.settings.switchSuccess)
-    currentMode.value = targetMode // Optimistic update
-    // No need to fetchMode immediately as we just set it, 
-    // but good to keep for verification if desired
+    ElMessage.success(t.value.settings.modeSwitchSuccess.replace('{mode}', targetMode.toUpperCase()))
+    
+    currentMode.value = targetMode
+    setTimeout(() => {
+      fetchMode()
+    }, 1000)
   } catch (e: any) {
     const errorMsg = e.response?.data?.error || 'Switch failed'
     ElMessage.error(errorMsg)
-    fetchMode() // Revert to server state on error
+    fetchMode()
   } finally {
     modeLoading.value = false
   }
@@ -186,35 +214,106 @@ onMounted(() => {
         
         <div class="tab-content grid-layout">
           <!-- Consistency Mode -->
-          <div class="settings-section glass-card">
+          <div class="settings-section glass-card mode-section">
             <div class="section-header">
               <el-icon><Operation /></el-icon>
-              <h4>{{ t.settings.consistency }}</h4>
-              <el-tag :type="currentMode === 'cp' ? 'primary' : 'success'" size="small" effect="dark">
-                {{ currentMode.toUpperCase() }}
-              </el-tag>
+              <h4>运行模式</h4>
+              <div class="status-tags">
+                <div class="status-indicator">
+                  <span class="indicator-dot" :class="currentEnv === 'cluster' ? 'active' : 'idle'"></span>
+                  <span class="dot-label">当前运行:</span>
+                  <el-tag :type="currentEnv === 'cluster' ? 'primary' : 'info'" size="small" effect="dark">
+                    {{ currentEnv === 'cluster' ? '集群模式' : '单机模式' }}
+                  </el-tag>
+                </div>
+                <!-- Only show protocol if in cluster mode -->
+                <div class="status-indicator" v-if="currentEnv === 'cluster'">
+                  <span class="dot-label">一致性:</span>
+                  <el-tag :class="currentMode === 'cp' ? 'tag-cp' : 'tag-ap'" size="small" effect="dark">
+                    {{ currentMode.toUpperCase() }}
+                  </el-tag>
+                </div>
+              </div>
             </div>
             
-            <div class="mode-options" v-loading="modeLoading">
-              <div 
-                class="mode-opt" 
-                :class="{ active: currentMode === 'ap' }"
-                @click="handleModeChange('ap')"
-              >
-                <div class="opt-title">{{ t.settings.apTitle }}</div>
-                <div class="opt-desc">{{ t.settings.apDesc }}</div>
-              </div>
-              <div 
-                class="mode-opt" 
-                :class="{ active: currentMode === 'cp' }"
-                @click="handleModeChange('cp')"
-              >
-                <div class="opt-title">{{ t.settings.cpTitle }}</div>
-                <div class="opt-desc">{{ t.settings.cpDesc }}</div>
+            <div class="consistency-wrapper-v7" v-loading="modeLoading">
+              <!-- Grid Selection -->
+              <div class="main-mode-grid">
+                <!-- Standalone Mode Card -->
+                <div 
+                  class="mode-card-v7" 
+                  :class="{ active: currentEnv === 'standalone' }"
+                  @click="handleEnvChange('standalone')"
+                >
+                  <div class="card-glow"></div>
+                  <div class="card-inner">
+                    <div class="mode-icon-v7"><el-icon><Monitor /></el-icon></div>
+                    <div class="mode-content-v7">
+                      <div class="mode-title-v7">单机模式</div>
+                      <div class="mode-desc-v7">本地自闭环，轻量化部署，不涉及分布式一致性协议。</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Cluster Mode Card with Integrated Switch -->
+                <div 
+                  class="mode-card-v7 cluster" 
+                  :class="{ active: currentEnv === 'cluster' }"
+                  @click="handleEnvChange('cluster')"
+                >
+                  <div class="card-glow"></div>
+                  <div class="card-inner">
+                    <div class="mode-icon-v7 cluster"><el-icon><Share /></el-icon></div>
+                    <div class="mode-content-v7">
+                      <div class="mode-title-v7">分布式集群模式</div>
+                      
+                      <div class="integrated-toggle-v7" :class="[currentMode]" v-if="currentEnv === 'cluster'" @click.stop>
+                        <div 
+                          class="toggle-option" 
+                          :class="{ selected: currentMode === 'ap' }"
+                          @click="handleModeChange('ap')"
+                        >
+                          <div class="toggle-bg"></div>
+                          <div class="toggle-text">
+                            <span class="primary">AP 模式</span>
+                            <span class="secondary">可用性优先</span>
+                          </div>
+                        </div>
+                        <div 
+                          class="toggle-option" 
+                          :class="{ selected: currentMode === 'cp' }"
+                          @click="handleModeChange('cp')"
+                        >
+                          <div class="toggle-bg"></div>
+                          <div class="toggle-text">
+                            <span class="primary">CP 模式</span>
+                            <span class="secondary">强一致性</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mode-desc-v7" v-else>启用分布式协调，支持 AP / CP 协议切换。</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div style="margin-top: auto; padding-top: 24px;">
-              <p style="font-size: 12px; color: var(--text-muted); margin: 0;">* {{ currentMode === 'cp' ? t.settings.cpDesc : t.settings.apDesc }}</p>
+
+            <!-- Technical Summary -->
+            <div class="technical-footer-v7">
+              <div class="info-bubble-v7" :class="[currentEnv === 'standalone' ? 'standalone' : currentMode]">
+                <el-icon><InfoFilled /></el-icon>
+                <div class="bubble-content">
+                  <template v-if="currentEnv === 'standalone'">
+                    <strong>单机模式：</strong>本地存储，适用于测试或边缘单点场景。
+                  </template>
+                  <template v-else-if="currentMode === 'ap'">
+                    <strong>AP 模式 (Gossip)：</strong>分区容错性高，优先保证系统可用性，节点间数据最终对齐。
+                  </template>
+                  <template v-else>
+                    <strong>CP 模式 (Raft)：</strong>强一致性保证，要求集群多数派存活，适用于核心元数据管理。
+                  </template>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -518,13 +617,12 @@ onMounted(() => {
   width: 100%;
 }
 
-/* Structural elements use square corners */
+/* Structural elements use clean corners */
 .glass-card,
 .settings-section,
 .key-card,
-.key-list,
-.mode-opt {
-  border-radius: 0 !important;
+.key-list {
+  border-radius: 8px;
 }
 
 .settings-tabs :deep(.el-tabs__header) {
@@ -549,8 +647,13 @@ onMounted(() => {
 
 .tab-content.grid-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  grid-template-columns: 1.25fr 0.75fr;
   gap: 24px;
+}
+@media (max-width: 1200px) {
+  .tab-content.grid-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tab-content.two-cols {
@@ -618,44 +721,276 @@ onMounted(() => {
   align-items: center;
 }
 
-/* Form Styles */
-.mode-options {
+/* V7 Operation Mode Styles */
+.consistency-wrapper-v7 {
+  margin-top: 8px;
+}
+
+.main-mode-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
-.mode-opt {
-  padding: 24px;
+.mode-card-v7 {
+  position: relative;
+  min-height: 160px;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  background: var(--bg-glass);
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  display: flex;
+}
+
+.mode-card-v7:hover {
+  border-color: var(--accent-blue);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
+.mode-card-v7.active {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.02);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.08);
+}
+
+.card-glow {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.mode-card-v7.active .card-glow {
+  opacity: 1;
+}
+
+.card-inner {
+  padding: 24px;
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  z-index: 1;
+}
+
+.mode-icon-v7 {
+  width: 56px;
+  height: 56px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--text-muted);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.mode-card-v7.active .mode-icon-v7 {
+  background: var(--accent-blue);
+  color: white;
+}
+
+.mode-card-v7.cluster.active .mode-icon-v7 {
+  background: var(--accent-blue);
+}
+
+.mode-content-v7 {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
-.mode-opt:hover {
-  border-color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.04);
+.mode-title-v7 {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--text-color);
 }
 
-.mode-opt.active {
-  border-color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.opt-title {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.opt-desc {
-  font-size: 12px;
+.mode-desc-v7 {
+  font-size: 13px;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.5;
 }
+
+/* Integrated Toggle Style */
+.integrated-toggle-v7 {
+  display: flex;
+  background: var(--bg-card-alt, rgba(0,0,0,0.04));
+  padding: 4px;
+  border-radius: 10px;
+  margin-top: 12px;
+  gap: 4px;
+  width: fit-content;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.toggle-option {
+  min-width: 100px;
+  position: relative;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.3s;
+  text-align: center;
+  overflow: visible;
+}
+
+.toggle-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  white-space: nowrap;
+  align-items: center;
+}
+
+.toggle-text .primary {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.toggle-text .secondary {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.7;
+  color: var(--text-muted);
+}
+
+.toggle-option.selected .primary { color: white; }
+.toggle-option.selected .secondary { color: rgba(255,255,255,0.85); }
+
+.integrated-toggle-v7.cp .toggle-bg {
+  background: #f97316; /* Orange */
+}
+
+.integrated-toggle-v7.ap .toggle-bg {
+  background: #10b981; /* Emerald/Green */
+}
+
+.tag-cp {
+  background-color: #f97316 !important;
+  border-color: #f97316 !important;
+  color: white !important;
+}
+
+.tag-ap {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
+}
+
+.toggle-bg {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  border-radius: 8px;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toggle-option.selected .toggle-bg {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Status Indicators */
+.status-tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.03);
+  padding: 2px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.indicator-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.dot-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Technical Footer */
+.technical-footer-v7 {
+  margin-top: 24px;
+}
+
+.info-bubble-v7 {
+  padding: 16px 20px;
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  background: rgba(0,0,0,0.02);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s;
+}
+
+.info-bubble-v7.cp {
+  background: rgba(249, 115, 22, 0.05); /* Orange bg */
+  border-color: rgba(249, 115, 22, 0.2);
+}
+
+.info-bubble-v7.cp .el-icon {
+  color: #f97316;
+}
+
+.info-bubble-v7.ap {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.info-bubble-v7.ap .el-icon {
+  color: #10b981;
+}
+
+.info-bubble-v7 .el-icon {
+  font-size: 18px;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.bubble-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.info-bubble-v7.ap { border-left: 4px solid var(--accent-green); background: rgba(16, 185, 129, 0.03); }
+.info-bubble-v7.cp { border-left: 4px solid var(--accent-blue); background: rgba(59, 130, 246, 0.03); }
+.info-bubble-v7.standalone { border-left: 4px solid #94a3b8; }
 
 .val-control {
   display: flex;

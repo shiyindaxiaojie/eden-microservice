@@ -1,44 +1,92 @@
-# Eden Go Registry Configuration Example
+############################################################
+# Eden Registry Core Configuration Example
 # Copy this file to config.yaml and modify as needed.
+############################################################
 
-# Unique identifier for this node
+# Node basic configuration
+# node_id: Unique identifier for this node
 node_id: "node-1"
 
-# Consistency mode: "ap" (eventual consistency) or "cp" (strong consistency via Raft)
-mode: "ap"
-
-# HTTP API listen address
-http_addr: ":8500"
-
-# Raft transport bind address (used in CP mode)
-raft_addr: "127.0.0.1:7000"
-
-# Directory for persistent data (services, events, users, settings, raft logs)
-data_dir: "./data"
-
-# Datacenter name (used for service instance tagging)
+# Datacenter name, used for multi-DC isolation
 datacenter: "dc1"
 
-# Address of an existing leader node to join in CP mode
-join: ""
+# Listen addresses
+# http_addr: REST API and Console listen address
+http_addr: ":8500"
+# raft_addr: Internal communication address for Raft in CP mode
+raft_addr: "127.0.0.1:7000"
 
-# Seed nodes for AP mode broadcasting
-seeds: []
-  # - "http://127.0.0.1:8501"
-  # - "http://127.0.0.1:8502"
+# Directory for persistent data (services, users, settings, raft logs)
+data_dir: "./data"
 
-# Authentication & Authorization
+############################################################
+# Authentication and Authorization
+############################################################
 auth:
+  # Console login authentication (JWT)
   jwt:
-    enabled: false
-    secret: "<your-jwt-secret>"
+    enabled: true
+    secret: "change-this-to-a-secure-random-string"
+
+  # API Key authentication for service registration
+  # Note: API Keys are managed via the Web UI
   api_key:
-    enabled: false
-    keys:
-      - "<your-api-key>"
-  users:
-    - username: "admin"
-      password: "<your-password>"
-      nickname: "Administrator"
-      remark: "Built-in admin user"
-      role: "admin"
+
+############################################################
+# Logging Configuration
+############################################################
+log:
+  level: INFO # DEBUG, INFO, WARN, ERROR, FATAL
+  format: text # text, json
+  pattern: "%d [%p] [%T] %m%n"
+  policies:
+    cron_triggering_policy:
+      schedule: 0 0 4 * * ?
+    size_based_triggering_policy:
+      size: 20MB
+  rollover:
+    max_file: 10
+    retention: 30d
+  appenders:
+    - name: Console # Standard output
+      type: Console
+      pattern: "%d [%p] [%T] %m%n"
+    - name: AccessLog # API Request records
+      type: RollingFile
+      level: INFO
+      file_name: "logs/access.log"
+      file_pattern: access-%i.log.gz
+      async: true
+      filter:
+        type: marker
+        marker: API
+        on_match: ACCEPT
+        on_mismatch: DENY
+      rollover:
+        max_file: 5
+        retention: 7d
+    - name: InfoLog # General business logs
+      type: RollingFile
+      level: INFO
+      file_name: "logs/info.log"
+      file_pattern: info-%i.log.gz
+      async: true
+      rollover:
+        max_file: 5
+        retention: 7d
+    - name: ErrorLog # Error logs with rate limiting
+      type: RollingFile
+      level: ERROR
+      file_name: "logs/error.log"
+      file_pattern: error-%i.log.gz
+      async: true
+      filter: # Burst filter to prevent log flooding
+        type: burst
+        level: ERROR
+        rate: 10 # 10 entries per second
+        max_burst: 100 # Allow burst up to 100 entries
+        on_match: ACCEPT
+        on_mismatch: DENY
+      rollover:
+        max_file: 10
+        retention: 30d

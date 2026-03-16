@@ -6,17 +6,17 @@ set WORKDIR=%~dp0..\..
 cd %WORKDIR%
 
 echo Starting Node 1 (Port 8500)...
-start "Eden-Node1" cmd /c "go run ./cmd/server/main.go -config configs/node1.yaml"
+start "Eden-Node1" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node1.yaml"
 
 timeout /t 2 /nobreak >nul
 
 echo Starting Node 2 (Port 8501)...
-start "Eden-Node2" cmd /c "go run ./cmd/server/main.go -config configs/node2.yaml"
+start "Eden-Node2" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node2.yaml"
 
 timeout /t 2 /nobreak >nul
 
 echo Starting Node 3 (Port 8502)...
-start "Eden-Node3" cmd /c "go run ./cmd/server/main.go -config configs/node3.yaml"
+start "Eden-Node3" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node3.yaml"
 
 echo.
 echo AP Cluster started successfully!

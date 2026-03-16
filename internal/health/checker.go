@@ -1,9 +1,9 @@
 package health
 
 import (
-	"log"
 	"time"
 
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
 )
 
@@ -32,16 +32,16 @@ func (c *Checker) Start() {
 	go func() {
 		ticker := time.NewTicker(c.interval)
 		defer ticker.Stop()
-		log.Printf("[HealthChecker] started, ttl=%v interval=%v", c.ttl, c.interval)
+		logger.Info("[HealthChecker] started, ttl=%v interval=%v", c.ttl, c.interval)
 		for {
 			select {
 			case <-ticker.C:
 				removed := c.registry.MarkCritical(c.ttl)
 				if len(removed) > 0 {
-					log.Printf("[HealthChecker] removed %d expired instances", len(removed))
+					logger.Info("[HealthChecker] removed %d expired instances", len(removed))
 				}
 			case <-c.stopCh:
-				log.Println("[HealthChecker] stopped")
+				logger.Info("[HealthChecker] stopped")
 				return
 			}
 		}

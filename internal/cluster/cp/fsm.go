@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	hraft "github.com/hashicorp/raft"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
@@ -23,6 +23,8 @@ const (
 	CmdAddUser       CommandType = "add_user"
 	CmdDeleteUser    CommandType = "delete_user"
 	CmdSetMode       CommandType = "set_mode"
+	CmdSetEnv        CommandType = "set_env"
+	CmdSetSeeds      CommandType = "set_seeds"
 )
 
 // Command represents a Raft log command.
@@ -36,6 +38,8 @@ type Command struct {
 	Key         string          `json:"key,omitempty"`      // for delete operations
 	Username    string          `json:"username,omitempty"` // for delete operations
 	Mode        string          `json:"mode,omitempty"`     // for set_mode
+	Environment string          `json:"environment,omitempty"` // for set_env
+	Seeds       []string        `json:"seeds,omitempty"`       // for set_seeds
 }
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
@@ -52,7 +56,7 @@ func NewFSM(registry *store.Registry) *FSM {
 func (f *FSM) Apply(l *hraft.Log) interface{} {
 	var cmd Command
 	if err := json.Unmarshal(l.Data, &cmd); err != nil {
-		log.Printf("[FSM] failed to unmarshal command: %v", err)
+		logger.Error("[FSM] failed to unmarshal command: %v", err)
 		return err
 	}
 
@@ -80,6 +84,12 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		return nil
 	case CmdSetMode:
 		f.registry.SetMode(cmd.Mode)
+		return nil
+	case CmdSetEnv:
+		f.registry.SetEnvironment(cmd.Environment)
+		return nil
+	case CmdSetSeeds:
+		f.registry.SetSeeds(cmd.Seeds)
 		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)

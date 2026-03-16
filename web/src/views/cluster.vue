@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getClusterMembers, getClusterStats, type ClusterMember, type ClusterStats } from '../api/registry'
+import { getClusterMembers, getClusterStats, addClusterMember, removeClusterMember, type ClusterMember, type ClusterStats } from '../api/registry'
 import { useI18n } from '../utils/i18n'
-import { Guide } from '@element-plus/icons-vue'
+import { Guide, Plus, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { t } = useI18n()
 const members = ref<ClusterMember[]>([])
 const stats = ref<ClusterStats | null>(null)
 const loading = ref(true)
+const showAddDialog = ref(false)
+const addForm = ref({ node_id: '', address: '' })
 
 async function fetchCluster() {
   loading.value = true
@@ -20,6 +23,38 @@ async function fetchCluster() {
   } finally {
     loading.value = false
   }
+}
+
+async function handleAdd() {
+  if (!addForm.value.address) {
+    ElMessage.warning('Address is required')
+    return
+  }
+  try {
+    await addClusterMember({
+      node_id: addForm.value.node_id,
+      address: addForm.value.address
+    })
+    ElMessage.success(t.value.common.success)
+    showAddDialog.value = false
+    addForm.value = { node_id: '', address: '' }
+    fetchCluster()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.error || 'Add failed')
+  }
+}
+
+async function handleRemove(row: ClusterMember) {
+  try {
+    await ElMessageBox.confirm(
+      `Confirm removal of node ${row.id} (${row.address})?`,
+      t.value.common.warning,
+      { type: 'warning' }
+    )
+    await removeClusterMember(row.address, row.id)
+    ElMessage.success(t.value.common.success)
+    fetchCluster()
+  } catch {}
 }
 
 function roleTagType(role: string) {
@@ -59,12 +94,13 @@ onMounted(fetchCluster)
             {{ t.cluster.nodeList }}
             <el-tag 
               v-if="stats" 
-              :type="stats.mode === 'cp' ? 'primary' : 'success'" 
+              :class="stats.environment === 'standalone' ? '' : (stats.mode === 'cp' ? 'tag-cp' : 'tag-ap')" 
+              :type="stats.environment === 'standalone' ? 'info' : ''"
               effect="dark" 
               size="small"
               class="mode-tag"
             >
-              {{ stats.mode === 'cp' ? t.settings.cpTitle : t.settings.apTitle }}
+              {{ stats.environment === 'standalone' ? t.settings.singleTitle : (stats.mode === 'cp' ? t.settings.cpTitle : t.settings.apTitle) }}
             </el-tag>
           </div>
           <div class="hero-subtitle">
@@ -89,6 +125,13 @@ onMounted(fetchCluster)
             {{ stats?.health_rate ? stats.health_rate.toFixed(0) + '%' : '-' }}
           </div>
         </div>
+        
+        <!-- Add Node Action moved to far right -->
+        <div class="hero-action-item" v-if="stats?.environment === 'cluster' || stats?.mode === 'cp'">
+          <el-button type="primary" :icon="Plus" @click="showAddDialog = true" class="add-node-btn">
+            {{ t.cluster.addNode }}
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -98,7 +141,7 @@ onMounted(fetchCluster)
         <el-table-column :label="t.cluster.nodeId" prop="id" min-width="200" />
         <el-table-column :label="t.cluster.raftAddr" prop="address" min-width="200">
           <template #default="{ row }">
-            <span class="ip-address">{{ row.address }}</span>
+            <span class="mono-addr">{{ row.address }}</span>
           </template>
         </el-table-column>
         <el-table-column :label="t.cluster.role" min-width="120">
@@ -106,8 +149,43 @@ onMounted(fetchCluster)
             <el-tag :type="roleTagType(row.role)" size="small" effect="dark">{{ getRoleName(row.role) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column :label="t.cluster.status" min-width="120">
+          <template #default="{ row }">
+            <div class="status-cell">
+              <span class="status-dot" :class="row.status === 'Online' ? 'active' : 'inactive'"></span>
+              <span>{{ row.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t.common.actions" width="100" align="right">
+          <template #default="{ row }">
+            <el-button 
+              v-if="row.role !== 'Local' && row.role !== 'Standalone' && row.role !== 'Leader'" 
+              link 
+              type="danger" 
+              :icon="Delete" 
+              @click="handleRemove(row)"
+            />
+          </template>
+        </el-table-column>
       </el-table>
     </div>
+
+    <!-- Add Member Dialog -->
+    <el-dialog v-model="showAddDialog" :title="t.cluster.nodeList" width="450px" class="premium-dialog">
+      <el-form label-position="top">
+        <el-form-item v-if="stats?.mode === 'cp'" :label="t.cluster.nodeId">
+          <el-input v-model="addForm.node_id" placeholder="node-2" />
+        </el-form-item>
+        <el-form-item :label="t.common.address">
+          <el-input v-model="addForm.address" placeholder="http://127.0.0.1:8501" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAddDialog = false">{{ t.common.cancel }}</el-button>
+        <el-button type="primary" @click="handleAdd">{{ t.common.confirm }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -165,10 +243,30 @@ onMounted(fetchCluster)
   font-weight: 500;
 }
 
+
 .hero-stats {
   display: flex;
+  align-items: center;
   gap: 48px;
   padding-right: 20px;
+}
+
+.hero-action-item {
+  margin-left: 24px;
+}
+
+.add-node-btn {
+  height: 48px;
+  padding: 0 24px;
+  font-weight: 600;
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgba(var(--accent-blue-rgb), 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.add-node-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(var(--accent-blue-rgb), 0.3);
 }
 
 .hero-stat-item .stat-label {
@@ -194,5 +292,64 @@ onMounted(fetchCluster)
   backdrop-filter: blur(20px);
   border: 1px solid var(--border-color);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.status-dot.active {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
+}
+
+.status-dot.inactive {
+  background-color: var(--text-muted);
+}
+
+.status-dot.active::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-green);
+  opacity: 0.5;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.mono-addr {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tag-cp {
+  background-color: #f97316 !important;
+  border-color: #f97316 !important;
+  color: white !important;
+}
+
+.tag-ap {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
 }
 </style>

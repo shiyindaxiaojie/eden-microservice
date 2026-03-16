@@ -17,7 +17,48 @@ type Config struct {
 	Datacenter string   `mapstructure:"datacenter"`
 	Join       string   `mapstructure:"join"`  // seed node to join
 	Seeds      []string `mapstructure:"seeds"` // seed node list for AP mode
-	Auth       Auth     `mapstructure:"auth"`
+	Auth       Auth      `mapstructure:"auth"`
+	Log        LogConfig `mapstructure:"log"`
+}
+
+type LogConfig struct {
+	Level           string           `mapstructure:"level"`
+	Format          string           `mapstructure:"format"`
+	Pattern         string           `mapstructure:"pattern"`
+	Policies        *PoliciesConfig  `mapstructure:"policies"`
+	Rollover        *RolloverConfig  `mapstructure:"rollover"`
+	IncludeLocation bool             `mapstructure:"include_location"`
+	Appenders       []AppenderConfig `mapstructure:"appenders"`
+}
+
+type PoliciesConfig struct {
+	CronTriggeringPolicy      *CronPolicyConfig `mapstructure:"cron_triggering_policy"`
+	SizeBasedTriggeringPolicy *SizePolicyConfig `mapstructure:"size_based_triggering_policy"`
+}
+
+type CronPolicyConfig struct {
+	Schedule string `mapstructure:"schedule"`
+}
+
+type SizePolicyConfig struct {
+	Size string `mapstructure:"size"`
+}
+
+type RolloverConfig struct {
+	MaxFile   int    `mapstructure:"max_file"`
+	Retention string `mapstructure:"retention"`
+}
+
+type AppenderConfig struct {
+	Name        string                 `mapstructure:"name"`
+	Type        string                 `mapstructure:"type"`
+	Level       string                 `mapstructure:"level"`
+	Pattern     string                 `mapstructure:"pattern"`
+	FileName    string                 `mapstructure:"file_name"`
+	FilePattern string                 `mapstructure:"file_pattern"`
+	Filter      map[string]interface{} `mapstructure:"filter"`
+	Async       bool                   `mapstructure:"async"`
+	Rollover    *RolloverConfig        `mapstructure:"rollover"`
 }
 
 type Auth struct {
@@ -68,6 +109,14 @@ func LoadConfig(path string) (*Config, error) {
 		{"username": "admin", "password": "admin", "role": "admin"},
 	})
 	viper.SetDefault("join", "")
+
+	// Default Log Configuration
+	viper.SetDefault("log.level", "INFO")
+	viper.SetDefault("log.format", "text")
+	viper.SetDefault("log.pattern", "%d [%p] [%T] %m%n")
+	viper.SetDefault("log.appenders", []map[string]interface{}{
+		{"name": "Console", "type": "Console", "pattern": "%d [%p] [%T] %m%n"},
+	})
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

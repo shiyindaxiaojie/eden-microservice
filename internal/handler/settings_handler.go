@@ -2,13 +2,14 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"golang.org/x/crypto/bcrypt"
+	"strings"
 )
 
 // ---------- RBAC (User Management) Handlers ----------
@@ -123,40 +124,87 @@ func (h *Handler) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		jsonOK(w, map[string]string{"mode": h.registry.GetMode()})
+		jsonOK(w, map[string]string{
+			"mode": h.registry.GetMode(),
+			"env":  h.registry.GetEnvironment(),
+		})
 		return
 	}
 	if r.Method == http.MethodPost {
-		// Allow both admin and developer to switch modes
-		authMiddleware := h.RBACMiddleware("admin", "developer")
-		authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			mode := r.URL.Query().Get("mode")
-			if mode != "ap" && mode != "cp" {
+		mode := r.URL.Query().Get("mode")
+		env := r.URL.Query().Get("env")
+
+		if mode != "" && mode != "ap" && mode != "cp" {
 				httpError(w, http.StatusBadRequest, "invalid mode: "+mode)
 				return
 			}
-
-			log.Printf("[Settings] Switching consistency mode to: %s", mode)
-
-			currentMode := h.registry.GetMode()
-			var err error
-			if currentMode == "cp" {
-				// We are currently in CP mode, must use Raft to change anything
-				cmd := cp.Command{Type: cp.CmdSetMode, Mode: mode}
-				err = h.cpNode.Apply(cmd, 5*time.Second)
-			} else {
-				// We are currently in AP mode, use Gossip/Broadcast to change mode
-				err = h.apNode.Apply("set_mode", mode, r.URL.Query().Get("replicate") == "true")
-			}
-
-			if err != nil {
-				log.Printf("[Settings] Failed to switch mode: %v", err)
-				httpError(w, http.StatusInternalServerError, "failed to apply mode change: "+err.Error())
+			if env != "" && env != "standalone" && env != "cluster" {
+				httpError(w, http.StatusBadRequest, "invalid env: "+env)
 				return
 			}
 
-			jsonOK(w, map[string]string{"status": "ok", "mode": mode})
-		})).ServeHTTP(w, r)
+			if env != "" {
+				logger.Info("[Settings] Switching environment to: %s", env)
+				currentMode := h.registry.GetMode()
+				currentEnv := h.registry.GetEnvironment()
+
+				if currentEnv == "standalone" {
+					h.registry.SetEnvironment(env)
+				} else if env == "standalone" {
+					// Switching TO standalone should always be allowed locally 
+					// to recover from broken cluster states.
+					logger.Warn("[Settings] Emergency switch to standalone mode")
+					h.registry.SetEnvironment(env)
+				} else if currentMode == "cp" {
+					cmd := cp.Command{Type: cp.CmdSetEnv, Environment: env}
+					if err := h.cpNode.Apply(cmd, 5*time.Second); err != nil {
+						errStr := err.Error()
+						if strings.Contains(errStr, "no leader") || strings.Contains(errStr, "leadership lost") || strings.Contains(errStr, "not leader") {
+							logger.Warn("[Settings] Consistency cluster has no leader, performing local maintenance switch")
+							h.registry.SetEnvironment(env)
+						} else {
+							httpError(w, http.StatusInternalServerError, "failed to apply env change: "+errStr)
+							return
+						}
+					}
+				} else {
+					h.registry.SetEnvironment(env)
+				}
+			}
+
+			if mode != "" {
+				logger.Info("[Settings] Switching consistency mode to: %s", mode)
+				currentMode := h.registry.GetMode()
+				currentEnv := h.registry.GetEnvironment()
+
+				if currentEnv == "standalone" {
+					h.registry.SetMode(mode)
+				} else if currentMode == "cp" {
+					cmd := cp.Command{Type: cp.CmdSetMode, Mode: mode}
+					if err := h.cpNode.Apply(cmd, 5*time.Second); err != nil {
+						errStr := err.Error()
+						if strings.Contains(errStr, "no leader") || strings.Contains(errStr, "leadership lost") {
+							logger.Warn("[Settings] Consistency cluster has no leader, performing local mode switch")
+							h.registry.SetMode(mode)
+						} else if strings.Contains(errStr, "not leader") || strings.Contains(errStr, "redirect to") {
+							h.handleLeaderRedirect(w, err)
+							return
+						} else {
+							logger.Error("[Settings] Failed to switch CP mode: %v", err)
+							httpError(w, http.StatusInternalServerError, "failed to apply mode change: "+errStr)
+							return
+						}
+					}
+				} else {
+					if err := h.apNode.Apply("set_mode", mode, r.URL.Query().Get("replicate") == "true"); err != nil {
+						logger.Error("[Settings] Failed to switch AP mode: %v", err)
+						httpError(w, http.StatusInternalServerError, "failed to apply mode change: "+err.Error())
+						return
+					}
+				}
+			}
+
+		jsonOK(w, map[string]string{"status": "ok"})
 		return
 	}
 	httpError(w, http.StatusMethodNotAllowed, "Method not allowed")

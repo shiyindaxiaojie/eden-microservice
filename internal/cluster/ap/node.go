@@ -3,11 +3,11 @@ package ap
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
@@ -37,6 +37,21 @@ func NewNode(cfg *config.Config, registry *store.Registry) *Node {
 		}
 	}
 	return n
+}
+
+// SyncSeeds updates the internal peer map from registry seeds.
+func (n *Node) SyncSeeds() {
+	seeds := n.Registry.GetSeeds()
+	// Clear old and set new
+	n.peerMap.Range(func(key, value interface{}) bool {
+		n.peerMap.Delete(key)
+		return true
+	})
+	for _, seed := range seeds {
+		if seed != "" {
+			n.peerMap.Store(seed, true)
+		}
+	}
 }
 
 // Apply executes the command locally and broadcasts it.
@@ -76,6 +91,11 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 		if mode, ok := data.(string); ok {
 			n.Registry.SetMode(mode)
 		}
+	case "set_seeds":
+		if seeds, ok := data.([]string); ok {
+			n.Registry.SetSeeds(seeds)
+			n.SyncSeeds()
+		}
 	}
 
 	// Broadcast to peers if not already a replicated request
@@ -90,7 +110,7 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 func (n *Node) broadcast(cmdType string, data interface{}) {
 	payload, err := json.Marshal(data)
 	if err != nil {
-		log.Printf("[AP Node] marshal error: %v", err)
+		logger.Error("[AP Node] marshal error: %v", err)
 		return
 	}
 
@@ -112,6 +132,8 @@ func (n *Node) broadcast(cmdType string, data interface{}) {
 		path = "/v1/rbac/user/delete?replicate=true"
 	case "set_mode":
 		path = "/v1/settings/mode?replicate=true"
+	case "set_seeds":
+		path = "/v1/cluster/member?replicate=true" // Using member endpoint for batch sync as well
 	}
 
 	n.peerMap.Range(func(key, value interface{}) bool {

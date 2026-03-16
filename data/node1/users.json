@@ -1,0 +1,12 @@
+{
+  "users": {
+    "admin": {
+      "username": "admin",
+      "password": "$2a$10$0OkmirlXB.axbstshtpUoOlhCk8RPZ4v14vQtjecz5TgLY8DPI6Ly",
+      "nickname": "",
+      "remark": "",
+      "role": "admin",
+      "is_builtin": true
+    }
+  }
+}

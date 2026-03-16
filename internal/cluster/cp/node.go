@@ -3,16 +3,20 @@ package cp
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/shiyindaxiaojie/eden-go-logger"
+
 	hraft "github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
 )
+
+// ServerID is a type alias for Raft server ID.
+type ServerID = hraft.ServerID
 
 // Config holds Raft cluster configuration.
 type Config struct {
@@ -81,7 +85,7 @@ func NewNode(cfg Config, registry *store.Registry) (*Node, error) {
 		}
 		f := r.BootstrapCluster(configuration)
 		if f.Error() != nil && f.Error() != hraft.ErrCantBootstrap {
-			log.Printf("[Raft] bootstrap warning: %v", f.Error())
+			logger.Warn("[Raft] bootstrap warning: %v", f.Error())
 		}
 	}
 
@@ -94,7 +98,12 @@ func NewNode(cfg Config, registry *store.Registry) (*Node, error) {
 }
 
 // Apply submits a command through Raft consensus.
-func (n *Node) Apply(cmd Command, timeout time.Duration) error {
+func (n *Node) Apply(cmd interface{}, timeout interface{}) error {
+	t, ok := timeout.(time.Duration)
+	if !ok {
+		t = 5 * time.Second
+	}
+	
 	if n.Raft.State() != hraft.Leader {
 		leader := n.Raft.Leader()
 		if leader == "" {
@@ -108,7 +117,7 @@ func (n *Node) Apply(cmd Command, timeout time.Duration) error {
 		return fmt.Errorf("marshal command: %w", err)
 	}
 
-	f := n.Raft.Apply(data, timeout)
+	f := n.Raft.Apply(data, t)
 	if f.Error() != nil {
 		return f.Error()
 	}
@@ -117,6 +126,15 @@ func (n *Node) Apply(cmd Command, timeout time.Duration) error {
 		return resp
 	}
 	return nil
+}
+
+// RemoveServer removes a voter from the cluster.
+func (n *Node) RemoveServer(nodeID string) error {
+	if n.Raft.State() != hraft.Leader {
+		return fmt.Errorf("not leader")
+	}
+	f := n.Raft.RemoveServer(hraft.ServerID(nodeID), 0, 0)
+	return f.Error()
 }
 
 // Join adds a new voter to the cluster.
@@ -155,11 +173,12 @@ func (n *Node) Join(nodeID, addr string) error {
 type ClusterMember struct {
 	ID      string `json:"id"`
 	Address string `json:"address"`
-	Role    string `json:"role"` // "Leader", "Follower", "Candidate"
+	Role    string `json:"role"`   // "Leader", "Follower", "Candidate"
+	Status  string `json:"status"` // "Online", "Offline"
 }
 
 // Members returns the current cluster membership.
-func (n *Node) Members() ([]ClusterMember, error) {
+func (n *Node) Members() (interface{}, error) {
 	configFuture := n.Raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		return nil, err
@@ -172,10 +191,20 @@ func (n *Node) Members() ([]ClusterMember, error) {
 		if srv.Address == leaderAddr {
 			role = "Leader"
 		}
+
+		// Simple TCP check for status
+		status := "Offline"
+		conn, err := net.DialTimeout("tcp", string(srv.Address), 200*time.Millisecond)
+		if err == nil {
+			status = "Online"
+			conn.Close()
+		}
+
 		members = append(members, ClusterMember{
 			ID:      string(srv.ID),
 			Address: string(srv.Address),
 			Role:    role,
+			Status:  status,
 		})
 	}
 	return members, nil

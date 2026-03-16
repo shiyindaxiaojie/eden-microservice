@@ -6,6 +6,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb/v2 v2.3.1
+	github.com/shiyindaxiaojie/eden-go-logger v1.0.1
 	github.com/spf13/viper v1.21.0
 	golang.org/x/crypto v0.49.0
 )

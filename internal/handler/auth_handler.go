@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -249,7 +249,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[Auth] Login attempt: %s", req.Username)
+	logger.Info("[Auth] Login attempt: %s", req.Username)
 
 	// Look up user in dynamic registry storage or built-in seeded configs
 	if user, ok := h.registry.GetUser(req.Username); ok {

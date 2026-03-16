@@ -1,8 +1,21 @@
-mode: "ap"
+# Eden Registry Node 2 Configuration
 node_id: "node-2"
+datacenter: "dc1"
 http_addr: ":8501"
-raft_addr: ""
+raft_addr: "127.0.0.1:7001"
 data_dir: "./data/node2"
-seeds:
-  - "http://127.0.0.1:8500"
-  - "http://127.0.0.1:8502"
+
+auth:
+  jwt:
+    enabled: true
+    secret: "eden-jwt-console-secret-key"
+  api_key:
+
+log:
+  level: INFO
+  format: text
+  pattern: "%d [%p] [%T] %m%n"
+  appenders:
+    - name: Console
+      type: Console
+      pattern: "%d [%p] [%T] %m%n"

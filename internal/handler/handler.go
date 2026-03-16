@@ -2,9 +2,6 @@ package handler
 
 import (
 	"net/http"
-
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
-	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
 )
@@ -12,14 +9,14 @@ import (
 // Handler serves the HTTP API for both AP and CP modes.
 type Handler struct {
 	config   *config.Config
-	cpNode   *cp.Node
-	apNode   *ap.Node
+	cpNode   CPNode
+	apNode   APNode
 	registry *store.Registry
 	mux      *http.ServeMux
 }
 
 // NewHandler creates a unified HTTP handler.
-func NewHandler(cfg *config.Config, registry *store.Registry, cpNode *cp.Node, apNode *ap.Node) *Handler {
+func NewHandler(cfg *config.Config, registry *store.Registry, cpNode CPNode, apNode APNode) *Handler {
 	h := &Handler{
 		config:   cfg,
 		registry: registry,
@@ -59,6 +56,7 @@ func (h *Handler) registerRoutes() {
 
 	h.mux.Handle("/v1/cluster/join", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleJoin))))
 	h.mux.Handle("/v1/cluster/members", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleMembers))))
+	h.mux.Handle("/v1/cluster/member", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleMember))))
 	h.mux.Handle("/v1/cluster/stats", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleStats))))
 	h.mux.Handle("/v1/events", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleEvents))))
 
@@ -74,4 +72,10 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/settings/apikey", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleSaveAPIKey))))
 	h.mux.Handle("/v1/settings/apikey/delete", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleDeleteAPIKey))))
 	h.mux.Handle("/v1/settings/mode", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleMode))))
+
+	// --- Health Check ---
+	h.mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 }
