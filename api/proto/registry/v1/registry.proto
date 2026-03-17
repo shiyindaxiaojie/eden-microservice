@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package eden.registry.v1;
+
+option go_package = "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1;registryv1";
+
+// RegistryService defines the gRPC API for client-to-registry communication.
+service RegistryService {
+  // Register a service instance.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // Deregister a service instance.
+  rpc Deregister(DeregisterRequest) returns (DeregisterResponse);
+  // Send heartbeat to keep instance alive.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  // Discover all healthy instances of a service.
+  rpc Discover(DiscoverRequest) returns (DiscoverResponse);
+  // Watch for changes in service instance list (server-side streaming).
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
+
+message ServiceInstance {
+  string id = 1;
+  string service_name = 2;
+  string host = 3;
+  int32  port = 4;
+  int32  weight = 5;
+  string status = 6;
+  string datacenter = 7;
+  map<string, string> metadata = 8;
+}
+
+message RegisterRequest {
+  ServiceInstance instance = 1;
+}
+
+message RegisterResponse {
+  bool success = 1;
+}
+
+message DeregisterRequest {
+  string service_name = 1;
+  string instance_id = 2;
+}
+
+message DeregisterResponse {
+  bool success = 1;
+}
+
+message HeartbeatRequest {
+  string service_name = 1;
+  string instance_id = 2;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+}
+
+message DiscoverRequest {
+  string service_name = 1;
+  bool   healthy_only = 2;
+  string datacenter = 3;
+}
+
+message DiscoverResponse {
+  repeated ServiceInstance instances = 1;
+}
+
+message WatchRequest {
+  string service_name = 1;
+}
+
+message WatchResponse {
+  repeated ServiceInstance instances = 1;
+}

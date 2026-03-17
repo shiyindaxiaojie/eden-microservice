@@ -3,9 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
-	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 )
 
@@ -28,17 +26,9 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		inst.Datacenter = h.config.Datacenter
 	}
 
-	mode := h.registry.GetMode()
-	if mode == "cp" {
-		cmd := cp.Command{Type: cp.CmdRegister, Instance: &inst}
-		if err := h.cpNode.Apply(cmd, 5*time.Second); err != nil {
-			h.handleLeaderRedirect(w, err)
-			return
-		}
-	} else {
-		// AP mode
-		isReplicate := r.URL.Query().Get("replicate") == "true"
-		h.apNode.Apply("register", &inst, isReplicate)
+	if err := h.catalog.Register(&inst); err != nil {
+		h.handleLeaderRedirect(w, err)
+		return
 	}
 
 	jsonOK(w, map[string]string{"status": "ok"})
@@ -57,17 +47,9 @@ func (h *Handler) handleDeregister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mode := h.registry.GetMode()
-	if mode == "cp" {
-		cmd := cp.Command{Type: cp.CmdDeregister, ServiceName: req.ServiceName, InstanceID: req.InstanceID}
-		if err := h.cpNode.Apply(cmd, 5*time.Second); err != nil {
-			h.handleLeaderRedirect(w, err)
-			return
-		}
-	} else {
-		isReplicate := r.URL.Query().Get("replicate") == "true"
-		data := map[string]string{"service_name": req.ServiceName, "instance_id": req.InstanceID}
-		h.apNode.Apply("deregister", data, isReplicate)
+	if err := h.catalog.Deregister(req.ServiceName, req.InstanceID); err != nil {
+		h.handleLeaderRedirect(w, err)
+		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }
@@ -85,33 +67,30 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mode := h.registry.GetMode()
-	if mode == "cp" {
-		cmd := cp.Command{Type: cp.CmdHeartbeat, ServiceName: req.ServiceName, InstanceID: req.InstanceID}
-		if err := h.cpNode.Apply(cmd, 5*time.Second); err != nil {
-			h.handleLeaderRedirect(w, err)
-			return
-		}
-	} else {
-		isReplicate := r.URL.Query().Get("replicate") == "true"
-		data := map[string]string{"service_name": req.ServiceName, "instance_id": req.InstanceID}
-		h.apNode.Apply("heartbeat", data, isReplicate)
+	if err := h.catalog.Heartbeat(req.ServiceName, req.InstanceID); err != nil {
+		h.handleLeaderRedirect(w, err)
+		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
 func (h *Handler) handleListServices(w http.ResponseWriter, r *http.Request) {
-	jsonOK(w, h.registry.ListServices())
+	services, err := h.catalog.ListServices()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, services)
 }
 
 func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Path[len("/v1/catalog/service/"):]
 	healthy := r.URL.Query().Get("passing") == "true"
-	var instances []*model.Instance
-	if healthy {
-		instances = h.registry.GetServiceHealthy(name)
-	} else {
-		instances = h.registry.GetService(name)
+	
+	instances, err := h.catalog.GetService(name, healthy)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	if instances == nil {
 		instances = []*model.Instance{}
@@ -130,14 +109,4 @@ func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, instances)
-}
-
-// handleLeaderRedirect returns a redirect response pointing to the current Raft leader.
-func (h *Handler) handleLeaderRedirect(w http.ResponseWriter, err error) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusTemporaryRedirect)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error":  err.Error(),
-		"leader": h.cpNode.LeaderAddr(),
-	})
 }

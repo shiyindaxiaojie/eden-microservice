@@ -2,26 +2,33 @@ package handler
 
 import (
 	"net/http"
+
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
 )
 
 // Handler serves the HTTP API for both AP and CP modes.
 type Handler struct {
 	config   *config.Config
-	cpNode   CPNode
-	apNode   APNode
-	registry *store.Registry
+	catalog  service.CatalogService
+	auth     service.AuthService
+	settings service.SettingsService
+	cluster  service.ClusterService
 	mux      *http.ServeMux
 }
 
 // NewHandler creates a unified HTTP handler.
-func NewHandler(cfg *config.Config, registry *store.Registry, cpNode CPNode, apNode APNode) *Handler {
+func NewHandler(cfg *config.Config, 
+	catalog service.CatalogService, 
+	auth service.AuthService, 
+	settings service.SettingsService, 
+	cluster service.ClusterService) *Handler {
 	h := &Handler{
 		config:   cfg,
-		registry: registry,
-		cpNode:   cpNode,
-		apNode:   apNode,
+		catalog:  catalog,
+		auth:     auth,
+		settings: settings,
+		cluster:  cluster,
 		mux:      http.NewServeMux(),
 	}
 	h.registerRoutes()
@@ -51,6 +58,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("/v1/catalog/service/", h.handleGetService)
 
 	// --- Cluster & Management API ---
+	h.mux.HandleFunc("/v1/node/info", h.handleNodeInfo)
 	adminOnly := h.RBACMiddleware("admin")
 	adminOrDev := h.RBACMiddleware("admin", "developer")
 
@@ -72,6 +80,14 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/settings/apikey", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleSaveAPIKey))))
 	h.mux.Handle("/v1/settings/apikey/delete", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleDeleteAPIKey))))
 	h.mux.Handle("/v1/settings/mode", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleMode))))
+
+	// --- Internal Sync (no auth, for inter-node communication) ---
+	h.mux.HandleFunc("/internal/sync/seeds", h.handleInternalSyncSeeds)
+	h.mux.HandleFunc("/internal/sync/users", h.handleInternalSyncUsers)
+	h.mux.HandleFunc("/internal/sync/users/delete", h.handleInternalDeleteUser)
+	h.mux.HandleFunc("/internal/sync/apikeys", h.handleInternalSyncAPIKey)
+	h.mux.HandleFunc("/internal/sync/apikeys/delete", h.handleInternalDeleteAPIKey)
+	h.mux.HandleFunc("/internal/sync/settings", h.handleInternalSyncSettings)
 
 	// --- Health Check ---
 	h.mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

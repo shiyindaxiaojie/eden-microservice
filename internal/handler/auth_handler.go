@@ -10,7 +10,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/shiyindaxiaojie/eden-go-logger"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type contextKey string
@@ -66,10 +65,15 @@ func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		username := claims["user_id"].(string)
-		role := claims["role"].(string)
 
-		ctx := context.WithValue(r.Context(), UserContextKey, username)
-		ctx = context.WithValue(ctx, RoleContextKey, role)
+		user, ok := h.auth.GetUser(username)
+		if !ok {
+			httpError(w, http.StatusUnauthorized, "user not found")
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), UserContextKey, user.Username)
+		ctx = context.WithValue(ctx, RoleContextKey, user.Role)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -118,7 +122,6 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 
 		key := r.Header.Get("X-API-Key")
 		if key == "" {
-			// Also check query param
 			key = r.URL.Query().Get("api_key")
 		}
 
@@ -128,7 +131,6 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 		}
 
 		valid := false
-		// Check static config keys
 		for _, k := range h.config.Auth.APIKey.Keys {
 			if k == key {
 				valid = true
@@ -136,14 +138,9 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Check dynamic registry keys
 		if !valid {
-			if k, ok := h.registry.GetAPIKey(key); ok {
-				// Check expiration
-				now := time.Now().Unix()
-				if k.ExpiresAt == 0 || now <= k.ExpiresAt {
-					valid = true
-				}
+			if _, ok := h.auth.VerifyAPIKey(key); ok {
+				valid = true
 			}
 		}
 
@@ -160,7 +157,6 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 func (h *Handler) ConsolidatedAuthMiddleware(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// 1. Try API Key first
 			key := r.Header.Get("X-API-Key")
 			if key == "" {
 				key = r.URL.Query().Get("api_key")
@@ -175,11 +171,8 @@ func (h *Handler) ConsolidatedAuthMiddleware(roles ...string) func(http.Handler)
 					}
 				}
 				if !valid {
-					if k, ok := h.registry.GetAPIKey(key); ok {
-						now := time.Now().Unix()
-						if k.ExpiresAt == 0 || now <= k.ExpiresAt {
-							valid = true
-						}
+					if _, ok := h.auth.VerifyAPIKey(key); ok {
+						valid = true
 					}
 				}
 				if valid {
@@ -188,7 +181,6 @@ func (h *Handler) ConsolidatedAuthMiddleware(roles ...string) func(http.Handler)
 				}
 			}
 
-			// 2. Try JWT
 			authHeader := r.Header.Get("Authorization")
 			if authHeader != "" {
 				parts := strings.Split(authHeader, " ")
@@ -251,30 +243,27 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("[Auth] Login attempt: %s", req.Username)
 
-	// Look up user in dynamic registry storage or built-in seeded configs
-	if user, ok := h.registry.GetUser(req.Username); ok {
-		// The client sends SHA256(password). We compare this hash against our stored hash.
-		// Our stored hash is either:
-		// 1. bcrypt(SHA256(password)) -> Handled by CompareHashAndPassword
-		// 2. SHA256(password)         -> Handled by direct comparison (legacy/startup seed)
-		err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-		if err == nil || user.Password == req.Password {
-			token, err := h.GenerateToken(user.Username, user.Role)
-			if err != nil {
-				httpError(w, http.StatusInternalServerError, "failed to generate token")
-				return
-			}
-			nickname := user.Nickname
-			if nickname == "" {
-				nickname = user.Username
-			}
-			jsonOK(w, map[string]string{
-				"token":    token,
-				"role":     user.Role,
-				"nickname": nickname,
-			})
+	if _, err := h.auth.Login(req.Username, req.Password); err == nil {
+		user, ok := h.auth.GetUser(req.Username)
+		if !ok {
+			httpError(w, http.StatusInternalServerError, "user not found after successful login")
 			return
 		}
+		token, err := h.GenerateToken(user.Username, user.Role)
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, "failed to generate token")
+			return
+		}
+		nickname := user.Nickname
+		if nickname == "" {
+			nickname = user.Username
+		}
+		jsonOK(w, map[string]string{
+			"token":    token,
+			"role":     user.Role,
+			"nickname": nickname,
+		})
+		return
 	}
 
 	httpError(w, http.StatusUnauthorized, "invalid credentials")

@@ -1,42 +1,55 @@
-# Eden Go Registry 项目任务表
+# Eden Go Registry - 完整任务清单
 
-## 1. 需求分析与设计 (当前阶段)
-- [x] 分析微服务注册中心的核心需求
-- [x] 确定技术选型 (Go, Raft, HTTP/gRPC)
-- [x] 输出系统架构设计与实现计划 (Implementation Plan)
+## Phase 1：节点同步 Bug 修复
+- [ ] 新增 `/internal/sync/*` 端点（无认证中间件）
+  - [ ] `POST /internal/sync/seeds` — 接收并保存 seeds
+  - [ ] `POST /internal/sync/users` — 接收并保存用户
+  - [ ] `POST /internal/sync/apikeys` — 接收并保存 API Key
+  - [ ] `POST /internal/sync/settings` — 接收并保存 mode/env
+- [ ] 重写 `SetSeedsWithReplication`：按目标节点视角转换 seeds
+- [ ] 修改 `ap/node.go` broadcast：广播 URL 改为 `/internal/sync/*`
+- [ ] 测试：3 节点集群 seeds/users 同步
 
-## 2. 核心数据结构与配置管理
-- [x] 定义服务注册模型 (Service, Instance)
-- [x] 实现内存中的服务注册表 (Registry) 及并发安全控制
-- [x] 集成 `boltdb` 进行数据的本地持久化存储
-- [x] 引入 `viper` 添加 YAML 配置支持 (configs 目录，端口与模式配置)
+## Phase 2：Go SDK 设计与实现
+- [ ] `pkg/registry/registry.go` — 核心接口 `Registry`
+- [ ] `pkg/registry/factory.go` — 工厂方法 `NewRegistry(cfg)`
+- [ ] `pkg/registry/eden/client.go` — Eden HTTP 实现
+- [ ] `pkg/registry/consul/adapter.go` — Consul SDK 适配
+- [ ] `pkg/registry/nacos/adapter.go` — Nacos SDK 适配
+- [ ] 重构 `examples/service-discovery/`
+  - [ ] `cmd/user-center/main.go` — 用户中心
+  - [ ] `cmd/auth-center/main.go` — 认证中心
+  - [ ] `cmd/order-center/main.go` — 订单中心（跨服务调用）
+  - [ ] `config.yaml` — type 一键切换
+  - [ ] `start.bat` / `start.sh`
 
-## 3. 分布式一致性与高可用 (AP/CP 模式)
-- [x] (CP) 集成 `hashicorp/raft` 实现 FSM 和选主
-- [x] (CP) 实现节点的加入 (Join) 与集群选主网络通信
-- [x] (AP) 实现基于 Gossip 或异步 RPC 的对等数据广播与同步
-- [x] 增加 AP / CP 工作模式切换逻辑 (默认 AP)
+## Phase 3：gRPC 服务端
+- [ ] `api/proto/registry/v1/registry.proto` — 客户端通信协议
+- [ ] `api/proto/cluster/v1/cluster.proto` — 节点间通信协议
+- [ ] 生成 Go 代码（protoc）
+- [ ] `internal/grpc/server.go` — gRPC 注册/发现/心跳/Watch
+- [ ] `cmd/server/main.go` — 启动 gRPC listener
+- [ ] 更新 SDK：`eden/client.go` 支持 gRPC 连接
 
-## 4. API 接口实现
-- [x] 实现 HTTP API (Register, Deregister, Discovery, HealthCheck)
-- [ ] 定义 gRPC Protobuf 并实现 gRPC API
-- [ ] 实现服务状态的 Watch/Long Polling 机制
+## Phase 4：节点间 gRPC 通信
+- [ ] `internal/grpc/cluster_server.go` — 节点间同步服务
+- [ ] 替换 `/internal/sync/*` HTTP 为 gRPC 调用
+- [ ] AP 广播改为 gRPC streaming
+- [ ] CP Raft transport 保持 hashicorp/raft 原生
 
-## 5. 健康检查
-- [x] 实现基于 TTL 的客户端心跳机制
-- [x] 定时清理下线或失联的实例
+## Phase 5：QUIC 传输层
+- [ ] 集成 `quic-go` 库
+- [ ] gRPC over QUIC transport 实现
+- [ ] SDK 配置项：`transport: grpc | quic`
+- [ ] 弱网测试
 
-## 6. 前端管理控制台 (Web Dashboard)
-- [x] 初始化 Vite + Vue 3 + TypeScript 项目 (`web/`)
-- [x] 全局样式与 Frosted Glass 暗色主题
-- [x] 仪表盘页面 (Dashboard)：统计卡片 + 事件时间线
-- [x] 服务列表页面：卡片式展示 + 搜索过滤
-- [x] 服务详情 / 实例列表页面：表格 + 手动注销
-- [x] 集群节点页面：节点角色 + Raft 指标
-- [x] API 层 (`api/registry/`) 与 Pinia Store
-
-## 7. 测试与验证
-- [ ] 单元测试 (Registry Store, FSM)
-- [ ] 集群测试 (单节点功能，多节点数据同步及恢复)
-- [ ] 前端构建与页面功能验证
-- [ ] 性能压测与优化
+## Phase 6：控制台驱动配置优化 [x]
+- [x] 启动参数最小化（node_id, http_addr, data_dir）
+- [x] 确保所有设置变更通过同步机制传播
+  - [x] 更新 Proto 定义（添加 log_level）
+  - [x] 实现 gRPC SyncSettings 逻辑
+  - [x] 实现 AP 模式下的同步广播
+- [x] 日志级别热更新
+  - [x] 扩展 Registry Store 支持 log_level 持久化
+  - [x] 实现 Logger 级别动态调整
+  - [x] 更新 Settings Handler 支持 log_level 修改

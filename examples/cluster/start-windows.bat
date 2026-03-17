@@ -1,34 +1,56 @@
 @echo off
-echo Starting Eden Go Registry AP Cluster (3 Nodes)...
+setlocal enabledelayedexpansion
+
+echo ======================================================
+echo Starting Eden Go Registry Cluster with Frontends...
+echo ======================================================
 
 set WORKDIR=%~dp0..\..
+cd /d %WORKDIR%
 
-cd %WORKDIR%
+:: 1. Cleanup old frontend processes (optional but recommended)
+taskkill /fi "windowtitle eq Eden-Node*" /im cmd.exe /t /f >nul 2>&1
 
-echo Starting Node 1 (Port 8500)...
-start "Eden-Node1" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node1.yaml"
-
+:: --- Node 1 ---
+echo [1/3] Starting Node 1 (Backend: 8500, Frontend: 2019)...
+start "Eden-Node1-Backend" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node1.yaml"
 timeout /t 2 /nobreak >nul
+cd web
+start "Eden-Node1-Frontend" cmd /c "set VITE_PORT=2019&& set VITE_PROXY_TARGET=http://127.0.0.1:8500&& npx vite"
+cd ..
 
-echo Starting Node 2 (Port 8501)...
-start "Eden-Node2" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node2.yaml"
-
+:: --- Node 2 ---
+echo [2/3] Starting Node 2 (Backend: 8501, Frontend: 2020)...
+start "Eden-Node2-Backend" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node2.yaml"
 timeout /t 2 /nobreak >nul
+cd web
+start "Eden-Node2-Frontend" cmd /c "set VITE_PORT=2020&& set VITE_PROXY_TARGET=http://127.0.0.1:8501&& npx vite"
+cd ..
 
-echo Starting Node 3 (Port 8502)...
-start "Eden-Node3" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node3.yaml"
+:: --- Node 3 ---
+echo [3/3] Starting Node 3 (Backend: 8502, Frontend: 2021)...
+start "Eden-Node3-Backend" cmd /c "go run ./cmd/server/main.go -config examples/cluster/configs/node3.yaml"
+timeout /t 2 /nobreak >nul
+cd web
+start "Eden-Node3-Frontend" cmd /c "set VITE_PORT=2021&& set VITE_PROXY_TARGET=http://127.0.0.1:8502&& npx vite"
+cd ..
 
 echo.
-echo AP Cluster started successfully!
-echo Node 1: http://localhost:8500
-echo Node 2: http://localhost:8501
-echo Node 3: http://localhost:8502
+echo Cluster and Frontends started!
+echo ------------------------------------------------------
+echo Node 1 Control: http://localhost:2019 (Backend: 8500)
+echo Node 2 Control: http://localhost:2020 (Backend: 8501)
+echo Node 3 Control: http://localhost:2021 (Backend: 8502)
+echo ------------------------------------------------------
 echo.
 echo Press any key to stop all nodes...
 pause >nul
 
-taskkill /fi "windowtitle eq Eden-Node1" /im cmd.exe /t /f >nul 2>&1
-taskkill /fi "windowtitle eq Eden-Node2" /im cmd.exe /t /f >nul 2>&1
-taskkill /fi "windowtitle eq Eden-Node3" /im cmd.exe /t /f >nul 2>&1
+:: Stop all processes started in new windows with the specified titles
+echo Shutting down...
+taskkill /fi "windowtitle eq Eden-Node1-*" /im cmd.exe /t /f >nul 2>&1
+taskkill /fi "windowtitle eq Eden-Node2-*" /im cmd.exe /t /f >nul 2>&1
+taskkill /fi "windowtitle eq Eden-Node3-*" /im cmd.exe /t /f >nul 2>&1
 
-echo Cluster stopped.
+echo Done.
+pause

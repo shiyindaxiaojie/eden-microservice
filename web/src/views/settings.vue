@@ -113,7 +113,8 @@ async function handleModeChange(targetMode: string) {
   modeLoading.value = true
   try {
     await api.post(`/v1/settings/mode?mode=${targetMode}`)
-    ElMessage.success(t.value.settings.modeSwitchSuccess.replace('{mode}', targetMode.toUpperCase()))
+    const modeLabel = targetMode === 'cp' ? '强一致性' : '最终一致性'
+    ElMessage.success(t.value.settings.modeSwitchSuccess.replace('{mode}', modeLabel))
     
     currentMode.value = targetMode
     setTimeout(() => {
@@ -230,7 +231,7 @@ onMounted(() => {
                 <div class="status-indicator" v-if="currentEnv === 'cluster'">
                   <span class="dot-label">一致性:</span>
                   <el-tag :class="currentMode === 'cp' ? 'tag-cp' : 'tag-ap'" size="small" effect="dark">
-                    {{ currentMode.toUpperCase() }}
+                    {{ currentMode === 'cp' ? '强一致性' : '最终一致性' }}
                   </el-tag>
                 </div>
               </div>

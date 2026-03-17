@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,37 +15,44 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
 	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	egrpc "github.com/shiyindaxiaojie/eden-go-registry/internal/grpc"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/handler"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/health"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/pkg/crypto"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	pb_cluster "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
+	pb_reg "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	"crypto/tls"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"crypto/rand"
+	"math/big"
 )
 
 func main() {
 	var (
 		cfgFile   = flag.String("config", "configs/config.yaml", "Path to configuration file")
-		httpAddr  = flag.String("http-addr", "", "Override HTTP API listen address")
-		raftAddr  = flag.String("raft-addr", "", "Override Raft transport bind address")
-		dataDir   = flag.String("data-dir", "", "Override Raft data directory")
+		dataDir   = flag.String("data-dir", "", "Override data directory")
 		nodeID    = flag.String("node-id", "", "Override node ID")
-		mode      = flag.String("mode", "", "Override mode (ap or cp)")
-		bootstrap = flag.Bool("bootstrap", false, "Bootstrap as first node in new CP cluster")
-		joinAddr  = flag.String("join", "", "Address of leader node to join in CP mode")
-		seedsFlag = flag.String("seeds", "", "Override AP mode seeds (comma separated, e.g. http://127.0.0.1:8500,http://127.0.0.1:8501)")
-		ttl       = flag.Duration("ttl", 30*time.Second, "Instance heartbeat TTL")
+		httpAddr  = flag.String("http-addr", "", "Override HTTP listen address")
 	)
 	flag.Parse()
 
 	// 1. Load configuration
 	cfg, err := config.LoadConfig(*cfgFile)
 	if err != nil {
-		logger.Warn("Failed to load config file: %v. Using defaults/env/flags.", err)
+		logger.Warn("Failed to load config file: %v. Using defaults.", err)
 		cfg = &config.Config{
 			NodeID:   "node-1",
 			Mode:     "ap",
 			HTTPAddr: ":8500",
+			GRPCAddr: ":9000",
 			RaftAddr: "127.0.0.1:7000",
 			DataDir:  "./data",
 		}
@@ -54,23 +62,11 @@ func main() {
 	if *httpAddr != "" {
 		cfg.HTTPAddr = *httpAddr
 	}
-	if *raftAddr != "" {
-		cfg.RaftAddr = *raftAddr
-	}
 	if *dataDir != "" {
 		cfg.DataDir = *dataDir
 	}
 	if *nodeID != "" {
 		cfg.NodeID = *nodeID
-	}
-	if *mode != "" {
-		cfg.Mode = *mode
-	}
-	if *joinAddr != "" {
-		cfg.Join = *joinAddr
-	}
-	if *seedsFlag != "" {
-		cfg.Seeds = strings.Split(*seedsFlag, ",")
 	}
 
 	cfg.Mode = strings.ToLower(cfg.Mode)
@@ -78,18 +74,16 @@ func main() {
 		cfg.Mode = "ap"
 	}
 
-	// Initialize Logger from config
-	logger.Init(convertToLoggerConfig(cfg.Log))
-	logger.Info("========================================")
-	logger.Info("    Eden Go Registry")
-	logger.Info("========================================")
-	logger.Info("  Node ID   : %s", cfg.NodeID)
-	logger.Info("  Mode      : %s", strings.ToUpper(cfg.Mode))
-	logger.Info("  HTTP Addr : %s", cfg.HTTPAddr)
-	logger.Info("  Data Dir  : %s", cfg.DataDir)
-
 	// 2. Create Registry Store
 	registry := store.NewRegistry(cfg.DataDir)
+
+	// Initialize Logger from config
+	persistedLevel := registry.GetLogLevel()
+	if persistedLevel != "" {
+		cfg.Log.Level = persistedLevel
+	}
+	logger.Init(convertToLoggerConfig(cfg.Log))
+	// (Logs moved and combined below after port resolution)
 
 	// Seed built-in users from config
 	var builtInUsers []model.User
@@ -111,25 +105,67 @@ func main() {
 			Role:     uc.Role,
 		})
 	}
-	registry.SeedBuiltInUsers(builtInUsers)
+	registry.Auth.SeedBuiltInUsers(builtInUsers)
 
 	// 3. Setup Consistency Mode (Initialize BOTH for online switching)
 	var cpNode *cp.Node
 	var apNode *ap.Node
 
+	// Resolve Raft Addr if empty or just a port
+	if cfg.RaftAddr == "" || strings.HasPrefix(cfg.RaftAddr, ":") {
+		bindAddr := cfg.RaftAddr
+		if bindAddr == "" || bindAddr == ":0" {
+			bindAddr = "127.0.0.1:0"
+		} else if strings.HasPrefix(bindAddr, ":") {
+			bindAddr = "127.0.0.1" + bindAddr
+		}
+		
+		l, err := net.Listen("tcp", bindAddr)
+		if err != nil {
+			logger.Fatal("Failed to resolve Raft port: %v", err)
+		}
+		cfg.RaftAddr = l.Addr().String()
+		l.Close()
+	}
+
 	// Always setup CP (Raft)
 	logger.Info("  Raft Addr : %s", cfg.RaftAddr)
-	logger.Info("  Bootstrap : %v", *bootstrap)
 	raftCfg := cp.Config{
 		NodeID:    cfg.NodeID,
 		BindAddr:  cfg.RaftAddr,
 		DataDir:   cfg.DataDir,
-		Bootstrap: *bootstrap,
+		Bootstrap: cfg.Bootstrap,
 	}
 	cpNode, err = cp.NewNode(raftCfg, registry)
 	if err != nil {
 		logger.Fatal("Failed to start Raft node: %v", err)
 	}
+
+	// 4. Final Port Resolution & Logging
+	// Resolve gRPC and QUIC immediately for logging (not just inside goroutines)
+	if cfg.GRPCAddr == "" || strings.HasSuffix(cfg.GRPCAddr, ":0") {
+		addr := cfg.GRPCAddr
+		if addr == "" { addr = ":0" }
+		l, _ := net.Listen("tcp", addr)
+		cfg.GRPCAddr = l.Addr().String()
+		l.Close()
+	}
+	if cfg.QUICAddr == "" || strings.HasSuffix(cfg.QUICAddr, ":0") {
+		// Use same port as gRPC if possible, or new one
+		cfg.QUICAddr = cfg.GRPCAddr // Just a suggestion or let it be auto
+	}
+
+	logger.Info("========================================")
+	logger.Info("    Eden Go Registry")
+	logger.Info("========================================")
+	logger.Info("  Node ID   : %s", cfg.NodeID)
+	logger.Info("  Mode      : %s", strings.ToUpper(registry.GetMode()))
+	logger.Info("  HTTP Addr : %s", cfg.HTTPAddr)
+	logger.Info("  GRPC Addr : %s", cfg.GRPCAddr)
+	logger.Info("  QUIC Addr : %s", cfg.QUICAddr)
+	logger.Info("  Raft Addr : %s", cfg.RaftAddr)
+	logger.Info("  Data Dir  : %s", cfg.DataDir)
+	logger.Info("========================================")
 
 	if cfg.Join != "" {
 		go func() {
@@ -162,19 +198,74 @@ func main() {
 	logger.Info("  Active Mode: %s", strings.ToUpper(registry.GetMode()))
 
 	// 4. Start Health Checker
-	checker := health.NewChecker(registry, *ttl, 10*time.Second)
+	// Default TTL 30s, check every 10s if not specified in future config
+	checker := health.NewChecker(registry, 30*time.Second, 10*time.Second)
 	checker.Start()
 
-	// 5. Start HTTP API
-	h := handler.NewHandler(cfg, registry, cpNode, apNode)
-	httpServer := &http.Server{
-		Addr:    cfg.HTTPAddr,
-		Handler: h,
-	}
+	// 5. Setup Specialized Services
+	catSvc := service.NewCatalogService(registry, cpNode, apNode)
+	authSvc := service.NewAuthService(registry)
+	setSvc := service.NewSettingsService(registry, cpNode, apNode)
+	clsSvc := service.NewClusterService(registry, cpNode, apNode)
+
+	// 6. Start HTTP API
+	h := handler.NewHandler(cfg, catSvc, authSvc, setSvc, clsSvc)
+
+	// Start gRPC API
+	grpcServer := grpc.NewServer()
+	regServer := egrpc.NewRegistryServer(catSvc)
+	clusterServer := egrpc.NewClusterServer(registry, apNode)
+	pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
+	pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)
+	reflection.Register(grpcServer)
 
 	go func() {
-		logger.Info("HTTP API server listening on %s", cfg.HTTPAddr)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		addr := cfg.GRPCAddr
+		if addr == "" {
+			addr = ":0"
+		}
+		lis, err := net.Listen("tcp", addr)
+		if err != nil {
+			logger.Fatal("Failed to listen for gRPC: %v", err)
+		}
+		cfg.GRPCAddr = lis.Addr().String() // Update resolved addr
+		logger.Info("gRPC server listening on %s", cfg.GRPCAddr)
+		if err := grpcServer.Serve(lis); err != nil {
+			logger.Error("gRPC server error: %v", err)
+		}
+	}()
+
+	// Start QUIC gRPC server
+	go func() {
+		cert, err := generateSelfSignedCert()
+		if err != nil {
+			logger.Error("Failed to generate self-signed cert for QUIC: %v", err)
+			return
+		}
+		tlsConf := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			NextProtos:   []string{"h3"},
+		}
+		addr := cfg.QUICAddr
+		if addr == "" {
+			addr = ":0"
+		}
+		qlis, err := egrpc.NewQUICListener(addr, tlsConf)
+		if err != nil {
+			logger.Error("Failed to listen for QUIC: %v", err)
+			return
+		}
+		cfg.QUICAddr = qlis.Addr().String() // Update resolved addr
+		logger.Info("gRPC over QUIC server listening on %s", cfg.QUICAddr)
+		if err := grpcServer.Serve(qlis); err != nil {
+			logger.Error("QUIC gRPC server error: %v", err)
+		}
+	}()
+
+	// Start HTTP API
+	logger.Info("HTTP API server listening on %s", cfg.HTTPAddr)
+	go func() {
+		if err := http.ListenAndServe(cfg.HTTPAddr, h); err != nil {
 			logger.Fatal("HTTP server error: %v", err)
 		}
 	}()
@@ -249,4 +340,31 @@ func convertToLoggerConfig(lc config.LogConfig) logger.Configuration {
 		IncludeLocation: lc.IncludeLocation,
 		Appenders:       appenders,
 	}
+}
+
+func generateSelfSignedCert() (tls.Certificate, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Eden Go Registry"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour * 24 * 365),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return tls.Certificate{
+		Certificate: [][]byte{derBytes},
+		PrivateKey:  key,
+	}, nil
 }

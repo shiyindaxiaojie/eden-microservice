@@ -7,13 +7,17 @@ import (
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 )
 
 // ---------- Cluster Handlers (Membership & Stats) ----------
 
+func (h *Handler) handleNodeInfo(w http.ResponseWriter, r *http.Request) {
+	jsonOK(w, h.config)
+}
+
 func (h *Handler) handleJoin(w http.ResponseWriter, r *http.Request) {
-	if h.config.Mode == "ap" {
+	mode := h.settings.GetMode()
+	if mode == "ap" {
 		jsonOK(w, map[string]string{"status": "ignored_in_ap_mode"})
 		return
 	}
@@ -21,8 +25,10 @@ func (h *Handler) handleJoin(w http.ResponseWriter, r *http.Request) {
 		NodeID  string `json:"node_id"`
 		Address string `json:"address"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
-	if err := h.cpNode.Join(req.NodeID, req.Address); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return
+	}
+	if err := h.cluster.JoinCluster(req.NodeID, req.Address); err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -30,23 +36,22 @@ func (h *Handler) handleJoin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
-	mode := h.registry.GetMode()
-	env := h.registry.GetEnvironment()
+	mode := h.settings.GetMode()
+	env := h.settings.GetEnvironment()
 
 	if env == "standalone" {
 		localAddr := h.normalizeAddr(h.config.HTTPAddr)
 		members := []map[string]string{
 			{"id": h.config.NodeID, "address": localAddr, "role": "Standalone", "status": "Online"},
 		}
-		// In standalone, also show persistent seeds if any, so user can manage node list before switching
-		seeds := h.registry.GetSeeds()
+		seeds := h.settings.GetSeeds()
 		for i, seed := range seeds {
 			if seed != "" {
 				members = append(members, map[string]string{
 					"id":      fmt.Sprintf("peer-node-%d", i+1),
 					"address": seed,
 					"role":    "Peer",
-					"status":  "Offline", // Likely offline in standalone, or we could ping it
+					"status":  "Offline",
 				})
 			}
 		}
@@ -56,15 +61,13 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 
 	if mode == "ap" {
 		localAddr := h.normalizeAddr(h.config.HTTPAddr)
-
 		members := []map[string]string{
 			{"id": h.config.NodeID, "address": localAddr, "role": "Local", "status": "Online"},
 		}
-		seeds := h.registry.GetSeeds()
+		seeds := h.settings.GetSeeds()
 		for i, seed := range seeds {
 			if seed != "" {
 				status := "Offline"
-				// Try to ping the seed (assuming it's an HTTP address)
 				client := http.Client{Timeout: 300 * time.Millisecond}
 				resp, err := client.Get(seed + "/health")
 				if err == nil {
@@ -83,39 +86,30 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, members)
 		return
 	}
-	members, err := h.cpNode.Members()
+	
+	members, err := h.cluster.GetMembers()
 	if err != nil || members == nil {
-		// Fallback: If Raft is leaderless or uninitialized, show local node
 		localAddr := h.normalizeAddr(h.config.HTTPAddr)
 		members = []map[string]string{
 			{"id": h.config.NodeID, "address": localAddr, "role": "Local", "status": "Online"},
-		}
-	} else {
-		// Ensure it's not an empty slice
-		if m, ok := members.([]cp.ClusterMember); ok && len(m) == 0 {
-			localAddr := h.normalizeAddr(h.config.HTTPAddr)
-			members = []map[string]string{
-				{"id": h.config.NodeID, "address": localAddr, "role": "Local", "status": "Online"},
-			}
 		}
 	}
 	jsonOK(w, members)
 }
 
 func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
-	mode := h.registry.GetMode()
+	mode := h.settings.GetMode()
 	if r.Method == http.MethodPost {
 		var req struct {
 			NodeID  string   `json:"node_id"`
 			Address string   `json:"address"`
-			Seeds   []string `json:"seeds"` // Optional batch update
+			Seeds   []string `json:"seeds"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 
-		// Handle batch seeds update if provided
 		if len(req.Seeds) > 0 {
-			if err := h.SetSeedsWithReplication(req.Seeds); err != nil {
-				httpError(w, http.StatusInternalServerError, "failed to sync seeds: "+err.Error())
+			if err := h.settings.SetSeeds(req.Seeds); err != nil {
+				httpError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 			jsonOK(w, map[string]string{"status": "ok"})
@@ -127,12 +121,9 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		env := h.registry.GetEnvironment()
-
-		// If in standalone, we ONLY manage seeds (persistent node list), no protocol actions
+		env := h.settings.GetEnvironment()
 		if env == "standalone" || mode == "ap" {
-			seeds := h.registry.GetSeeds()
-			// Check if already exists
+			seeds := h.settings.GetSeeds()
 			for _, s := range seeds {
 				if s == req.Address {
 					jsonOK(w, map[string]string{"status": "ok"})
@@ -140,11 +131,10 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			seeds = append(seeds, req.Address)
-			if err := h.SetSeedsWithReplication(seeds); err != nil {
-				httpError(w, http.StatusInternalServerError, "failed to sync seeds: "+err.Error())
+			if err := h.settings.SetSeeds(seeds); err != nil {
+				httpError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-
 			jsonOK(w, map[string]string{"status": "ok"})
 			return
 		}
@@ -154,8 +144,8 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 				httpError(w, http.StatusBadRequest, "node_id required for CP mode")
 				return
 			}
-			if err := h.cpNode.Join(req.NodeID, req.Address); err != nil {
-				httpError(w, http.StatusInternalServerError, "failed to join raft cluster: "+err.Error())
+			if err := h.cluster.JoinCluster(req.NodeID, req.Address); err != nil {
+				h.handleLeaderRedirect(w, err)
 				return
 			}
 		}
@@ -172,37 +162,33 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		env := h.registry.GetEnvironment()
+		env := h.settings.GetEnvironment()
 		if env == "standalone" || mode == "ap" {
-			seeds := h.registry.GetSeeds()
+			seeds := h.settings.GetSeeds()
 			newSeeds := []string{}
 			for _, s := range seeds {
 				if s != addr {
 					newSeeds = append(newSeeds, s)
 				}
 			}
-			if err := h.SetSeedsWithReplication(newSeeds); err != nil {
-				httpError(w, http.StatusInternalServerError, "failed to sync seeds: "+err.Error())
+			if err := h.settings.SetSeeds(newSeeds); err != nil {
+				httpError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-
 			jsonOK(w, map[string]string{"status": "ok"})
 			return
 		}
 
 		if mode == "cp" {
-			// In CP mode, we use NodeID to remove server
-			// hashicorp/raft RemoveServer needs ServerID
 			if nodeID == "" {
 				httpError(w, http.StatusBadRequest, "node_id required for CP mode removal")
 				return
 			}
-			if err := h.cpNode.RemoveServer(nodeID); err != nil {
-				httpError(w, http.StatusInternalServerError, "failed to remove from raft: "+err.Error())
+			if err := h.cluster.RemoveMember(nodeID); err != nil {
+				h.handleLeaderRedirect(w, err)
 				return
 			}
 		}
-
 		jsonOK(w, map[string]string{"status": "ok"})
 		return
 	}
@@ -211,78 +197,109 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
-	stats := h.registry.Stats()
-	mode := h.registry.GetMode()
-	env := h.registry.GetEnvironment()
-	isLeader := true
-	leaderAddr := h.normalizeAddr(h.config.HTTPAddr)
+	stats, err := h.cluster.GetStats()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	mode := h.settings.GetMode()
+	env := h.settings.GetEnvironment()
+	isLeader := h.cluster.IsLeader()
+	leaderAddr := h.cluster.LeaderAddr()
+	if leaderAddr == "" {
+		leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
+	}
+	
 	nodeCount := 1
-
 	if env == "cluster" {
 		if mode == "cp" {
-			isLeader = h.cpNode.IsLeader()
-			if !isLeader {
-				leaderAddr = h.cpNode.LeaderAddr()
-			}
-			
-			m, _ := h.cpNode.Members()
-			// Handle different possible slice types or nil
-			if m != nil {
-				// Try type assertion to both possible forms (slice of structs or slice of maps)
-				if sm, ok := m.([]cp.ClusterMember); ok && len(sm) > 0 {
-					nodeCount = len(sm)
-				} else if mm, ok := m.([]map[string]string); ok && len(mm) > 0 {
-					nodeCount = len(mm)
+			members, _ := h.cluster.GetMembers()
+			if members != nil {
+				if m, ok := members.([]interface{}); ok {
+					nodeCount = len(m)
 				}
 			}
 		} else {
-			nodeCount = len(h.registry.GetSeeds()) + 1
+			nodeCount = len(h.settings.GetSeeds()) + 1
 		}
 	}
 
-	// Double check nodeCount is never less than 1
 	if nodeCount < 1 { nodeCount = 1 }
 
 	result := map[string]interface{}{
-		"node_count":     nodeCount,
-		"service_count":  stats.ServiceCount,
-		"instance_count": stats.InstanceCount,
-		"healthy_count":  stats.HealthyCount,
-		"health_rate":    stats.HealthRate,
-		"memory_usage":   stats.MemoryUsage,
-		"is_leader":      isLeader,
-		"leader_addr":    leaderAddr,
-		"mode":           mode,
-		"environment":    env,
+		"node_count":  nodeCount,
+		"is_leader":   isLeader,
+		"leader_addr": leaderAddr,
+		"mode":        mode,
+		"environment": env,
+		"stats":       stats,
 	}
 	jsonOK(w, result)
 }
 
 func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
-	events := h.registry.GetEvents(50)
-	if events == nil {
-		events = make([]*model.Event, 0)
+	events, err := h.cluster.ListEvents()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	jsonOK(w, events)
 }
 
-// SetSeedsWithReplication updates seeds and propagates to cluster
-func (h *Handler) SetSeedsWithReplication(seeds []string) error {
-	mode := h.registry.GetMode()
-	
-	// Local update
-	h.registry.SetSeeds(seeds)
-	
-	if mode == "cp" {
-		if h.cpNode != nil {
-			cmd := cp.Command{Type: cp.CmdSetSeeds, Seeds: seeds}
-			return h.cpNode.Apply(cmd, 5*time.Second)
-		}
-	} else {
-		if h.apNode != nil {
-			h.apNode.SyncSeeds()
-			return h.apNode.Apply("set_seeds", seeds, false)
-		}
+// Internal sync handlers
+func (h *Handler) handleInternalSyncSeeds(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Seeds []string `json:"seeds"`
 	}
-	return nil
+	json.NewDecoder(r.Body).Decode(&req)
+	h.settings.SetSeeds(req.Seeds)
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleInternalSyncUsers(w http.ResponseWriter, r *http.Request) {
+	var u model.User
+	json.NewDecoder(r.Body).Decode(&u)
+	h.settings.AddUser(&u)
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleInternalDeleteUser(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	h.settings.DeleteUser(req.Username)
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleInternalSyncAPIKey(w http.ResponseWriter, r *http.Request) {
+	var k model.APIKey
+	json.NewDecoder(r.Body).Decode(&k)
+	h.settings.AddAPIKey(&k)
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleInternalDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Key string `json:"key"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	h.settings.DeleteAPIKey(req.Key)
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleInternalSyncSettings(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Mode        string `json:"mode,omitempty"`
+		Environment string `json:"environment,omitempty"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if req.Mode != "" {
+		h.settings.SetMode(req.Mode)
+	}
+	if req.Environment != "" {
+		h.settings.SetEnvironment(req.Environment)
+	}
+	jsonOK(w, map[string]string{"status": "ok"})
 }

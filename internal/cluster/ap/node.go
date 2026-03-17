@@ -1,13 +1,13 @@
 package ap
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	"net/http"
-	"sync"
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
+	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
@@ -17,8 +17,7 @@ import (
 type Node struct {
 	Config   *config.Config
 	Registry *store.Registry
-	client   *http.Client
-	peerMap  sync.Map // string (addr) -> bool
+	PM       *cluster.PeerManager
 }
 
 // NewNode creates an AP mode node.
@@ -26,32 +25,27 @@ func NewNode(cfg *config.Config, registry *store.Registry) *Node {
 	n := &Node{
 		Config:   cfg,
 		Registry: registry,
-		client: &http.Client{
-			Timeout: 2 * time.Second,
-		},
+		PM:       cluster.NewPeerManager(),
 	}
 	// Initial peers from seeds
-	for _, seed := range cfg.Seeds {
-		if seed != "" {
-			n.peerMap.Store(seed, true)
-		}
-	}
+	n.SyncSeeds()
 	return n
 }
 
 // SyncSeeds updates the internal peer map from registry seeds.
 func (n *Node) SyncSeeds() {
 	seeds := n.Registry.GetSeeds()
-	// Clear old and set new
-	n.peerMap.Range(func(key, value interface{}) bool {
-		n.peerMap.Delete(key)
-		return true
-	})
-	for _, seed := range seeds {
-		if seed != "" {
-			n.peerMap.Store(seed, true)
-		}
-	}
+	n.PM.UpdatePeers(seeds)
+}
+
+// GetConfig returns the node configuration.
+func (n *Node) GetConfig() *config.Config {
+	return n.Config
+}
+
+// GetPM returns the peer manager.
+func (n *Node) GetPM() interface{} {
+	return n.PM
 }
 
 // Apply executes the command locally and broadcasts it.
@@ -96,6 +90,10 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 			n.Registry.SetSeeds(seeds)
 			n.SyncSeeds()
 		}
+	case "set_log_level":
+		if level, ok := data.(string); ok {
+			n.Registry.SetLogLevel(level)
+		}
 	}
 
 	// Broadcast to peers if not already a replicated request
@@ -106,7 +104,7 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 	return nil
 }
 
-// broadcast sends the command to other seeds/peers
+// broadcast sends the command to other seeds/peers via gRPC
 func (n *Node) broadcast(cmdType string, data interface{}) {
 	payload, err := json.Marshal(data)
 	if err != nil {
@@ -114,53 +112,14 @@ func (n *Node) broadcast(cmdType string, data interface{}) {
 		return
 	}
 
-	path := ""
-	switch cmdType {
-	case "register":
-		path = "/v1/catalog/register?replicate=true"
-	case "deregister":
-		path = "/v1/catalog/deregister?replicate=true"
-	case "heartbeat":
-		path = "/v1/catalog/heartbeat?replicate=true"
-	case "add_api_key":
-		path = "/v1/settings/apikey?replicate=true"
-	case "delete_api_key":
-		path = "/v1/settings/apikey/delete?replicate=true" // Note: server handler might needs updating to handle Query in broadcast
-	case "add_user":
-		path = "/v1/rbac/user?replicate=true"
-	case "delete_user":
-		path = "/v1/rbac/user/delete?replicate=true"
-	case "set_mode":
-		path = "/v1/settings/mode?replicate=true"
-	case "set_seeds":
-		path = "/v1/cluster/member?replicate=true" // Using member endpoint for batch sync as well
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	n.peerMap.Range(func(key, value interface{}) bool {
-		peer := key.(string)
-		go func(addr string) {
-			targetURL := addr + path
-			// For delete operations, we need to append the query param from data
-			if cmdType == "delete_api_key" {
-				if k, ok := data.(string); ok {
-					targetURL += "&key=" + k
-				}
-			} else if cmdType == "delete_user" {
-				if u, ok := data.(string); ok {
-					targetURL += "&username=" + u
-				}
-			} else if cmdType == "set_mode" {
-				if m, ok := data.(string); ok {
-					targetURL += "&mode=" + m
-				}
-			}
-
-			resp, err := n.client.Post(targetURL, "application/json", bytes.NewReader(payload))
-			if err != nil {
-				return
-			}
-			resp.Body.Close()
-		}(peer)
-		return true
+	n.PM.Broadcast(ctx, func(ctx context.Context, client pb.ClusterServiceClient) error {
+		_, err := client.ReplicateLog(ctx, &pb.ReplicateLogRequest{
+			CommandType: cmdType,
+			Data:        payload,
+		})
+		return err
 	})
 }

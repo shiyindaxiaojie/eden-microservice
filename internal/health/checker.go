@@ -36,7 +36,10 @@ func (c *Checker) Start() {
 		for {
 			select {
 			case <-ticker.C:
-				removed := c.registry.MarkCritical(c.ttl)
+				marked, removed := c.registry.MarkCritical(c.ttl)
+				if len(marked) > 0 {
+					logger.Debug("[HealthChecker] marked %d instances as critical", len(marked))
+				}
 				if len(removed) > 0 {
 					logger.Info("[HealthChecker] removed %d expired instances", len(removed))
 				}

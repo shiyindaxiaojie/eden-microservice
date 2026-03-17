@@ -11,12 +11,15 @@ import (
 type Config struct {
 	NodeID   string   `mapstructure:"node_id"`
 	Mode     string   `mapstructure:"mode"` // "ap" or "cp"
-	HTTPAddr string   `mapstructure:"http_addr"`
-	RaftAddr string   `mapstructure:"raft_addr"`
+	HTTPAddr   string   `mapstructure:"http_addr"`
+	GRPCAddr   string   `mapstructure:"grpc_addr"`
+	QUICAddr   string   `mapstructure:"quic_addr"`
+	RaftAddr   string   `mapstructure:"raft_addr"`
 	DataDir    string   `mapstructure:"data_dir"`
 	Datacenter string   `mapstructure:"datacenter"`
-	Join       string   `mapstructure:"join"`  // seed node to join
-	Seeds      []string `mapstructure:"seeds"` // seed node list for AP mode
+	Bootstrap  bool     `mapstructure:"bootstrap"` // for CP mode
+	Join       string   `mapstructure:"join"`      // seed node to join
+	Seeds      []string `mapstructure:"seeds"`     // seed node list for AP mode
 	Auth       Auth      `mapstructure:"auth"`
 	Log        LogConfig `mapstructure:"log"`
 }
@@ -97,7 +100,9 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("node_id", "node-1")
 	viper.SetDefault("mode", "ap")
 	viper.SetDefault("http_addr", ":8500")
-	viper.SetDefault("raft_addr", "127.0.0.1:7000")
+	viper.SetDefault("grpc_addr", "")
+	viper.SetDefault("quic_addr", "")
+	viper.SetDefault("raft_addr", "")
 	viper.SetDefault("data_dir", "./data")
 	viper.SetDefault("datacenter", "dc1")
 	viper.SetDefault("auth.jwt.enabled", false)
@@ -109,6 +114,7 @@ func LoadConfig(path string) (*Config, error) {
 		{"username": "admin", "password": "admin", "role": "admin"},
 	})
 	viper.SetDefault("join", "")
+	viper.SetDefault("bootstrap", false)
 
 	// Default Log Configuration
 	viper.SetDefault("log.level", "INFO")

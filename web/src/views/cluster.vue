@@ -47,7 +47,7 @@ async function handleAdd() {
 async function handleRemove(row: ClusterMember) {
   try {
     await ElMessageBox.confirm(
-      `Confirm removal of node ${row.id} (${row.address})?`,
+      `确定要移除节点 ${row.id} (${row.address}) 吗？`,
       t.value.common.warning,
       { type: 'warning' }
     )
@@ -63,6 +63,7 @@ function roleTagType(role: string) {
     case 'Follower':  return 'info'
     case 'Candidate': return 'warning'
     case 'Local':     return 'primary'
+    case 'Standalone': return 'primary'
     case 'Peer':      return 'info'
     default:          return 'info'
   }
@@ -73,7 +74,7 @@ function getRoleName(role: string) {
   if (r.includes('leader'))    return t.value.cluster.roles.leader
   if (r.includes('follower'))  return t.value.cluster.roles.follower
   if (r.includes('candidate')) return t.value.cluster.roles.candidate
-  if (r.includes('local'))     return t.value.cluster.roles.local
+  if (r.includes('local') || r.includes('standalone')) return t.value.cluster.roles.local
   if (r.includes('peer'))      return t.value.cluster.roles.peer
   return role
 }
@@ -104,7 +105,7 @@ onMounted(fetchCluster)
             </el-tag>
           </div>
           <div class="hero-subtitle">
-            {{ stats?.node_count || 0 }} {{ t.cluster.nodeCount.toLowerCase() }} — 
+            {{ stats?.node_count || 0 }} {{ t.cluster.nodeCount }} — 
             {{ stats?.leader_addr ? t.cluster.leaderAddr + ': ' + stats.leader_addr : t.dashboard.noEvents }}
           </div>
         </div>
@@ -138,8 +139,24 @@ onMounted(fetchCluster)
     <!-- Table Section -->
     <div class="glass-table-wrapper">
       <el-table :data="members" v-loading="loading" style="width: 100%">
-        <el-table-column :label="t.cluster.nodeId" prop="id" min-width="200" />
-        <el-table-column :label="t.cluster.raftAddr" prop="address" min-width="200">
+        <el-table-column :label="t.cluster.nodeId" min-width="200">
+          <template #default="{ row }">
+            <div class="node-id-cell">
+              <span class="node-id-text">{{ row.id }}</span>
+              <el-tag 
+                v-if="row.role === 'Local' || row.role === 'Standalone'" 
+                size="small" 
+                type="primary" 
+                effect="plain" 
+                color="rgba(64, 158, 255, 0.1)"
+                class="current-tag"
+              >
+                当前节点
+              </el-tag>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t.cluster.address" prop="address" min-width="200">
           <template #default="{ row }">
             <span class="mono-addr">{{ row.address }}</span>
           </template>
@@ -157,7 +174,7 @@ onMounted(fetchCluster)
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t.common.actions" width="100" align="right">
+        <el-table-column :label="t.common.actions" width="100" fixed="right">
           <template #default="{ row }">
             <el-button 
               v-if="row.role !== 'Local' && row.role !== 'Standalone' && row.role !== 'Leader'" 
@@ -339,6 +356,25 @@ onMounted(fetchCluster)
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.node-id-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-id-text {
+  font-weight: 500;
+}
+
+.current-tag {
+  border-radius: 4px;
+  border-style: solid;
+  font-size: 11px;
+  height: 20px;
+  line-height: 18px;
+  padding: 0 6px;
 }
 
 .tag-cp {

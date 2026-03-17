@@ -25,6 +25,7 @@ const (
 	CmdSetMode       CommandType = "set_mode"
 	CmdSetEnv        CommandType = "set_env"
 	CmdSetSeeds      CommandType = "set_seeds"
+	CmdSetLogLevel   CommandType = "set_log_level"
 )
 
 // Command represents a Raft log command.
@@ -35,11 +36,12 @@ type Command struct {
 	InstanceID  string          `json:"instance_id,omitempty"`
 	APIKey      *model.APIKey   `json:"api_key,omitempty"`
 	User        *model.User     `json:"user,omitempty"`
-	Key         string          `json:"key,omitempty"`      // for delete operations
-	Username    string          `json:"username,omitempty"` // for delete operations
-	Mode        string          `json:"mode,omitempty"`     // for set_mode
+	Key         string          `json:"key,omitempty"`         // for delete operations
+	Username    string          `json:"username,omitempty"`    // for delete operations
+	Mode        string          `json:"mode,omitempty"`        // for set_mode
 	Environment string          `json:"environment,omitempty"` // for set_env
 	Seeds       []string        `json:"seeds,omitempty"`       // for set_seeds
+	LogLevel    string          `json:"log_level,omitempty"`   // for set_log_level
 }
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
@@ -65,10 +67,10 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		f.registry.Register(cmd.Instance)
 		return nil
 	case CmdDeregister:
-		ok := f.registry.Deregister(cmd.ServiceName, cmd.InstanceID)
+		_, ok := f.registry.Deregister(cmd.ServiceName, cmd.InstanceID)
 		return ok
 	case CmdHeartbeat:
-		ok := f.registry.Heartbeat(cmd.ServiceName, cmd.InstanceID)
+		_, ok := f.registry.Heartbeat(cmd.ServiceName, cmd.InstanceID)
 		return ok
 	case CmdAddAPIKey:
 		f.registry.AddAPIKey(cmd.APIKey)
@@ -90,6 +92,9 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		return nil
 	case CmdSetSeeds:
 		f.registry.SetSeeds(cmd.Seeds)
+		return nil
+	case CmdSetLogLevel:
+		f.registry.SetLogLevel(cmd.LogLevel)
 		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)

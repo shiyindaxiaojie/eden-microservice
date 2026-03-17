@@ -1,21 +1,5 @@
-# Eden Registry Node 1 Configuration
+# Eden Registry Node 1 (Ports auto-resolved)
 node_id: "node-1"
-datacenter: "dc1"
 http_addr: ":8500"
-raft_addr: "127.0.0.1:7000"
 data_dir: "./data/node1"
-
-auth:
-  jwt:
-    enabled: true
-    secret: "eden-jwt-console-secret-key"
-  api_key:
-
-log:
-  level: INFO
-  format: text
-  pattern: "%d [%p] [%T] %m%n"
-  appenders:
-    - name: Console
-      type: Console
-      pattern: "%d [%p] [%T] %m%n"
+bootstrap: true

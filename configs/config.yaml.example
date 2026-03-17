@@ -1,39 +1,68 @@
 ############################################################
-# Eden Registry Core Configuration Example
-# Copy this file to config.yaml and modify as needed.
+# Eden Registry 核心启动配置
 ############################################################
 
-# Node basic configuration
-# node_id: Unique identifier for this node
+# 节点基本标识
 node_id: "node-1"
 
-# Datacenter name, used for multi-DC isolation
+# 运行模式：ap (高性能/弱一致) 或 cp (强一致，基于Raft)
+# 可在控制台动态切换
+mode: "ap"
+
+# 数据中心名称，用于多数据中心隔离
 datacenter: "dc1"
 
-# Listen addresses
-# http_addr: REST API and Console listen address
-http_addr: ":8500"
-# raft_addr: Internal communication address for Raft in CP mode
-raft_addr: "127.0.0.1:7000"
-
-# Directory for persistent data (services, users, settings, raft logs)
+# 数据存储目录（各节点必须隔离）
 data_dir: "./data"
 
 ############################################################
-# Authentication and Authorization
+# 网络监听配置（支持端口动态分配）
+############################################################
+
+# HTTP 管理API 和 控制台监听地址 (必须明确指定)
+http_addr: ":8500"
+
+# gRPC 监听地址 (用于数据同步)
+#   - 不填 或 填写 ":0" 则表示随机端口
+#   - 其他节点可通过 http_addr 获取此地址
+grpc_addr: ":0"
+
+# QUIC 监听地址 (基于UDP的gRPC传输)
+#   - 不填 或 填写 ":0" 则表示随机端口
+quic_addr: ""
+
+# Raft 内部通信地址 (CP 模式必备)
+#   - 注意：Raft 要求必须有明确的 IP (如 127.0.0.1 或 局域网IP)
+#   - 建议填写 "127.0.0.1:7000" 或 留空以自动分配 "127.0.0.1:随机端口"
+#   - 错误写法: ":7000" 或 "0.0.0.0:7000" (会报错 not advertisable)
+raft_addr: ""
+
+############################################################
+# 集群启动控制 (仅在 CP 模式下 node-1 使用)
+############################################################
+
+# 是否作为首个节点启动 Raft 集群
+bootstrap: false
+
+# 加入已有集群的 HTTP 地址（例如 "http://127.0.0.1:8500"）
+join: ""
+
+# AP 模式下的种子节点列表（HTTP 地址）
+seeds: []
+
+############################################################
+# 认证配置
 ############################################################
 auth:
-  # Console login authentication (JWT)
   jwt:
     enabled: true
-    secret: "change-this-to-a-secure-random-string"
-
-  # API Key authentication for service registration
-  # Note: API Keys are managed via the Web UI
-  api_key:
+    secret: "eden-jwt-console-secret-key"
+  
+  # API Key 相关配置已移至 Web 控制台管理
+  # 用户管理也建议在控制台进行，系统会自动持久化到 data/users.json
 
 ############################################################
-# Logging Configuration
+# 日志配置
 ############################################################
 log:
   level: INFO # DEBUG, INFO, WARN, ERROR, FATAL

@@ -98,12 +98,8 @@ func NewNode(cfg Config, registry *store.Registry) (*Node, error) {
 }
 
 // Apply submits a command through Raft consensus.
-func (n *Node) Apply(cmd interface{}, timeout interface{}) error {
-	t, ok := timeout.(time.Duration)
-	if !ok {
-		t = 5 * time.Second
-	}
-	
+func (n *Node) Apply(cmd interface{}, timeout time.Duration) error {
+	t := timeout
 	if n.Raft.State() != hraft.Leader {
 		leader := n.Raft.Leader()
 		if leader == "" {
