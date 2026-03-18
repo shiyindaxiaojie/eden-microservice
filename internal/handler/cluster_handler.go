@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
@@ -380,6 +381,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	
 	mode := h.settings.GetMode()
 	env := h.settings.GetEnvironment()
+	localAddr := h.normalizeAddr(h.config.HTTPAddr)
 	isLeader := h.cluster.IsLeader()
 	leaderAddr := h.cluster.LeaderAddr()
 	
@@ -405,20 +407,60 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	nodeCount := 1
+	healthyNodes := 1 // Local node is always healthy if we are running
 	if env == "cluster" {
 		if mode == "cp" {
-			members, _ := h.cluster.GetMembers()
-			if members != nil {
-				if m, ok := members.([]interface{}); ok {
-					nodeCount = len(m)
+			res, _ := h.cluster.GetMembers()
+			if ms, ok := res.([]cp.ClusterMember); ok {
+				nodeCount = len(ms)
+				healthyNodes = 0
+				for _, m := range ms {
+					if m.Status == "Online" {
+						healthyNodes++
+					}
+				}
+			} else if ims, ok := res.([]interface{}); ok {
+				nodeCount = len(ims)
+				healthyNodes = 0
+				for _, m := range ims {
+					if mm, ok := m.(map[string]interface{}); ok {
+						if mm["status"] == "Online" {
+							healthyNodes++
+						}
+					} else if cm, ok := m.(cp.ClusterMember); ok {
+						if cm.Status == "Online" {
+							healthyNodes++
+						}
+					}
 				}
 			}
 		} else {
-			nodeCount = len(h.settings.GetSeeds()) + 1
+			seeds := h.settings.GetSeeds()
+			nodeCount = len(seeds) + 1
+			// Quick parallel health check for AP seeds
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+			for _, s := range seeds {
+				if s == "" || h.normalizeAddr(s) == localAddr { continue }
+				wg.Add(1)
+				go func(addr string) {
+					defer wg.Done()
+					client := http.Client{Timeout: 200 * time.Millisecond}
+					resp, err := client.Get(addr + "/health")
+					if err == nil {
+						resp.Body.Close()
+						mu.Lock()
+						healthyNodes++
+						mu.Unlock()
+					}
+				}(s)
+			}
+			wg.Wait()
 		}
 	}
 
 	if nodeCount < 1 { nodeCount = 1 }
+	nodeHealthRate := float64(healthyNodes) / float64(nodeCount) * 100
 
 	result := map[string]interface{}{
 		"node_count":     nodeCount,
@@ -430,7 +472,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 		"service_count":  stats.ServiceCount,
 		"instance_count": stats.InstanceCount,
 		"healthy_count":  stats.HealthyCount,
-		"health_rate":    stats.HealthRate,
+		"health_rate":    nodeHealthRate, // Return node health rate here for cluster dashboard
 		"memory_usage":   stats.MemoryUsage,
 	}
 	jsonOK(w, result)

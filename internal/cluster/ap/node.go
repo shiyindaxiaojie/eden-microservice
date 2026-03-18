@@ -29,7 +29,57 @@ func NewNode(cfg *config.Config, registry *store.Registry) *Node {
 	}
 	// Initial peers from seeds
 	n.SyncSeeds()
+	// Start background sync
+	n.startAntiEntropy()
 	return n
+}
+
+func (n *Node) startAntiEntropy() {
+	ticker := time.NewTicker(30 * time.Second)
+	go func() {
+		for range ticker.C {
+			n.fullSync()
+		}
+	}()
+}
+
+func (n *Node) fullSync() {
+	peers := make([]*cluster.Peer, 0)
+	n.PM.Range(func(p *cluster.Peer) bool {
+		peers = append(peers, p)
+		return true
+	})
+
+	if len(peers) == 0 {
+		return
+	}
+
+	// Pick a random peer
+	target := peers[time.Now().UnixNano()%int64(len(peers))]
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := target.GetClient()
+	if err != nil {
+		logger.Error("[AP Node] failed to get client for full sync with %s: %v", target.ID, err)
+		return
+	}
+
+	resp, err := client.SyncDiscovery(ctx, &pb.SyncDiscoveryRequest{})
+	if err != nil {
+		logger.Warn("[AP Node] full sync with %s failed: %v", target.ID, err)
+		return
+	}
+
+	var remoteServices map[string]map[string]*model.Instance
+	if err := json.Unmarshal(resp.Data, &remoteServices); err != nil {
+		logger.Error("[AP Node] unmarshal error during full sync: %v", err)
+		return
+	}
+
+	n.Registry.Services.Merge(remoteServices)
+	logger.Info("[AP Node] Full sync completed with %s", target.ID)
 }
 
 // SyncSeeds updates the internal peer map from registry seeds.

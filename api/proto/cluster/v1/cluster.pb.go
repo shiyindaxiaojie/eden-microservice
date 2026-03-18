@@ -21,6 +21,86 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type SyncDiscoveryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncDiscoveryRequest) Reset() {
+	*x = SyncDiscoveryRequest{}
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncDiscoveryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncDiscoveryRequest) ProtoMessage() {}
+
+func (x *SyncDiscoveryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncDiscoveryRequest.ProtoReflect.Descriptor instead.
+func (*SyncDiscoveryRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{0}
+}
+
+type SyncDiscoveryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"` // JSON serialized map[string]map[string]*model.Instance
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncDiscoveryResponse) Reset() {
+	*x = SyncDiscoveryResponse{}
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncDiscoveryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncDiscoveryResponse) ProtoMessage() {}
+
+func (x *SyncDiscoveryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncDiscoveryResponse.ProtoReflect.Descriptor instead.
+func (*SyncDiscoveryResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SyncDiscoveryResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 type SyncSeedsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Seeds         []string               `protobuf:"bytes,1,rep,name=seeds,proto3" json:"seeds,omitempty"`
@@ -30,7 +110,7 @@ type SyncSeedsRequest struct {
 
 func (x *SyncSeedsRequest) Reset() {
 	*x = SyncSeedsRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[0]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +122,7 @@ func (x *SyncSeedsRequest) String() string {
 func (*SyncSeedsRequest) ProtoMessage() {}
 
 func (x *SyncSeedsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[0]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +135,7 @@ func (x *SyncSeedsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncSeedsRequest.ProtoReflect.Descriptor instead.
 func (*SyncSeedsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{0}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SyncSeedsRequest) GetSeeds() []string {
@@ -75,7 +155,7 @@ type SyncResponse struct {
 
 func (x *SyncResponse) Reset() {
 	*x = SyncResponse{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[1]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87,7 +167,7 @@ func (x *SyncResponse) String() string {
 func (*SyncResponse) ProtoMessage() {}
 
 func (x *SyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[1]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -100,7 +180,7 @@ func (x *SyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncResponse.ProtoReflect.Descriptor instead.
 func (*SyncResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{1}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SyncResponse) GetSuccess() bool {
@@ -131,7 +211,7 @@ type SyncUserRequest struct {
 
 func (x *SyncUserRequest) Reset() {
 	*x = SyncUserRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[2]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -143,7 +223,7 @@ func (x *SyncUserRequest) String() string {
 func (*SyncUserRequest) ProtoMessage() {}
 
 func (x *SyncUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[2]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -156,7 +236,7 @@ func (x *SyncUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncUserRequest.ProtoReflect.Descriptor instead.
 func (*SyncUserRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{2}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SyncUserRequest) GetUsername() string {
@@ -210,7 +290,7 @@ type DeleteUserRequest struct {
 
 func (x *DeleteUserRequest) Reset() {
 	*x = DeleteUserRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[3]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +302,7 @@ func (x *DeleteUserRequest) String() string {
 func (*DeleteUserRequest) ProtoMessage() {}
 
 func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[3]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +315,7 @@ func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{3}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DeleteUserRequest) GetUsername() string {
@@ -257,7 +337,7 @@ type SyncAPIKeyRequest struct {
 
 func (x *SyncAPIKeyRequest) Reset() {
 	*x = SyncAPIKeyRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[4]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -269,7 +349,7 @@ func (x *SyncAPIKeyRequest) String() string {
 func (*SyncAPIKeyRequest) ProtoMessage() {}
 
 func (x *SyncAPIKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[4]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -282,7 +362,7 @@ func (x *SyncAPIKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncAPIKeyRequest.ProtoReflect.Descriptor instead.
 func (*SyncAPIKeyRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{4}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SyncAPIKeyRequest) GetKey() string {
@@ -322,7 +402,7 @@ type DeleteAPIKeyRequest struct {
 
 func (x *DeleteAPIKeyRequest) Reset() {
 	*x = DeleteAPIKeyRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[5]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +414,7 @@ func (x *DeleteAPIKeyRequest) String() string {
 func (*DeleteAPIKeyRequest) ProtoMessage() {}
 
 func (x *DeleteAPIKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[5]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +427,7 @@ func (x *DeleteAPIKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteAPIKeyRequest.ProtoReflect.Descriptor instead.
 func (*DeleteAPIKeyRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{5}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DeleteAPIKeyRequest) GetKey() string {
@@ -368,7 +448,7 @@ type SyncSettingsRequest struct {
 
 func (x *SyncSettingsRequest) Reset() {
 	*x = SyncSettingsRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[6]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -380,7 +460,7 @@ func (x *SyncSettingsRequest) String() string {
 func (*SyncSettingsRequest) ProtoMessage() {}
 
 func (x *SyncSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[6]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -393,7 +473,7 @@ func (x *SyncSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncSettingsRequest.ProtoReflect.Descriptor instead.
 func (*SyncSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{6}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SyncSettingsRequest) GetMode() string {
@@ -427,7 +507,7 @@ type ReplicateLogRequest struct {
 
 func (x *ReplicateLogRequest) Reset() {
 	*x = ReplicateLogRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[7]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -439,7 +519,7 @@ func (x *ReplicateLogRequest) String() string {
 func (*ReplicateLogRequest) ProtoMessage() {}
 
 func (x *ReplicateLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[7]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -452,7 +532,7 @@ func (x *ReplicateLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicateLogRequest.ProtoReflect.Descriptor instead.
 func (*ReplicateLogRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{7}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ReplicateLogRequest) GetCommandType() string {
@@ -480,7 +560,7 @@ type ForwardRequest struct {
 
 func (x *ForwardRequest) Reset() {
 	*x = ForwardRequest{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[8]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -492,7 +572,7 @@ func (x *ForwardRequest) String() string {
 func (*ForwardRequest) ProtoMessage() {}
 
 func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[8]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -505,7 +585,7 @@ func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardRequest.ProtoReflect.Descriptor instead.
 func (*ForwardRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{8}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ForwardRequest) GetPath() string {
@@ -540,7 +620,7 @@ type ForwardResponse struct {
 
 func (x *ForwardResponse) Reset() {
 	*x = ForwardResponse{}
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[9]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -552,7 +632,7 @@ func (x *ForwardResponse) String() string {
 func (*ForwardResponse) ProtoMessage() {}
 
 func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[9]
+	mi := &file_api_proto_cluster_v1_cluster_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -565,7 +645,7 @@ func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardResponse.ProtoReflect.Descriptor instead.
 func (*ForwardResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{9}
+	return file_api_proto_cluster_v1_cluster_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ForwardResponse) GetSuccess() bool {
@@ -593,7 +673,10 @@ var File_api_proto_cluster_v1_cluster_proto protoreflect.FileDescriptor
 
 const file_api_proto_cluster_v1_cluster_proto_rawDesc = "" +
 	"\n" +
-	"\"api/proto/cluster/v1/cluster.proto\x12\x0feden.cluster.v1\"(\n" +
+	"\"api/proto/cluster/v1/cluster.proto\x12\x0feden.cluster.v1\"\x16\n" +
+	"\x14SyncDiscoveryRequest\"+\n" +
+	"\x15SyncDiscoveryResponse\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"(\n" +
 	"\x10SyncSeedsRequest\x12\x14\n" +
 	"\x05seeds\x18\x01 \x03(\tR\x05seeds\"B\n" +
 	"\fSyncResponse\x12\x18\n" +
@@ -616,10 +699,11 @@ const file_api_proto_cluster_v1_cluster_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x04 \x01(\x03R\texpiresAt\"'\n" +
 	"\x13DeleteAPIKeyRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\"K\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\"h\n" +
 	"\x13SyncSettingsRequest\x12\x12\n" +
 	"\x04mode\x18\x01 \x01(\tR\x04mode\x12 \n" +
-	"\venvironment\x18\x02 \x01(\tR\venvironment\"L\n" +
+	"\venvironment\x18\x02 \x01(\tR\venvironment\x12\x1b\n" +
+	"\tlog_level\x18\x03 \x01(\tR\blogLevel\"L\n" +
 	"\x13ReplicateLogRequest\x12!\n" +
 	"\fcommand_type\x18\x01 \x01(\tR\vcommandType\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"P\n" +
@@ -631,7 +715,7 @@ const file_api_proto_cluster_v1_cluster_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\vstatus_code\x18\x02 \x01(\x05R\n" +
 	"statusCode\x12\x12\n" +
-	"\x04body\x18\x03 \x01(\fR\x04body2\xa3\x05\n" +
+	"\x04body\x18\x03 \x01(\fR\x04body2\x83\x06\n" +
 	"\x0eClusterService\x12M\n" +
 	"\tSyncSeeds\x12!.eden.cluster.v1.SyncSeedsRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12K\n" +
 	"\bSyncUser\x12 .eden.cluster.v1.SyncUserRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12O\n" +
@@ -641,7 +725,8 @@ const file_api_proto_cluster_v1_cluster_proto_rawDesc = "" +
 	"SyncAPIKey\x12\".eden.cluster.v1.SyncAPIKeyRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12S\n" +
 	"\fDeleteAPIKey\x12$.eden.cluster.v1.DeleteAPIKeyRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12S\n" +
 	"\fSyncSettings\x12$.eden.cluster.v1.SyncSettingsRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12S\n" +
-	"\fReplicateLog\x12$.eden.cluster.v1.ReplicateLogRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12T\n" +
+	"\fReplicateLog\x12$.eden.cluster.v1.ReplicateLogRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12^\n" +
+	"\rSyncDiscovery\x12%.eden.cluster.v1.SyncDiscoveryRequest\x1a&.eden.cluster.v1.SyncDiscoveryResponse\x12T\n" +
 	"\x0fForwardToLeader\x12\x1f.eden.cluster.v1.ForwardRequest\x1a .eden.cluster.v1.ForwardResponseBLZJgithub.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1;clusterv1b\x06proto3"
 
 var (
@@ -656,41 +741,45 @@ func file_api_proto_cluster_v1_cluster_proto_rawDescGZIP() []byte {
 	return file_api_proto_cluster_v1_cluster_proto_rawDescData
 }
 
-var file_api_proto_cluster_v1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_api_proto_cluster_v1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_proto_cluster_v1_cluster_proto_goTypes = []any{
-	(*SyncSeedsRequest)(nil),    // 0: eden.cluster.v1.SyncSeedsRequest
-	(*SyncResponse)(nil),        // 1: eden.cluster.v1.SyncResponse
-	(*SyncUserRequest)(nil),     // 2: eden.cluster.v1.SyncUserRequest
-	(*DeleteUserRequest)(nil),   // 3: eden.cluster.v1.DeleteUserRequest
-	(*SyncAPIKeyRequest)(nil),   // 4: eden.cluster.v1.SyncAPIKeyRequest
-	(*DeleteAPIKeyRequest)(nil), // 5: eden.cluster.v1.DeleteAPIKeyRequest
-	(*SyncSettingsRequest)(nil), // 6: eden.cluster.v1.SyncSettingsRequest
-	(*ReplicateLogRequest)(nil), // 7: eden.cluster.v1.ReplicateLogRequest
-	(*ForwardRequest)(nil),      // 8: eden.cluster.v1.ForwardRequest
-	(*ForwardResponse)(nil),     // 9: eden.cluster.v1.ForwardResponse
+	(*SyncDiscoveryRequest)(nil),  // 0: eden.cluster.v1.SyncDiscoveryRequest
+	(*SyncDiscoveryResponse)(nil), // 1: eden.cluster.v1.SyncDiscoveryResponse
+	(*SyncSeedsRequest)(nil),      // 2: eden.cluster.v1.SyncSeedsRequest
+	(*SyncResponse)(nil),          // 3: eden.cluster.v1.SyncResponse
+	(*SyncUserRequest)(nil),       // 4: eden.cluster.v1.SyncUserRequest
+	(*DeleteUserRequest)(nil),     // 5: eden.cluster.v1.DeleteUserRequest
+	(*SyncAPIKeyRequest)(nil),     // 6: eden.cluster.v1.SyncAPIKeyRequest
+	(*DeleteAPIKeyRequest)(nil),   // 7: eden.cluster.v1.DeleteAPIKeyRequest
+	(*SyncSettingsRequest)(nil),   // 8: eden.cluster.v1.SyncSettingsRequest
+	(*ReplicateLogRequest)(nil),   // 9: eden.cluster.v1.ReplicateLogRequest
+	(*ForwardRequest)(nil),        // 10: eden.cluster.v1.ForwardRequest
+	(*ForwardResponse)(nil),       // 11: eden.cluster.v1.ForwardResponse
 }
 var file_api_proto_cluster_v1_cluster_proto_depIdxs = []int32{
-	0, // 0: eden.cluster.v1.ClusterService.SyncSeeds:input_type -> eden.cluster.v1.SyncSeedsRequest
-	2, // 1: eden.cluster.v1.ClusterService.SyncUser:input_type -> eden.cluster.v1.SyncUserRequest
-	3, // 2: eden.cluster.v1.ClusterService.DeleteUser:input_type -> eden.cluster.v1.DeleteUserRequest
-	4, // 3: eden.cluster.v1.ClusterService.SyncAPIKey:input_type -> eden.cluster.v1.SyncAPIKeyRequest
-	5, // 4: eden.cluster.v1.ClusterService.DeleteAPIKey:input_type -> eden.cluster.v1.DeleteAPIKeyRequest
-	6, // 5: eden.cluster.v1.ClusterService.SyncSettings:input_type -> eden.cluster.v1.SyncSettingsRequest
-	7, // 6: eden.cluster.v1.ClusterService.ReplicateLog:input_type -> eden.cluster.v1.ReplicateLogRequest
-	8, // 7: eden.cluster.v1.ClusterService.ForwardToLeader:input_type -> eden.cluster.v1.ForwardRequest
-	1, // 8: eden.cluster.v1.ClusterService.SyncSeeds:output_type -> eden.cluster.v1.SyncResponse
-	1, // 9: eden.cluster.v1.ClusterService.SyncUser:output_type -> eden.cluster.v1.SyncResponse
-	1, // 10: eden.cluster.v1.ClusterService.DeleteUser:output_type -> eden.cluster.v1.SyncResponse
-	1, // 11: eden.cluster.v1.ClusterService.SyncAPIKey:output_type -> eden.cluster.v1.SyncResponse
-	1, // 12: eden.cluster.v1.ClusterService.DeleteAPIKey:output_type -> eden.cluster.v1.SyncResponse
-	1, // 13: eden.cluster.v1.ClusterService.SyncSettings:output_type -> eden.cluster.v1.SyncResponse
-	1, // 14: eden.cluster.v1.ClusterService.ReplicateLog:output_type -> eden.cluster.v1.SyncResponse
-	9, // 15: eden.cluster.v1.ClusterService.ForwardToLeader:output_type -> eden.cluster.v1.ForwardResponse
-	8, // [8:16] is the sub-list for method output_type
-	0, // [0:8] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	2,  // 0: eden.cluster.v1.ClusterService.SyncSeeds:input_type -> eden.cluster.v1.SyncSeedsRequest
+	4,  // 1: eden.cluster.v1.ClusterService.SyncUser:input_type -> eden.cluster.v1.SyncUserRequest
+	5,  // 2: eden.cluster.v1.ClusterService.DeleteUser:input_type -> eden.cluster.v1.DeleteUserRequest
+	6,  // 3: eden.cluster.v1.ClusterService.SyncAPIKey:input_type -> eden.cluster.v1.SyncAPIKeyRequest
+	7,  // 4: eden.cluster.v1.ClusterService.DeleteAPIKey:input_type -> eden.cluster.v1.DeleteAPIKeyRequest
+	8,  // 5: eden.cluster.v1.ClusterService.SyncSettings:input_type -> eden.cluster.v1.SyncSettingsRequest
+	9,  // 6: eden.cluster.v1.ClusterService.ReplicateLog:input_type -> eden.cluster.v1.ReplicateLogRequest
+	0,  // 7: eden.cluster.v1.ClusterService.SyncDiscovery:input_type -> eden.cluster.v1.SyncDiscoveryRequest
+	10, // 8: eden.cluster.v1.ClusterService.ForwardToLeader:input_type -> eden.cluster.v1.ForwardRequest
+	3,  // 9: eden.cluster.v1.ClusterService.SyncSeeds:output_type -> eden.cluster.v1.SyncResponse
+	3,  // 10: eden.cluster.v1.ClusterService.SyncUser:output_type -> eden.cluster.v1.SyncResponse
+	3,  // 11: eden.cluster.v1.ClusterService.DeleteUser:output_type -> eden.cluster.v1.SyncResponse
+	3,  // 12: eden.cluster.v1.ClusterService.SyncAPIKey:output_type -> eden.cluster.v1.SyncResponse
+	3,  // 13: eden.cluster.v1.ClusterService.DeleteAPIKey:output_type -> eden.cluster.v1.SyncResponse
+	3,  // 14: eden.cluster.v1.ClusterService.SyncSettings:output_type -> eden.cluster.v1.SyncResponse
+	3,  // 15: eden.cluster.v1.ClusterService.ReplicateLog:output_type -> eden.cluster.v1.SyncResponse
+	1,  // 16: eden.cluster.v1.ClusterService.SyncDiscovery:output_type -> eden.cluster.v1.SyncDiscoveryResponse
+	11, // 17: eden.cluster.v1.ClusterService.ForwardToLeader:output_type -> eden.cluster.v1.ForwardResponse
+	9,  // [9:18] is the sub-list for method output_type
+	0,  // [0:9] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_cluster_v1_cluster_proto_init() }
@@ -704,7 +793,7 @@ func file_api_proto_cluster_v1_cluster_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_cluster_v1_cluster_proto_rawDesc), len(file_api_proto_cluster_v1_cluster_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

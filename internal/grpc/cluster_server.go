@@ -145,6 +145,15 @@ func (s *ClusterServer) ReplicateLog(ctx context.Context, req *pb.ReplicateLogRe
 	return &pb.SyncResponse{Success: true}, nil
 }
 
+func (s *ClusterServer) SyncDiscovery(ctx context.Context, req *pb.SyncDiscoveryRequest) (*pb.SyncDiscoveryResponse, error) {
+	allServices := s.registry.Services.GetAll()
+	data, err := json.Marshal(allServices)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SyncDiscoveryResponse{Data: data}, nil
+}
+
 func (s *ClusterServer) ForwardToLeader(ctx context.Context, req *pb.ForwardRequest) (*pb.ForwardResponse, error) {
 	// Real implementation would forward the request to the leader node
 	// This is used in CP mode when a follower receives a write request

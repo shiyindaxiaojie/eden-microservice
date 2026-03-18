@@ -9,11 +9,15 @@ import (
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"encoding/json"
+	"net/http"
+	"strings"
 )
 
 // Peer represents a remote node in the cluster.
 type Peer struct {
-	Addr       string
+	ID         string // HTTP address (identifier)
+	grpcAddr   string // Resolved gRPC address
 	conn       *grpc.ClientConn
 	client     pb.ClusterServiceClient
 	mu         sync.RWMutex
@@ -46,7 +50,7 @@ func (pm *PeerManager) UpdatePeers(addrs []string) {
 		if p, ok := pm.peers[addr]; ok {
 			newPeers[addr] = p
 		} else {
-			newPeers[addr] = &Peer{Addr: addr}
+			newPeers[addr] = &Peer{ID: addr}
 		}
 	}
 
@@ -72,7 +76,19 @@ func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
 		return p.client, nil
 	}
 
-	conn, err := grpc.Dial(p.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Resolve gRPC address if needed
+	addr := p.grpcAddr
+	if addr == "" {
+		p.mu.Unlock() // Unlock to call resolve which is slow
+		err := p.Resolve()
+		p.mu.Lock()
+		if err != nil {
+			return nil, err
+		}
+		addr = p.grpcAddr
+	}
+
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +96,34 @@ func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
 	p.conn = conn
 	p.client = pb.NewClusterServiceClient(conn)
 	return p.client, nil
+}
+
+// Resolve fetches node info to get the gRPC address.
+func (p *Peer) Resolve() error {
+	client := http.Client{Timeout: 1 * time.Second}
+	resp, err := client.Get(p.ID + "/v1/node/info")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var info struct {
+		GRPCAddr string `json:"grpc_addr"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return err
+	}
+
+	p.mu.Lock()
+	p.grpcAddr = info.GRPCAddr
+	// Normalize if needed (if it's just :port)
+	if strings.HasPrefix(p.grpcAddr, ":") {
+		// Extract host from ID
+		parts := strings.Split(strings.TrimPrefix(strings.TrimPrefix(p.ID, "http://"), "https://"), ":")
+		p.grpcAddr = parts[0] + p.grpcAddr
+	}
+	p.mu.Unlock()
+	return nil
 }
 
 // Range iterates over all peers.
@@ -104,12 +148,12 @@ func (pm *PeerManager) Broadcast(ctx context.Context, f func(ctx context.Context
 		go func(p *Peer) {
 			client, err := p.GetClient()
 			if err != nil {
-				logger.Error("[PeerManager] failed to get client for %s: %v", p.Addr, err)
+				logger.Error("[PeerManager] failed to get client for %s: %v", p.ID, err)
 				return
 			}
 			
 			if err := f(ctx, client); err != nil {
-				logger.Warn("[PeerManager] broadcast to %s failed: %v", p.Addr, err)
+				logger.Warn("[PeerManager] broadcast to %s failed: %v", p.ID, err)
 			}
 		}(p)
 		return true

@@ -20,8 +20,16 @@ service ClusterService {
   rpc SyncSettings(SyncSettingsRequest) returns (SyncResponse);
   // Replicate a log entry (for AP mode broadcast).
   rpc ReplicateLog(ReplicateLogRequest) returns (SyncResponse);
+  // Pull full discovery state from a peer (Anti-Entropy).
+  rpc SyncDiscovery(SyncDiscoveryRequest) returns (SyncDiscoveryResponse);
   // Forward a write request to the leader (for CP mode).
   rpc ForwardToLeader(ForwardRequest) returns (ForwardResponse);
+}
+
+message SyncDiscoveryRequest {}
+
+message SyncDiscoveryResponse {
+  bytes data = 1; // JSON serialized map[string]map[string]*model.Instance
 }
 
 message SyncSeedsRequest {

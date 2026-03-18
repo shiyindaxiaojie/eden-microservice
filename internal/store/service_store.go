@@ -251,6 +251,36 @@ func (s *ServiceStore) GetAll() map[string]map[string]*model.Instance {
 	return copy
 }
 
+// Merge merges remote state into local state.
+func (s *ServiceStore) Merge(remote map[string]map[string]*model.Instance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := false
+	for svcName, remoteInsts := range remote {
+		if _, ok := s.services[svcName]; !ok {
+			s.services[svcName] = make(map[string]*model.Instance)
+		}
+		localInsts := s.services[svcName]
+		for id, rInst := range remoteInsts {
+			if lInst, ok := localInsts[id]; ok {
+				// Keep the one with later heartbeat
+				if rInst.LastHeartbeat.After(lInst.LastHeartbeat) {
+					localInsts[id] = rInst
+					changed = true
+				}
+			} else {
+				localInsts[id] = rInst
+				changed = true
+			}
+		}
+	}
+	
+	if changed {
+		s.Save()
+	}
+}
+
 // Restore replaces total state.
 func (s *ServiceStore) Restore(services map[string]map[string]*model.Instance) {
 	s.mu.Lock()

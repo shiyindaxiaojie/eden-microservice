@@ -26,6 +26,7 @@ const (
 	ClusterService_DeleteAPIKey_FullMethodName    = "/eden.cluster.v1.ClusterService/DeleteAPIKey"
 	ClusterService_SyncSettings_FullMethodName    = "/eden.cluster.v1.ClusterService/SyncSettings"
 	ClusterService_ReplicateLog_FullMethodName    = "/eden.cluster.v1.ClusterService/ReplicateLog"
+	ClusterService_SyncDiscovery_FullMethodName   = "/eden.cluster.v1.ClusterService/SyncDiscovery"
 	ClusterService_ForwardToLeader_FullMethodName = "/eden.cluster.v1.ClusterService/ForwardToLeader"
 )
 
@@ -49,6 +50,8 @@ type ClusterServiceClient interface {
 	SyncSettings(ctx context.Context, in *SyncSettingsRequest, opts ...grpc.CallOption) (*SyncResponse, error)
 	// Replicate a log entry (for AP mode broadcast).
 	ReplicateLog(ctx context.Context, in *ReplicateLogRequest, opts ...grpc.CallOption) (*SyncResponse, error)
+	// Pull full discovery state from a peer (Anti-Entropy).
+	SyncDiscovery(ctx context.Context, in *SyncDiscoveryRequest, opts ...grpc.CallOption) (*SyncDiscoveryResponse, error)
 	// Forward a write request to the leader (for CP mode).
 	ForwardToLeader(ctx context.Context, in *ForwardRequest, opts ...grpc.CallOption) (*ForwardResponse, error)
 }
@@ -131,6 +134,16 @@ func (c *clusterServiceClient) ReplicateLog(ctx context.Context, in *ReplicateLo
 	return out, nil
 }
 
+func (c *clusterServiceClient) SyncDiscovery(ctx context.Context, in *SyncDiscoveryRequest, opts ...grpc.CallOption) (*SyncDiscoveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SyncDiscoveryResponse)
+	err := c.cc.Invoke(ctx, ClusterService_SyncDiscovery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *clusterServiceClient) ForwardToLeader(ctx context.Context, in *ForwardRequest, opts ...grpc.CallOption) (*ForwardResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ForwardResponse)
@@ -161,6 +174,8 @@ type ClusterServiceServer interface {
 	SyncSettings(context.Context, *SyncSettingsRequest) (*SyncResponse, error)
 	// Replicate a log entry (for AP mode broadcast).
 	ReplicateLog(context.Context, *ReplicateLogRequest) (*SyncResponse, error)
+	// Pull full discovery state from a peer (Anti-Entropy).
+	SyncDiscovery(context.Context, *SyncDiscoveryRequest) (*SyncDiscoveryResponse, error)
 	// Forward a write request to the leader (for CP mode).
 	ForwardToLeader(context.Context, *ForwardRequest) (*ForwardResponse, error)
 	mustEmbedUnimplementedClusterServiceServer()
@@ -193,6 +208,9 @@ func (UnimplementedClusterServiceServer) SyncSettings(context.Context, *SyncSett
 }
 func (UnimplementedClusterServiceServer) ReplicateLog(context.Context, *ReplicateLogRequest) (*SyncResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReplicateLog not implemented")
+}
+func (UnimplementedClusterServiceServer) SyncDiscovery(context.Context, *SyncDiscoveryRequest) (*SyncDiscoveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncDiscovery not implemented")
 }
 func (UnimplementedClusterServiceServer) ForwardToLeader(context.Context, *ForwardRequest) (*ForwardResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForwardToLeader not implemented")
@@ -344,6 +362,24 @@ func _ClusterService_ReplicateLog_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClusterService_SyncDiscovery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncDiscoveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClusterServiceServer).SyncDiscovery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClusterService_SyncDiscovery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClusterServiceServer).SyncDiscovery(ctx, req.(*SyncDiscoveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ClusterService_ForwardToLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ForwardRequest)
 	if err := dec(in); err != nil {
@@ -396,6 +432,10 @@ var ClusterService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReplicateLog",
 			Handler:    _ClusterService_ReplicateLog_Handler,
+		},
+		{
+			MethodName: "SyncDiscovery",
+			Handler:    _ClusterService_SyncDiscovery_Handler,
 		},
 		{
 			MethodName: "ForwardToLeader",
