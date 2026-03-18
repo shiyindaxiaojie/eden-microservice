@@ -1,5 +1,5 @@
 {
-  "mode": "cp",
+  "mode": "ap",
   "environment": "cluster",
   "log_level": ""
 }

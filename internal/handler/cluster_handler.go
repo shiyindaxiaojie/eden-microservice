@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -171,34 +172,54 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 	// 2. Correlation Heuristic: Match seeds to Raft members by host + port order
 	seedToRaftID := make(map[string]string)
 	if mode == "cp" && env == "cluster" && len(seeds) > 0 {
-		// Group seeds by host
+		// Group seeds by host (excluding local)
 		hostSeeds := make(map[string][]string)
 		for _, s := range seeds {
 			cleaned := strings.TrimPrefix(strings.TrimPrefix(s, "http://"), "https://")
+			if h.normalizeAddr(s) == localAddr { continue }
 			host, _, _ := net.SplitHostPort(cleaned)
 			if host == "" { host = cleaned }
 			hostSeeds[host] = append(hostSeeds[host], s)
 		}
-		// Group Raft members by host
+		// Group Raft members by host (excluding local)
 		hostRaft := make(map[string][]string)
 		raftAddrToID := make(map[string]string)
+		localRaftAddr := h.config.RaftAddr
 		for id, rm := range raftMembersMap {
+			raftAddrToID[rm["address"]] = id
+			if rm["address"] == localRaftAddr { continue }
 			host, _, _ := net.SplitHostPort(rm["address"])
 			if host != "" {
 				hostRaft[host] = append(hostRaft[host], rm["address"])
-				raftAddrToID[rm["address"]] = id
 			}
 		}
 		// Sort both by port and match
 		for host, sList := range hostSeeds {
 			rList := hostRaft[host]
 			if len(sList) > 0 && len(rList) > 0 {
-				// Simple sort: shorter port strings come first or just string sort
-				// (In 3-node local, they match by order if started sequentially)
-				// We can't guarantee port order, but often they align.
-				// If len is 1, it's 100% match.
-				if len(sList) == 1 && len(rList) == 1 {
-					seedToRaftID[sList[0]] = raftAddrToID[rList[0]]
+				// Sort by port numbers (extracting from addr)
+				sortFunc := func(list []string) {
+					sort.Slice(list, func(i, j int) bool {
+						_, p1, _ := net.SplitHostPort(list[i])
+						if p1 == "" { // Handle HTTP strings like http://...:8500
+							parts := strings.Split(list[i], ":")
+							p1 = parts[len(parts)-1]
+						}
+						_, p2, _ := net.SplitHostPort(list[j])
+						if p2 == "" {
+							parts := strings.Split(list[j], ":")
+							p2 = parts[len(parts)-1]
+						}
+						return p1 < p2
+					})
+				}
+				sortFunc(sList)
+				sortFunc(rList)
+				// If lengths match, we can match by order (common in local tests)
+				if len(sList) == len(rList) {
+					for i := 0; i < len(sList); i++ {
+						seedToRaftID[sList[i]] = raftAddrToID[rList[i]]
+					}
 				}
 			}
 		}
