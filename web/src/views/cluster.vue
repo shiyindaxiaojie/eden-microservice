@@ -10,8 +10,18 @@ const members = ref<ClusterMember[]>([])
 const stats = ref<ClusterStats | null>(null)
 const loading = ref(true)
 const showAddDialog = ref(false)
-const addForm = ref({ node_id: '', address: '' })
+const addForms = ref([{ protocol: 'http://', host: '', port: '' }])
 
+function addNodeRow() {
+  addForms.value.push({ protocol: 'http://', host: '', port: '' })
+}
+
+function removeNodeRow(index: number) {
+  addForms.value.splice(index, 1)
+  if (addForms.value.length === 0) {
+    addNodeRow()
+  }
+}
 async function fetchCluster() {
   loading.value = true
   try {
@@ -26,21 +36,28 @@ async function fetchCluster() {
 }
 
 async function handleAdd() {
-  if (!addForm.value.address) {
-    ElMessage.warning('Address is required')
+  const addresses = addForms.value
+    .filter(f => f.host && f.port)
+    .map(f => `${f.protocol}${f.host}:${f.port}`)
+
+  if (addresses.length === 0) {
+    ElMessage.warning('Please enter valid address information')
     return
   }
   try {
-    await addClusterMember({
-      node_id: addForm.value.node_id,
-      address: addForm.value.address
-    })
+    await addClusterMember({ addresses })
     ElMessage.success(t.value.common.success)
     showAddDialog.value = false
-    addForm.value = { node_id: '', address: '' }
+    addForms.value = [{ protocol: 'http://', host: '', port: '' }]
     fetchCluster()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Add failed')
+    const data = e.response?.data
+    if (data?.error === 'not leader' && data?.leader) {
+      const tip = t.value.settings.notLeaderTip.replace('{addr}', data.leader)
+      ElMessage.warning(tip)
+    } else {
+      ElMessage.error(data?.error || 'Add failed')
+    }
   }
 }
 
@@ -74,7 +91,8 @@ function getRoleName(role: string) {
   if (r.includes('leader'))    return t.value.cluster.roles.leader
   if (r.includes('follower'))  return t.value.cluster.roles.follower
   if (r.includes('candidate')) return t.value.cluster.roles.candidate
-  if (r.includes('local') || r.includes('standalone')) return t.value.cluster.roles.local
+  if (r.includes('local'))     return t.value.cluster.roles.local
+  if (r.includes('standalone')) return t.value.cluster.roles.standalone
   if (r.includes('peer'))      return t.value.cluster.roles.peer
   return role
 }
@@ -120,14 +138,9 @@ onMounted(fetchCluster)
         <div class="hero-stat-item">
           <div class="stat-label">{{ t.cluster.role }}</div>
           <div class="stat-value">
-            <template v-if="stats?.mode === 'ap'">
-              <el-tag type="success" size="small" effect="plain">{{ t.cluster.roles.peer }}</el-tag>
-            </template>
-            <template v-else>
-              <el-tag :type="stats?.is_leader ? 'success' : 'info'" size="small" effect="plain">
-                {{ stats?.is_leader ? t.cluster.roles.leader : t.cluster.roles.follower }}
-              </el-tag>
-            </template>
+            <el-tag :type="roleTagType(stats?.role || '')" size="small" effect="plain">
+              {{ getRoleName(stats?.role || '') }}
+            </el-tag>
           </div>
         </div>
         <div class="hero-stat-item">
@@ -154,21 +167,36 @@ onMounted(fetchCluster)
             <div class="node-id-cell">
               <span class="node-id-text">{{ row.id }}</span>
               <el-tag 
-                v-if="row.is_local === 'true' || row.role === 'Local' || row.role === 'Standalone'" 
+                v-if="row.is_local" 
                 size="small" 
                 type="primary" 
                 effect="plain" 
                 color="rgba(64, 158, 255, 0.1)"
                 class="current-tag"
               >
-                当前节点
+                {{ t.cluster.currentNode }}
               </el-tag>
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t.cluster.address" prop="address" min-width="200">
+        <el-table-column :label="t.cluster.address" min-width="280">
           <template #default="{ row }">
-            <span class="mono-addr">{{ row.address }}</span>
+            <div class="address-tags">
+              <el-tag v-if="row.http_addr" size="small" type="primary" class="addr-tag" effect="light">
+                <span class="addr-proto">HTTP</span> <span class="mono-addr">{{ row.http_addr }}</span>
+              </el-tag>
+              <el-tag v-if="row.grpc_addr" size="small" type="success" class="addr-tag" effect="light">
+                <span class="addr-proto">GRPC</span> <span class="mono-addr">{{ row.grpc_addr }}</span>
+              </el-tag>
+              <el-tag v-if="row.raft_addr" size="small" type="warning" class="addr-tag" effect="light">
+                <span class="addr-proto">RAFT</span> <span class="mono-addr">{{ row.raft_addr }}</span>
+              </el-tag>
+              <el-tag v-if="row.quic_addr" size="small" type="info" class="addr-tag" effect="light">
+                <span class="addr-proto">QUIC</span> <span class="mono-addr">{{ row.quic_addr }}</span>
+              </el-tag>
+              <!-- Fallback to ordinary address for older APIs or standalone -->
+              <span v-if="!row.http_addr" class="mono-addr">{{ row.address }}</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column :label="t.cluster.role" min-width="120">
@@ -187,7 +215,7 @@ onMounted(fetchCluster)
         <el-table-column :label="t.common.actions" width="100" fixed="right">
           <template #default="{ row }">
             <el-button 
-              v-if="row.is_local !== 'true' && row.role !== 'Local' && row.role !== 'Standalone' && row.role !== 'Leader'" 
+              v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')" 
               link 
               type="danger" 
               :icon="Delete" 
@@ -199,15 +227,39 @@ onMounted(fetchCluster)
     </div>
 
     <!-- Add Member Dialog -->
-    <el-dialog v-model="showAddDialog" :title="t.cluster.nodeList" width="450px" class="premium-dialog">
-      <el-form label-position="top">
-        <el-form-item v-if="stats?.mode === 'cp'" :label="t.cluster.nodeId">
-          <el-input v-model="addForm.node_id" placeholder="node-2" />
-        </el-form-item>
-        <el-form-item :label="t.common.address">
-          <el-input v-model="addForm.address" placeholder="http://127.0.0.1:8501" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="showAddDialog" :title="t.cluster.addNode" width="550px" class="premium-dialog" @close="addForms = [{ protocol: 'http://', host: '', port: '' }]">
+      <div class="add-node-form">
+        <div v-for="(form, index) in addForms" :key="index" class="node-input-row">
+          <el-select v-model="form.protocol" class="protocol-select">
+            <el-option label="http://" value="http://" />
+            <el-option label="https://" value="https://" />
+          </el-select>
+          <el-input v-model="form.host" placeholder="127.0.0.1" class="host-input" />
+          <span class="colon-separator">:</span>
+          <el-input v-model="form.port" placeholder="8501" class="port-input" />
+          
+          <div class="row-actions">
+            <el-button 
+              type="primary" 
+              circle 
+              :icon="Plus" 
+              size="small" 
+              plain
+              v-if="index === addForms.length - 1"
+              @click="addNodeRow"
+            />
+            <el-button 
+              type="danger" 
+              circle 
+              :icon="Delete" 
+              size="small" 
+              plain
+              v-if="addForms.length > 1"
+              @click="removeNodeRow(index)"
+            />
+          </div>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="showAddDialog = false">{{ t.common.cancel }}</el-button>
         <el-button type="primary" @click="handleAdd">{{ t.common.confirm }}</el-button>
@@ -397,5 +449,67 @@ onMounted(fetchCluster)
   background-color: #10b981 !important;
   border-color: #10b981 !important;
   color: white !important;
+}
+
+/* Address Tags */
+.address-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.addr-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: fit-content;
+  padding: 0 8px;
+  border-radius: 6px;
+}
+.addr-proto {
+  font-weight: 700;
+  font-size: 10px;
+  margin-right: 6px;
+  opacity: 0.8;
+}
+
+/* Add Node Form */
+.add-node-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.node-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+.node-input-row:hover {
+  border-color: var(--accent-blue);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.protocol-select {
+  width: 100px;
+}
+.host-input {
+  flex: 1;
+}
+.colon-separator {
+  font-weight: bold;
+  color: var(--text-muted);
+}
+.port-input {
+  width: 80px;
+}
+.row-actions {
+  display: flex;
+  gap: 4px;
+  min-width: 64px;
+  justify-content: center;
 }
 </style>

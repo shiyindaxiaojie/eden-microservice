@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
@@ -14,6 +15,7 @@ type Handler struct {
 	auth     service.AuthService
 	settings service.SettingsService
 	cluster  service.ClusterService
+	nodeCache sync.Map // map[string]config.Config
 	mux      *http.ServeMux
 }
 
@@ -29,6 +31,7 @@ func NewHandler(cfg *config.Config,
 		auth:     auth,
 		settings: settings,
 		cluster:  cluster,
+		nodeCache: sync.Map{},
 		mux:      http.NewServeMux(),
 	}
 	h.registerRoutes()

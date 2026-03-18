@@ -26,9 +26,14 @@ func (h *Handler) normalizeAddr(addr string) string {
 		return ""
 	}
 	res := addr
-	if res[0] == ':' {
+	// If it's a raw port like ":8500", prefix with 127.0.0.1
+	if strings.HasPrefix(res, ":") {
 		res = "127.0.0.1" + res
 	}
+	// If it has broad-listening host [::] or 0.0.0.0, replace with 127.0.0.1
+	res = strings.Replace(res, "[::]", "127.0.0.1", 1)
+	res = strings.Replace(res, "0.0.0.0", "127.0.0.1", 1)
+
 	if !strings.HasPrefix(res, "http") {
 		res = "http://" + res
 	}

@@ -23,6 +23,11 @@ export interface ClusterMember {
   address: string
   role: string
   status: 'Online' | 'Offline'
+  is_local?: boolean
+  http_addr?: string
+  grpc_addr?: string
+  raft_addr?: string
+  quic_addr?: string
 }
 
 export interface ClusterStats {
@@ -36,6 +41,7 @@ export interface ClusterStats {
   memory_usage: number
   mode: 'ap' | 'cp'
   environment: 'standalone' | 'cluster'
+  role: string
 }
 
 export interface RegistryEvent {
@@ -54,7 +60,7 @@ export const deregisterInstance = (serviceName: string, instanceId: string) =>
 
 export const getClusterMembers = () => api.get<ClusterMember[]>('/v1/cluster/members')
 export const getClusterStats = () => api.get<ClusterStats>('/v1/cluster/stats')
-export const addClusterMember = (data: { node_id?: string, address: string }) => api.post('/v1/cluster/member', data)
+export const addClusterMember = (data: { addresses: string[] }) => api.post('/v1/cluster/member', data)
 export const removeClusterMember = (address: string, node_id?: string) => 
   api.delete(`/v1/cluster/member?address=${address}${node_id ? '&node_id=' + node_id : ''}`)
 export const getEvents = () => api.get<RegistryEvent[]>('/v1/events')

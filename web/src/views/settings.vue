@@ -99,8 +99,14 @@ async function handleEnvChange(targetEnv: string) {
       fetchMode()
     }, 1000)
   } catch (e: any) {
-    const errorMsg = e.response?.data?.error || 'Switch failed'
-    ElMessage.error(errorMsg)
+    const data = e.response?.data
+    if (data?.error === 'not leader' && data?.leader) {
+      const tip = t.value.settings.notLeaderTip.replace('{addr}', data.leader)
+      ElMessage.warning(tip)
+    } else {
+      const errorMsg = data?.error || 'Switch failed'
+      ElMessage.error(errorMsg)
+    }
     fetchMode()
   } finally {
     modeLoading.value = false
@@ -121,8 +127,14 @@ async function handleModeChange(targetMode: string) {
       fetchMode()
     }, 1000)
   } catch (e: any) {
-    const errorMsg = e.response?.data?.error || 'Switch failed'
-    ElMessage.error(errorMsg)
+    const data = e.response?.data
+    if (data?.error === 'not leader' && data?.leader) {
+      const tip = t.value.settings.notLeaderTip.replace('{addr}', data.leader)
+      ElMessage.warning(tip)
+    } else {
+      const errorMsg = data?.error || 'Switch failed'
+      ElMessage.error(errorMsg)
+    }
     fetchMode()
   } finally {
     modeLoading.value = false

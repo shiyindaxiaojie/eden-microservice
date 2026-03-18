@@ -9,19 +9,19 @@ import (
 
 // Config represents the registry configuration.
 type Config struct {
-	NodeID   string   `mapstructure:"node_id"`
-	Mode     string   `mapstructure:"mode"` // "ap" or "cp"
-	HTTPAddr   string   `mapstructure:"http_addr"`
-	GRPCAddr   string   `mapstructure:"grpc_addr"`
-	QUICAddr   string   `mapstructure:"quic_addr"`
-	RaftAddr   string   `mapstructure:"raft_addr"`
-	DataDir    string   `mapstructure:"data_dir"`
-	Datacenter string   `mapstructure:"datacenter"`
-	Bootstrap  bool     `mapstructure:"bootstrap"` // for CP mode
-	Join       string   `mapstructure:"join"`      // seed node to join
-	Seeds      []string `mapstructure:"seeds"`     // seed node list for AP mode
-	Auth       Auth      `mapstructure:"auth"`
-	Log        LogConfig `mapstructure:"log"`
+	NodeID   string   `mapstructure:"node_id" json:"node_id"`
+	Mode     string   `mapstructure:"mode" json:"mode"` // "ap" or "cp"
+	HTTPAddr   string   `mapstructure:"http_addr" json:"http_addr"`
+	GRPCAddr   string   `mapstructure:"grpc_addr" json:"grpc_addr"`
+	QUICAddr   string   `mapstructure:"quic_addr" json:"quic_addr"`
+	RaftAddr   string   `mapstructure:"raft_addr" json:"raft_addr"`
+	DataDir    string   `mapstructure:"data_dir" json:"data_dir"`
+	Datacenter string   `mapstructure:"datacenter" json:"datacenter"`
+	Bootstrap  bool     `mapstructure:"bootstrap" json:"bootstrap"`
+	Join       string   `mapstructure:"join" json:"join"`
+	Seeds      []string `mapstructure:"seeds" json:"seeds"`
+	Auth       Auth      `mapstructure:"auth" json:"auth"`
+	Log        LogConfig `mapstructure:"log" json:"log"`
 }
 
 type LogConfig struct {

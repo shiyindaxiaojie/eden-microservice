@@ -96,12 +96,45 @@ func (s *settingsService) SetMode(mode string) error {
 	if mode != "ap" && mode != "cp" {
 		return errors.New("invalid mode")
 	}
-	currentMode := s.store.GetMode()
-	if currentMode == "cp" && s.cpNode != nil {
-		cmd := cp.Command{Type: cp.CmdSetMode, Mode: mode}
-		return s.cpNode.Apply(cmd, 5*time.Second)
+	if mode == s.store.GetMode() {
+		return nil
 	}
+
+	currentEnv := s.store.GetEnvironment()
+	if mode == "cp" && currentEnv == "cluster" && s.cpNode != nil {
+		cmd := cp.Command{Type: cp.CmdSetMode, Mode: mode}
+		// If already in cluster mode, replicate but also continue to HTTP sync
+		_ = s.cpNode.Apply(cmd, 5*time.Second)
+	}
+	
 	s.store.SetMode(mode)
+
+	// If switching to CP, automatically invite existing AP seeds into the Raft cluster
+	if mode == "cp" && s.cpNode != nil {
+		seeds := s.store.GetSeeds()
+		for _, seedAddr := range seeds {
+			go func(addr string) {
+				// 1. Fetch node info to get RaftAddr and NodeID
+				client := http.Client{Timeout: 5 * time.Second}
+				resp, err := client.Get(addr + "/v1/node/info")
+				if err != nil {
+					return
+				}
+				defer resp.Body.Close()
+
+				var remoteCfg struct {
+					NodeID   string `json:"node_id"`
+					RaftAddr string `json:"raft_addr"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&remoteCfg) == nil {
+					if remoteCfg.NodeID != "" && remoteCfg.RaftAddr != "" {
+						_ = s.cpNode.Join(remoteCfg.NodeID, remoteCfg.RaftAddr)
+					}
+				}
+			}(seedAddr)
+		}
+	}
+
 	// Sync to peers via HTTP
 	s.syncSettingsToPeers(map[string]string{"mode": mode})
 	return nil
@@ -111,10 +144,13 @@ func (s *settingsService) SetEnvironment(env string) error {
 	if env != "standalone" && env != "cluster" {
 		return errors.New("invalid environment")
 	}
+	if env == s.store.GetEnvironment() {
+		return nil
+	}
 	mode := s.store.GetMode()
-	if mode == "cp" && s.cpNode != nil {
+	if mode == "cp" && env == "cluster" && s.cpNode != nil {
 		cmd := cp.Command{Type: cp.CmdSetEnv, Environment: env}
-		return s.cpNode.Apply(cmd, 5*time.Second)
+		_ = s.cpNode.Apply(cmd, 5*time.Second)
 	}
 	s.store.SetEnvironment(env)
 	// Sync to peers via HTTP
@@ -194,8 +230,30 @@ func (s *settingsService) SetSeeds(seeds []string) error {
 			}
 		}
 		go s.syncSeedsToPeerHTTP(peer, peerSeeds)
+		// Ensure the new peer also knows it should be in the same mode and environment
+		go s.syncSettingsToPeerHTTP(peer, map[string]string{
+			"mode":        s.store.GetMode(),
+			"environment": "cluster",
+		})
 	}
 	return nil
+}
+
+func (s *settingsService) syncSettingsToPeerHTTP(peerAddr string, settings map[string]string) {
+	body, err := json.Marshal(settings)
+	if err != nil {
+		return
+	}
+
+	url := peerAddr + "/internal/sync/settings"
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		logger.Warn("[SyncSettings] Failed to sync settings to %s: %v", peerAddr, err)
+		return
+	}
+	resp.Body.Close()
+	logger.Info("[SyncSettings] Synced settings to %s", peerAddr)
 }
 
 func (s *settingsService) syncSeedsToPeerHTTP(peerAddr string, seeds []string) {

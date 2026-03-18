@@ -11,7 +11,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	pb_cluster "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
+	pb_reg "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
 	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
@@ -22,25 +31,17 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/pkg/crypto"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
-	pb_cluster "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
-	pb_reg "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"crypto/tls"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"crypto/rand"
-	"math/big"
 )
 
 func main() {
 	var (
-		cfgFile   = flag.String("config", "configs/config.yaml", "Path to configuration file")
-		dataDir   = flag.String("data-dir", "", "Override data directory")
-		nodeID    = flag.String("node-id", "", "Override node ID")
-		httpAddr  = flag.String("http-addr", "", "Override HTTP listen address")
+		cfgFile  = flag.String("config", "configs/config.yaml", "Path to configuration file")
+		dataDir  = flag.String("data-dir", "", "Override data directory")
+		nodeID   = flag.String("node-id", "", "Override node ID")
+		httpAddr = flag.String("http-addr", "", "Override HTTP listen address")
 	)
 	flag.Parse()
 
@@ -96,7 +97,7 @@ func main() {
 		if err == nil {
 			finalPwd = string(hashed)
 		}
-		
+
 		builtInUsers = append(builtInUsers, model.User{
 			Username: uc.Username,
 			Password: finalPwd,
@@ -111,25 +112,59 @@ func main() {
 	var cpNode *cp.Node
 	var apNode *ap.Node
 
-	// Resolve Raft Addr if empty or just a port
-	if cfg.RaftAddr == "" || strings.HasPrefix(cfg.RaftAddr, ":") {
-		bindAddr := cfg.RaftAddr
-		if bindAddr == "" || bindAddr == ":0" {
-			bindAddr = "127.0.0.1:0"
-		} else if strings.HasPrefix(bindAddr, ":") {
-			bindAddr = "127.0.0.1" + bindAddr
-		}
-		
-		l, err := net.Listen("tcp", bindAddr)
+	// Helper to resolve free port in range
+	resolvePortRange := func(addr string, start, end int, network string) string {
+		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
-			logger.Fatal("Failed to resolve Raft port: %v", err)
+			if strings.HasPrefix(addr, ":") {
+				host = "127.0.0.1"
+				port = addr[1:]
+			} else {
+				host = "127.0.0.1"
+				port = "0"
+			}
 		}
-		cfg.RaftAddr = l.Addr().String()
-		l.Close()
+		if host == "" || host == "0.0.0.0" || host == "[::]" {
+			host = "127.0.0.1"
+		}
+
+		if port == "0" || port == "" {
+			for p := start; p <= end; p++ {
+				testAddr := fmt.Sprintf("%s:%d", host, p)
+				if network == "udp" {
+					if l, err := net.ListenPacket("udp", testAddr); err == nil {
+						l.Close()
+						return testAddr
+					}
+				} else {
+					if l, err := net.Listen("tcp", testAddr); err == nil {
+						l.Close()
+						return testAddr
+					}
+				}
+			}
+			// Fallback to OS-assigned port if range is exhausted
+			if network == "udp" {
+				if l, err := net.ListenPacket("udp", host+":0"); err == nil {
+					defer l.Close()
+					return l.LocalAddr().String()
+				}
+			} else {
+				if l, err := net.Listen("tcp", host+":0"); err == nil {
+					defer l.Close()
+					return l.Addr().String()
+				}
+			}
+		}
+		return fmt.Sprintf("%s:%s", host, port)
 	}
 
+	// Resolve Ports within preferred ranges
+	cfg.RaftAddr = resolvePortRange(cfg.RaftAddr, 7000, 7999, "tcp")
+	cfg.GRPCAddr = resolvePortRange(cfg.GRPCAddr, 9000, 9999, "tcp")
+	cfg.QUICAddr = resolvePortRange(cfg.QUICAddr, 10000, 10999, "udp")
+
 	// Always setup CP (Raft)
-	logger.Info("  Raft Addr : %s", cfg.RaftAddr)
 	raftCfg := cp.Config{
 		NodeID:    cfg.NodeID,
 		BindAddr:  cfg.RaftAddr,
@@ -139,25 +174,6 @@ func main() {
 	cpNode, err = cp.NewNode(raftCfg, registry)
 	if err != nil {
 		logger.Fatal("Failed to start Raft node: %v", err)
-	}
-
-	// 4. Final Port Resolution & Logging
-	// Resolve gRPC and QUIC immediately for logging (not just inside goroutines)
-	if cfg.GRPCAddr == "" || strings.HasSuffix(cfg.GRPCAddr, ":0") {
-		addr := cfg.GRPCAddr
-		if addr == "" { addr = ":0" }
-		l, _ := net.Listen("tcp", addr)
-		cfg.GRPCAddr = l.Addr().String()
-		l.Close()
-	}
-	if cfg.QUICAddr == "" || strings.HasSuffix(cfg.QUICAddr, ":0") {
-		addr := cfg.QUICAddr
-		if addr == "" { addr = ":0" }
-		pc, err := net.ListenPacket("udp", addr)
-		if err == nil {
-			cfg.QUICAddr = pc.LocalAddr().String()
-			pc.Close()
-		}
 	}
 
 	logger.Info("========================================")

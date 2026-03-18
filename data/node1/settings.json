@@ -1,0 +1,5 @@
+{
+  "mode": "cp",
+  "environment": "cluster",
+  "log_level": ""
+}
