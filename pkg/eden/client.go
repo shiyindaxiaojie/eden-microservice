@@ -93,7 +93,11 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 		stopCh:     make(chan struct{}),
 	}
 
-	// Start background node discovery
+	// 1. First sync is synchronous to ensure we have initial node data (gRPC addresses) 
+	// before any Register or Heartbeat calls are made from the caller goroutine.
+	c.syncNodes()
+
+	// 2. Start background node discovery for updates
 	c.startNodeDiscovery()
 
 	return c, nil
@@ -106,9 +110,6 @@ func (c *Client) startNodeDiscovery() {
 		ticker := time.NewTicker(2 * time.Minute)
 		defer ticker.Stop()
 		
-		// Immediate check
-		c.syncNodes()
-
 		for {
 			select {
 			case <-ticker.C:
@@ -192,7 +193,9 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 	return c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			addr := node.GRPCAddr
-			if addr == "" { addr = node.HTTPAddr } // Fallback
+			if addr == "" {
+				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			}
 			
 			var conn *grpc.ClientConn
 			var err error
@@ -244,7 +247,9 @@ func (c *Client) Deregister(instance *registry.ServiceInstance) error {
 	return c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			addr := node.GRPCAddr
-			if addr == "" { addr = node.HTTPAddr }
+			if addr == "" {
+				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			}
 
 			var conn *grpc.ClientConn
 			var err error
@@ -292,7 +297,9 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 	err := c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			addr := node.GRPCAddr
-			if addr == "" { addr = node.HTTPAddr }
+			if addr == "" {
+				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			}
 			
 			var conn *grpc.ClientConn
 			var err error
@@ -415,7 +422,9 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 	return c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			addr := node.GRPCAddr
-			if addr == "" { addr = node.HTTPAddr }
+			if addr == "" {
+				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			}
 			
 			var conn *grpc.ClientConn
 			var err error

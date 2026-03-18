@@ -77,7 +77,7 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	members := make([]map[string]interface{}, 0)
+	// members := make([]map[string]interface{}, 0) // Removed
 
 	// Helper to normalize host:port string to include an IP if it's [::] or :port
 	normalizeDisplayAddr := func(addr string) string {
@@ -226,18 +226,46 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Assemble final list
-	members = append(members, fetchNodeInfo(localAddr, true, ""))
+	// 3. Assemble final list in parallel
+	membersResults := make([]map[string]interface{}, 0)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Local node info
+	membersResults = append(membersResults, fetchNodeInfo(localAddr, true, ""))
 
 	if env != "standalone" {
 		for _, seed := range seeds {
-			if seed != "" && seed != localAddr {
-				members = append(members, fetchNodeInfo(seed, false, seedToRaftID[seed]))
+			if seed == "" || h.normalizeAddr(seed) == localAddr {
+				continue
 			}
+			wg.Add(1)
+			go func(s string, rid string) {
+				defer wg.Done()
+				info := fetchNodeInfo(s, false, rid)
+				mu.Lock()
+				membersResults = append(membersResults, info)
+				mu.Unlock()
+			}(seed, seedToRaftID[seed])
 		}
 	}
 
-	jsonOK(w, members)
+	wg.Wait()
+
+	// Sort members for consistent UI: Local node first, then sort by ID
+	sort.Slice(membersResults, func(i, j int) bool {
+		if membersResults[i]["is_local"].(bool) {
+			return true
+		}
+		if membersResults[j]["is_local"].(bool) {
+			return false
+		}
+		idI, _ := membersResults[i]["id"].(string)
+		idJ, _ := membersResults[j]["id"].(string)
+		return idI < idJ
+	})
+
+	jsonOK(w, membersResults)
 }
 
 func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {

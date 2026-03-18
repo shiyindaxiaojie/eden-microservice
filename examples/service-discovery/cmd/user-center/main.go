@@ -21,7 +21,7 @@ var registryAddr string
 func init() {
 	regAddr := os.Getenv("REGISTRY_ADDR")
 	if regAddr == "" {
-		regAddr = "127.0.0.1:9000"
+		regAddr = "http://127.0.0.1:8500"
 	}
 	registryAddr = regAddr
 }

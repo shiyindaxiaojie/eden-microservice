@@ -4,12 +4,13 @@ import (
 	"context"
 	"sync"
 	"time"
-
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -69,23 +70,34 @@ func (pm *PeerManager) UpdatePeers(addrs []string) {
 // GetClient returns a ClusterServiceClient for the given address.
 // It lazily creates the connection if needed.
 func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
+	p.mu.RLock()
+	c := p.client
+	p.mu.RUnlock()
+	if c != nil {
+		return c, nil
+	}
+
+	// Double check and create under full lock
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
+	
 	if p.client != nil {
 		return p.client, nil
 	}
 
 	// Resolve gRPC address if needed
-	addr := p.grpcAddr
-	if addr == "" {
-		p.mu.Unlock() // Unlock to call resolve which is slow
+	if p.grpcAddr == "" {
+		p.mu.Unlock() // Release lock for network IO
 		err := p.Resolve()
-		p.mu.Lock()
+		p.mu.Lock() // Re-lock
 		if err != nil {
 			return nil, err
 		}
-		addr = p.grpcAddr
+	}
+
+	addr := p.grpcAddr
+	if addr == "" {
+		return nil, fmt.Errorf("could not resolve gRPC address for %s", p.ID)
 	}
 
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -100,29 +112,42 @@ func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
 
 // Resolve fetches node info to get the gRPC address.
 func (p *Peer) Resolve() error {
-	client := http.Client{Timeout: 1 * time.Second}
+	client := http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(p.ID + "/v1/node/info")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to call info for %s: %w", p.ID, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to call info for %s: status %d", p.ID, resp.StatusCode)
+	}
 
 	var info struct {
 		GRPCAddr string `json:"grpc_addr"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return err
+		return fmt.Errorf("failed to decode info for %s: %w", p.ID, err)
 	}
 
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.grpcAddr = info.GRPCAddr
 	// Normalize if needed (if it's just :port)
-	if strings.HasPrefix(p.grpcAddr, ":") {
-		// Extract host from ID
-		parts := strings.Split(strings.TrimPrefix(strings.TrimPrefix(p.ID, "http://"), "https://"), ":")
-		p.grpcAddr = parts[0] + p.grpcAddr
+	if strings.Contains(p.grpcAddr, ":") {
+		host, port, _ := net.SplitHostPort(strings.TrimPrefix(p.grpcAddr, ":"))
+		if host == "" {
+			// Extract host from ID
+			idHost := strings.TrimPrefix(strings.TrimPrefix(p.ID, "http://"), "https://")
+			if h, _, err := net.SplitHostPort(idHost); err == nil {
+				idHost = h
+			}
+			if port == "" {
+				port = strings.TrimPrefix(p.grpcAddr, ":")
+			}
+			p.grpcAddr = idHost + ":" + port
+		}
 	}
-	p.mu.Unlock()
 	return nil
 }
 
@@ -143,17 +168,25 @@ func (pm *PeerManager) Range(f func(p *Peer) bool) {
 }
 
 // Broadcast calls the given function for all peers in parallel.
+// Fire-and-forget replication for AP mode to ensure the service stays responsive.
 func (pm *PeerManager) Broadcast(ctx context.Context, f func(ctx context.Context, client pb.ClusterServiceClient) error) {
 	pm.Range(func(p *Peer) bool {
+		// Do not wait for peers, do not block the caller!
 		go func(p *Peer) {
+			// Detach from the caller's context to avoid "context cancelled" on early return.
+			broadcastCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
 			client, err := p.GetClient()
 			if err != nil {
-				logger.Error("[PeerManager] failed to get client for %s: %v", p.ID, err)
+				// Tracking failures is good for debugging sync issues
+				logger.Debug("[PeerManager] skip broadcast to %s: could not get client: %v", p.ID, err)
 				return
 			}
 			
-			if err := f(ctx, client); err != nil {
-				logger.Warn("[PeerManager] broadcast to %s failed: %v", p.ID, err)
+			// Best-effort replication 
+			if err := f(broadcastCtx, client); err != nil {
+				logger.Warn("[PeerManager] replication to %s failed: %v", p.ID, err)
 			}
 		}(p)
 		return true
