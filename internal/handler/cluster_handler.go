@@ -61,10 +61,20 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 
 	if mode == "ap" {
 		localAddr := h.normalizeAddr(h.config.HTTPAddr)
-		members := []map[string]string{
-			{"id": h.config.NodeID, "address": localAddr, "role": "Local", "status": "Online"},
-		}
 		seeds := h.settings.GetSeeds()
+
+		members := make([]map[string]string, 0)
+
+		// Self — always "Peer" in AP (all nodes are equal)
+		members = append(members, map[string]string{
+			"id":       h.config.NodeID,
+			"address":  localAddr,
+			"role":     "Peer",
+			"status":   "Online",
+			"is_local": "true",
+		})
+
+		// Other peers
 		for i, seed := range seeds {
 			if seed != "" {
 				status := "Offline"
@@ -207,7 +217,12 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	env := h.settings.GetEnvironment()
 	isLeader := h.cluster.IsLeader()
 	leaderAddr := h.cluster.LeaderAddr()
-	if leaderAddr == "" {
+	
+	if mode == "ap" {
+		// AP mode: no leader concept, all peers are equal
+		leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
+		isLeader = false // AP has no leader
+	} else if leaderAddr == "" {
 		leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
 	}
 	
@@ -253,7 +268,8 @@ func (h *Handler) handleInternalSyncSeeds(w http.ResponseWriter, r *http.Request
 		Seeds []string `json:"seeds"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	h.settings.SetSeeds(req.Seeds)
+	// Save locally only, do NOT re-broadcast (avoid infinite loop)
+	h.settings.SaveSeedsLocal(req.Seeds)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
@@ -293,13 +309,18 @@ func (h *Handler) handleInternalSyncSettings(w http.ResponseWriter, r *http.Requ
 	var req struct {
 		Mode        string `json:"mode,omitempty"`
 		Environment string `json:"environment,omitempty"`
+		LogLevel    string `json:"log_level,omitempty"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	// Save directly to avoid re-broadcast (prevent infinite loop)
 	if req.Mode != "" {
-		h.settings.SetMode(req.Mode)
+		h.settings.SaveSettingLocal("mode", req.Mode)
 	}
 	if req.Environment != "" {
-		h.settings.SetEnvironment(req.Environment)
+		h.settings.SaveSettingLocal("environment", req.Environment)
+	}
+	if req.LogLevel != "" {
+		h.settings.SaveSettingLocal("log_level", req.LogLevel)
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }

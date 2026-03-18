@@ -2,6 +2,3 @@
 node_id: "node-3"
 http_addr: ":8502"
 data_dir: "./data/node3"
-bootstrap: false
- seeds:
-   - "http://127.0.0.1:8500"

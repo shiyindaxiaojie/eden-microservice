@@ -106,7 +106,12 @@ onMounted(fetchCluster)
           </div>
           <div class="hero-subtitle">
             {{ stats?.node_count || 0 }} {{ t.cluster.nodeCount }} — 
-            {{ stats?.leader_addr ? t.cluster.leaderAddr + ': ' + stats.leader_addr : t.dashboard.noEvents }}
+            <template v-if="stats?.mode === 'cp'">
+              {{ stats?.leader_addr ? t.cluster.leaderAddr + ': ' + stats.leader_addr : t.dashboard.noEvents }}
+            </template>
+            <template v-else>
+              {{ t.cluster.currentNode }}: {{ stats?.leader_addr || '-' }}
+            </template>
           </div>
         </div>
       </div>
@@ -115,9 +120,14 @@ onMounted(fetchCluster)
         <div class="hero-stat-item">
           <div class="stat-label">{{ t.cluster.role }}</div>
           <div class="stat-value">
-            <el-tag :type="stats?.is_leader ? 'success' : 'info'" size="small" effect="plain">
-              {{ stats?.is_leader ? t.cluster.roles.leader : t.cluster.roles.follower }}
-            </el-tag>
+            <template v-if="stats?.mode === 'ap'">
+              <el-tag type="success" size="small" effect="plain">{{ t.cluster.roles.peer }}</el-tag>
+            </template>
+            <template v-else>
+              <el-tag :type="stats?.is_leader ? 'success' : 'info'" size="small" effect="plain">
+                {{ stats?.is_leader ? t.cluster.roles.leader : t.cluster.roles.follower }}
+              </el-tag>
+            </template>
           </div>
         </div>
         <div class="hero-stat-item">
@@ -144,7 +154,7 @@ onMounted(fetchCluster)
             <div class="node-id-cell">
               <span class="node-id-text">{{ row.id }}</span>
               <el-tag 
-                v-if="row.role === 'Local' || row.role === 'Standalone'" 
+                v-if="row.is_local === 'true' || row.role === 'Local' || row.role === 'Standalone'" 
                 size="small" 
                 type="primary" 
                 effect="plain" 
@@ -177,7 +187,7 @@ onMounted(fetchCluster)
         <el-table-column :label="t.common.actions" width="100" fixed="right">
           <template #default="{ row }">
             <el-button 
-              v-if="row.role !== 'Local' && row.role !== 'Standalone' && row.role !== 'Leader'" 
+              v-if="row.is_local !== 'true' && row.role !== 'Local' && row.role !== 'Standalone' && row.role !== 'Leader'" 
               link 
               type="danger" 
               :icon="Delete" 

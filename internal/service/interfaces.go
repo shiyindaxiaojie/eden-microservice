@@ -41,6 +41,8 @@ type SettingsService interface {
 	GetEnvironment() string
 	GetSeeds() []string
 	SetSeeds(seeds []string) error
+	SaveSeedsLocal(seeds []string) // save locally only, no broadcast
+	SaveSettingLocal(key, value string) // save setting locally, no broadcast
 }
 
 // ClusterService handles cluster membership and monitoring.

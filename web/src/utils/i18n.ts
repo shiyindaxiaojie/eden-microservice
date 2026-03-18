@@ -90,6 +90,7 @@ export const messages = {
         peer: 'Cluster Peer',
       },
       addNode: 'Add Node',
+      currentNode: 'Current Node',
     },
     rbac: {
       title: 'RBAC',
@@ -256,10 +257,11 @@ export const messages = {
         leader: '主节点',
         follower: '从节点',
         candidate: '竞选者',
-        local: '主节点',
-        peer: '从节点',
+        local: '当前节点',
+        peer: '对等节点',
       },
       addNode: '添加节点',
+      currentNode: '当前节点',
     },
     rbac: {
       title: '权限与访问控制',

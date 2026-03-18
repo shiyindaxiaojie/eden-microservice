@@ -151,8 +151,13 @@ func main() {
 		l.Close()
 	}
 	if cfg.QUICAddr == "" || strings.HasSuffix(cfg.QUICAddr, ":0") {
-		// Use same port as gRPC if possible, or new one
-		cfg.QUICAddr = cfg.GRPCAddr // Just a suggestion or let it be auto
+		addr := cfg.QUICAddr
+		if addr == "" { addr = ":0" }
+		pc, err := net.ListenPacket("udp", addr)
+		if err == nil {
+			cfg.QUICAddr = pc.LocalAddr().String()
+			pc.Close()
+		}
 	}
 
 	logger.Info("========================================")
@@ -220,16 +225,11 @@ func main() {
 	reflection.Register(grpcServer)
 
 	go func() {
-		addr := cfg.GRPCAddr
-		if addr == "" {
-			addr = ":0"
-		}
-		lis, err := net.Listen("tcp", addr)
+		lis, err := net.Listen("tcp", cfg.GRPCAddr)
 		if err != nil {
 			logger.Fatal("Failed to listen for gRPC: %v", err)
 		}
-		cfg.GRPCAddr = lis.Addr().String() // Update resolved addr
-		logger.Info("gRPC server listening on %s", cfg.GRPCAddr)
+		logger.Info("gRPC server listening on %s", lis.Addr().String())
 		if err := grpcServer.Serve(lis); err != nil {
 			logger.Error("gRPC server error: %v", err)
 		}
@@ -246,17 +246,12 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 			NextProtos:   []string{"h3"},
 		}
-		addr := cfg.QUICAddr
-		if addr == "" {
-			addr = ":0"
-		}
-		qlis, err := egrpc.NewQUICListener(addr, tlsConf)
+		qlis, err := egrpc.NewQUICListener(cfg.QUICAddr, tlsConf)
 		if err != nil {
 			logger.Error("Failed to listen for QUIC: %v", err)
 			return
 		}
-		cfg.QUICAddr = qlis.Addr().String() // Update resolved addr
-		logger.Info("gRPC over QUIC server listening on %s", cfg.QUICAddr)
+		logger.Info("gRPC over QUIC server listening on %s", qlis.Addr().String())
 		if err := grpcServer.Serve(qlis); err != nil {
 			logger.Error("QUIC gRPC server error: %v", err)
 		}
