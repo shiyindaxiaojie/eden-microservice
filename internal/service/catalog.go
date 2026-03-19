@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,14 +16,20 @@ import (
 	"google.golang.org/grpc"
 )
 
+type subscription struct {
+	consumerService string
+	ch              chan WatchEvent
+}
+
 type catalogService struct {
 	store  *store.Registry
 	cpNode CPNode
 	apNode APNode
 	mu     sync.RWMutex
-	subs   map[string][]chan []*model.Instance
-	// Track dependencies: subscriberService -> set of providerServices
-	deps   map[string]map[string]bool
+	// namespace -> serviceName -> subscriptions
+	subs map[string]map[string][]subscription
+	// namespace -> subscriberService -> providerService set
+	deps map[string]map[string]map[string]bool
 }
 
 func NewCatalogService(s *store.Registry, cp CPNode, ap APNode) CatalogService {
@@ -30,14 +37,18 @@ func NewCatalogService(s *store.Registry, cp CPNode, ap APNode) CatalogService {
 		store:  s,
 		cpNode: cp,
 		apNode: ap,
-		subs:   make(map[string][]chan []*model.Instance),
-		deps:   make(map[string]map[string]bool),
+		subs:   make(map[string]map[string][]subscription),
+		deps:   make(map[string]map[string]map[string]bool),
 	}
 	s.Services.NotifyFunc = svc.handleNotify
 	return svc
 }
 
 func (s *catalogService) Register(inst *model.Instance) error {
+	if !s.store.Namespaces.Exists(inst.Namespace) {
+		return fmt.Errorf("namespace not found: %s", inst.EffectiveNamespace())
+	}
+
 	mode := s.store.GetMode()
 	if mode == "cp" && s.cpNode != nil {
 		if !s.cpNode.IsLeader() {
@@ -51,6 +62,13 @@ func (s *catalogService) Register(inst *model.Instance) error {
 	}
 	s.store.Register(inst)
 	return nil
+}
+
+func (s *catalogService) namespaceKey(namespace string) string {
+	if namespace == "" {
+		return model.DefaultNamespace
+	}
+	return namespace
 }
 
 func (s *catalogService) SetInstanceStatus(namespace, serviceName, instanceID string, status string) error {
@@ -71,32 +89,37 @@ func (s *catalogService) SetInstanceStatus(namespace, serviceName, instanceID st
 	return nil
 }
 
-func (s *catalogService) Heartbeat(serviceName, instanceID string) error {
+func (s *catalogService) Heartbeat(namespace, serviceName, instanceID string) error {
 	mode := s.store.GetMode()
 	if mode == "cp" && s.cpNode != nil {
 		if !s.cpNode.IsLeader() {
-			return s.forwardToLeader("heartbeat", nil, serviceName, instanceID)
+			return s.forwardToLeader("heartbeat", &model.Instance{Namespace: namespace}, serviceName, instanceID)
 		}
-		cmd := cp.Command{Type: cp.CmdHeartbeat, ServiceName: serviceName, InstanceID: instanceID}
+		cmd := cp.Command{Type: cp.CmdHeartbeat, Namespace: namespace, ServiceName: serviceName, InstanceID: instanceID}
 		return s.cpNode.Apply(cmd, 5*time.Second)
 	}
-	data := map[string]string{"service_name": serviceName, "instance_id": instanceID}
+	data := map[string]string{"namespace": namespace, "service_name": serviceName, "instance_id": instanceID}
 	if s.apNode != nil {
 		return s.apNode.Apply("heartbeat", data, false)
 	}
-	s.store.Heartbeat(serviceName, instanceID)
+	s.store.Services.HeartbeatNS(namespace, serviceName, instanceID)
 	return nil
 }
 
-func (s *catalogService) ListServices() ([]interface{}, error) {
-	services := s.store.ListServices()
+func (s *catalogService) ListServices(namespace string) ([]interface{}, error) {
+	ns := s.namespaceKey(namespace)
+	if !s.store.Namespaces.Exists(ns) {
+		return nil, fmt.Errorf("namespace not found: %s", ns)
+	}
+
+	services := s.store.Services.ListServicesNS(ns)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	result := make([]interface{}, len(services))
 	for i, svc := range services {
-		subCount := len(s.subs[svc.Name])
+		subCount := len(s.getSubscribersNoLock(ns, svc.Name))
 		result[i] = map[string]interface{}{
 			"name":             svc.Name,
 			"instance_count":   svc.InstanceCount,
@@ -107,51 +130,78 @@ func (s *catalogService) ListServices() ([]interface{}, error) {
 	return result, nil
 }
 
-func (s *catalogService) GetService(name string, healthyOnly bool) ([]*model.Instance, error) {
-	if healthyOnly {
-		return s.store.GetServiceHealthy(name), nil
+func (s *catalogService) GetService(namespace, name string, healthyOnly bool) ([]*model.Instance, error) {
+	ns := s.namespaceKey(namespace)
+	if !s.store.Namespaces.Exists(ns) {
+		return nil, fmt.Errorf("namespace not found: %s", ns)
 	}
-	return s.store.GetService(name), nil
+
+	if healthyOnly {
+		return s.store.Services.GetServiceHealthyNS(ns, name), nil
+	}
+	return s.store.Services.GetServiceNS(ns, name), nil
 }
 
-func (s *catalogService) Subscribe(serviceName string, ch chan []*model.Instance) {
+func (s *catalogService) Subscribe(namespace, serviceName, consumerService string, ch chan WatchEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.subs[serviceName] = append(s.subs[serviceName], ch)
+
+	ns := s.namespaceKey(namespace)
+	if s.subs[ns] == nil {
+		s.subs[ns] = make(map[string][]subscription)
+	}
+	s.subs[ns][serviceName] = append(s.subs[ns][serviceName], subscription{
+		consumerService: consumerService,
+		ch:              ch,
+	})
+	if consumerService != "" {
+		s.recordDependencyNoLock(ns, consumerService, serviceName)
+	}
 }
 
-func (s *catalogService) Unsubscribe(serviceName string, ch chan []*model.Instance) {
+func (s *catalogService) Unsubscribe(namespace, serviceName string, ch chan WatchEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	subs := s.subs[serviceName]
+
+	ns := s.namespaceKey(namespace)
+	subs := s.subs[ns][serviceName]
 	for i, v := range subs {
-		if v == ch {
-			s.subs[serviceName] = append(subs[:i], subs[i+1:]...)
+		if v.ch == ch {
+			s.subs[ns][serviceName] = append(subs[:i], subs[i+1:]...)
 			break
 		}
 	}
 }
 
-func (s *catalogService) GetSubscribers(serviceName string) []string {
+func (s *catalogService) GetSubscribers(namespace, serviceName string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Return consumer service names that depend on this service
-	var consumers []string
-	for consumer, providers := range s.deps {
+	return s.getSubscribersNoLock(s.namespaceKey(namespace), serviceName)
+}
+
+func (s *catalogService) getSubscribersNoLock(namespace, serviceName string) []string {
+	consumers := make([]string, 0)
+	seen := make(map[string]bool)
+	for consumer, providers := range s.deps[namespace] {
 		if providers[serviceName] {
-			consumers = append(consumers, consumer)
+			if !seen[consumer] {
+				seen[consumer] = true
+				consumers = append(consumers, consumer)
+			}
 		}
 	}
+	sort.Strings(consumers)
 	return consumers
 }
 
 func (s *catalogService) GetDependencyGraph(namespace string) map[string]interface{} {
+	ns := s.namespaceKey(namespace)
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Collect all service names from store
-	services := s.store.ListServices()
+	services := s.store.Services.ListServicesNS(ns)
 	nodeSet := make(map[string]bool)
 	for _, svc := range services {
 		nodeSet[svc.Name] = true
@@ -170,7 +220,7 @@ func (s *catalogService) GetDependencyGraph(namespace string) map[string]interfa
 
 	// Build edges from dependency tracking
 	edges := make([]map[string]string, 0)
-	for consumer, providers := range s.deps {
+	for consumer, providers := range s.deps[ns] {
 		for provider := range providers {
 			edges = append(edges, map[string]string{
 				"source": consumer,
@@ -188,19 +238,32 @@ func (s *catalogService) GetDependencyGraph(namespace string) map[string]interfa
 	}
 
 	return map[string]interface{}{
-		"nodes": nodes,
-		"edges": edges,
+		"namespace": ns,
+		"nodes":     nodes,
+		"edges":     edges,
 	}
 }
 
 // RecordDependency records that consumerService depends on providerService.
-func (s *catalogService) RecordDependency(consumerService, providerService string) {
+func (s *catalogService) RecordDependency(namespace, consumerService, providerService string) {
+	if consumerService == "" || providerService == "" || consumerService == providerService {
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.deps[consumerService] == nil {
-		s.deps[consumerService] = make(map[string]bool)
+
+	s.recordDependencyNoLock(s.namespaceKey(namespace), consumerService, providerService)
+}
+
+func (s *catalogService) recordDependencyNoLock(namespace, consumerService, providerService string) {
+	if s.deps[namespace] == nil {
+		s.deps[namespace] = make(map[string]map[string]bool)
 	}
-	s.deps[consumerService][providerService] = true
+	if s.deps[namespace][consumerService] == nil {
+		s.deps[namespace][consumerService] = make(map[string]bool)
+	}
+	s.deps[namespace][consumerService][providerService] = true
 }
 
 // Namespace management
@@ -220,13 +283,13 @@ func (s *catalogService) DeleteNamespace(name string) bool {
 	return s.store.DeleteNamespace(name)
 }
 
-func (s *catalogService) handleNotify(serviceName string, instances []*model.Instance) {
+func (s *catalogService) handleNotify(namespace, serviceName, action string, instances []*model.Instance) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if subs, ok := s.subs[serviceName]; ok {
+	if subs, ok := s.subs[s.namespaceKey(namespace)][serviceName]; ok {
 		for _, ch := range subs {
 			select {
-			case ch <- instances:
+			case ch.ch <- WatchEvent{Action: action, Instances: instances}:
 			default:
 				// Skip if slow consumer
 			}
@@ -278,6 +341,7 @@ func (s *catalogService) forwardToLeader(action string, inst *model.Instance, se
 			Instance: &pb.ServiceInstance{
 				Id:          inst.ID,
 				ServiceName: inst.ServiceName,
+				Namespace:   inst.Namespace,
 				Host:        inst.Host,
 				Port:        int32(inst.Port),
 				Weight:      int32(inst.Weight),
@@ -286,7 +350,11 @@ func (s *catalogService) forwardToLeader(action string, inst *model.Instance, se
 			},
 		})
 	case "heartbeat":
-		_, err = client.Heartbeat(ctx, &pb.HeartbeatRequest{ServiceName: serviceName, InstanceId: instanceID})
+		_, err = client.Heartbeat(ctx, &pb.HeartbeatRequest{
+			Namespace:   inst.Namespace,
+			ServiceName: serviceName,
+			InstanceId:  instanceID,
+		})
 	}
 	return err
 }

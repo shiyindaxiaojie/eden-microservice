@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getServices, getSubscribers, type ServiceSummary } from '../api/registry'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getNamespaces, getServiceInstances, getServices, getSubscribers, type Instance, type Namespace, type ServiceSummary } from '../api/registry'
 import { useI18n } from '../utils/i18n'
 import { Grid, Menu, Monitor, CircleCheck, User, Search } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const services = ref<ServiceSummary[]>([])
+const namespaces = ref<Namespace[]>([])
+const currentNamespace = ref((route.query.namespace as string) || 'default')
+const instancesByService = ref<Record<string, Instance[]>>({})
 const search = ref('')
+const healthFilter = ref<'healthy' | 'degraded' | ''>('')
 const loading = ref(true)
 const viewMode = ref<'grid' | 'list'>('grid')
 
@@ -19,15 +24,46 @@ const currentService = ref('')
 const subscribersList = ref<string[]>([])
 
 const filtered = computed(() => {
-  if (!search.value) return services.value
   const q = search.value.toLowerCase()
-  return services.value.filter(s => s.name.toLowerCase().includes(q))
+  return services.value.filter((s) => {
+    const instances = instancesByService.value[s.name] || []
+    const matchesSearch = !q || s.name.toLowerCase().includes(q) || instances.some((inst) =>
+      `${inst.host}:${inst.port}`.toLowerCase().includes(q)
+    )
+    const matchesHealth = !healthFilter.value ||
+      (healthFilter.value === 'healthy' ? s.healthy_count === s.instance_count : s.healthy_count < s.instance_count)
+    return matchesSearch && matchesHealth
+  })
 })
 
-async function fetchServices() {
+async function fetchNamespaces() {
   try {
-    const res = await getServices()
+    const res = await getNamespaces()
+    namespaces.value = res.data || []
+    if (!namespaces.value.find((ns) => ns.name === currentNamespace.value) && namespaces.value.length > 0) {
+      currentNamespace.value = namespaces.value[0]!.name
+    }
+  } catch (e) {
+    console.error('fetch namespaces failed', e)
+  }
+}
+
+async function fetchServices() {
+  loading.value = true
+  try {
+    const res = await getServices(currentNamespace.value)
     services.value = res.data || []
+    const entries = await Promise.all(
+      services.value.map(async (svc) => {
+        try {
+          const detailRes = await getServiceInstances(svc.name, currentNamespace.value)
+          return [svc.name, detailRes.data || []] as const
+        } catch {
+          return [svc.name, []] as const
+        }
+      })
+    )
+    instancesByService.value = Object.fromEntries(entries)
   } catch (e) {
     console.error('fetch services failed', e)
   } finally {
@@ -47,7 +83,10 @@ function barColor(rate: number) {
 }
 
 function goDetail(name: string) {
-  router.push(`/services/${encodeURIComponent(name)}`)
+  router.push({
+    path: `/services/${encodeURIComponent(name)}`,
+    query: { namespace: currentNamespace.value }
+  })
 }
 
 async function showSubscribers(name: string) {
@@ -56,7 +95,7 @@ async function showSubscribers(name: string) {
   subDialogVisible.value = true
   subLoading.value = true
   try {
-    const res = await getSubscribers(name)
+    const res = await getSubscribers(name, currentNamespace.value)
     subscribersList.value = res.data || []
   } catch (e: any) {
     console.error('Failed to fetch subscribers', e)
@@ -65,21 +104,33 @@ async function showSubscribers(name: string) {
   }
 }
 
-onMounted(fetchServices)
+watch(currentNamespace, fetchServices)
+
+onMounted(async () => {
+  await fetchNamespaces()
+  await fetchServices()
+})
 </script>
 
 <template>
   <div>
     <!-- Search & Toggle -->
     <div class="search-bar" style="display: flex; gap: 16px; margin-bottom: 24px;">
+      <el-select v-model="currentNamespace" size="large" style="width: 180px;">
+        <el-option v-for="ns in namespaces" :key="ns.name" :label="ns.name" :value="ns.name" />
+      </el-select>
       <el-input
         v-model="search"
-        :placeholder="t.services.searchPlaceholder"
+        :placeholder="`${t.services.searchPlaceholder} / IP`"
         size="large"
         clearable
         :prefix-icon="Search"
         style="flex: 1;"
       />
+      <el-select v-model="healthFilter" size="large" clearable style="width: 160px;" placeholder="Health">
+        <el-option label="Healthy" value="healthy" />
+        <el-option label="Degraded" value="degraded" />
+      </el-select>
       <el-radio-group v-model="viewMode" size="large">
         <el-radio-button value="grid"><el-icon><Menu /></el-icon></el-radio-button>
         <el-radio-button value="list"><el-icon><Grid /></el-icon></el-radio-button>
@@ -104,6 +155,7 @@ onMounted(fetchServices)
         <div class="svc-stats">
           <span><el-icon><Monitor /></el-icon> {{ svc.instance_count }} {{ t.services.instances }}</span>
           <span><el-icon><CircleCheck /></el-icon> {{ svc.healthy_count }} {{ t.services.healthy }}</span>
+          <span>{{ currentNamespace }}</span>
           <span class="sub-link" @click.stop="showSubscribers(svc.name)">
             <el-icon><User /></el-icon> {{ svc.subscriber_count || 0 }} {{ t.services.subscribers || 'Subscribers' }}
           </span>

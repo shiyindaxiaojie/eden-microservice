@@ -19,11 +19,11 @@ type SubscriberInfo struct {
 
 // ServiceStore handles service instance management and health.
 type ServiceStore struct {
-	mu         sync.RWMutex
+	mu sync.RWMutex
 	// namespace -> serviceName -> instanceID -> Instance
 	services   map[string]map[string]map[string]*model.Instance
 	dataPath   string
-	NotifyFunc func(serviceName string, instances []*model.Instance)
+	NotifyFunc func(namespace, serviceName, action string, instances []*model.Instance)
 }
 
 func NewServiceStore(dataPath string) *ServiceStore {
@@ -67,10 +67,7 @@ func (s *ServiceStore) Register(inst *model.Instance) {
 
 	s.services[ns][inst.ServiceName][inst.ID] = inst
 
-	if s.NotifyFunc != nil {
-		instances := s.getServiceNoLock(ns, inst.ServiceName)
-		go s.NotifyFunc(inst.ServiceName, instances)
-	}
+	s.notifyNoLock(ns, inst.ServiceName, "online")
 }
 
 // Deregister removes an instance.
@@ -106,10 +103,7 @@ func (s *ServiceStore) DeregisterNS(namespace, serviceName, instanceID string) (
 		delete(s.services, ns)
 	}
 
-	if s.NotifyFunc != nil {
-		insts := s.getServiceNoLock(ns, serviceName)
-		go s.NotifyFunc(serviceName, insts)
-	}
+	s.notifyNoLock(ns, serviceName, "offline")
 
 	return inst, true
 }
@@ -138,10 +132,13 @@ func (s *ServiceStore) SetInstanceStatus(namespace, serviceName, instanceID stri
 		inst.LastHeartbeat = time.Now()
 	}
 
-	if s.NotifyFunc != nil {
-		insts := s.getServiceNoLock(ns, serviceName)
-		go s.NotifyFunc(serviceName, insts)
+	action := "update"
+	if status == model.HealthPassing {
+		action = "online"
+	} else if status == model.HealthCritical {
+		action = "offline"
 	}
+	s.notifyNoLock(ns, serviceName, action)
 
 	return inst, true
 }
@@ -176,9 +173,8 @@ func (s *ServiceStore) HeartbeatNS(namespace, serviceName, instanceID string) (*
 		recovered = true
 	}
 
-	if recovered && s.NotifyFunc != nil {
-		insts := s.getServiceNoLock(ns, serviceName)
-		go s.NotifyFunc(serviceName, insts)
+	if recovered {
+		s.notifyNoLock(ns, serviceName, "online")
 	}
 
 	return inst, recovered
@@ -334,9 +330,8 @@ func (s *ServiceStore) MarkCritical(ttl time.Duration) ([]*model.Instance, []*mo
 				changed = true
 			}
 
-			if changed && s.NotifyFunc != nil {
-				insts := s.getServiceNoLock(ns, svcName)
-				go s.NotifyFunc(svcName, insts)
+			if changed {
+				s.notifyNoLock(ns, svcName, "offline")
 			}
 		}
 		if len(nsSvcs) == 0 {
@@ -344,6 +339,15 @@ func (s *ServiceStore) MarkCritical(ttl time.Duration) ([]*model.Instance, []*mo
 		}
 	}
 	return markedCritical, removed
+}
+
+func (s *ServiceStore) notifyNoLock(namespace, serviceName, action string) {
+	if s.NotifyFunc == nil {
+		return
+	}
+
+	insts := s.getServiceNoLock(namespace, serviceName)
+	go s.NotifyFunc(namespace, serviceName, action, insts)
 }
 
 // GetAll returns a snapshot of all services (flat, for backward-compat sync).
@@ -409,6 +413,40 @@ func (s *ServiceStore) Merge(remote map[string]map[string]*model.Instance) {
 			} else {
 				localInsts[id] = rInst
 				changed = true
+			}
+		}
+	}
+
+	if changed {
+		s.saveNoLock()
+	}
+}
+
+// MergeNS merges remote state into local state with namespace support.
+func (s *ServiceStore) MergeNS(remote map[string]map[string]map[string]*model.Instance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := false
+	for ns, remoteServices := range remote {
+		if _, ok := s.services[ns]; !ok {
+			s.services[ns] = make(map[string]map[string]*model.Instance)
+		}
+		for svcName, remoteInsts := range remoteServices {
+			if _, ok := s.services[ns][svcName]; !ok {
+				s.services[ns][svcName] = make(map[string]*model.Instance)
+			}
+			localInsts := s.services[ns][svcName]
+			for id, rInst := range remoteInsts {
+				if lInst, ok := localInsts[id]; ok {
+					if rInst.LastHeartbeat.After(lInst.LastHeartbeat) {
+						localInsts[id] = rInst
+						changed = true
+					}
+				} else {
+					localInsts[id] = rInst
+					changed = true
+				}
 			}
 		}
 	}

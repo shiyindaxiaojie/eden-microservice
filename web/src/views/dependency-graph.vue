@@ -4,6 +4,7 @@ import * as echarts from 'echarts'
 import { getDependencyGraph, getNamespaces, type Namespace } from '../api/registry'
 import { useI18n } from '../utils/i18n'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const chartRef = ref<HTMLElement | null>(null)
@@ -29,7 +30,7 @@ const renderGraph = (graphData: any) => {
   
   const nodes = graphData.nodes.map((n: any) => ({
     name: n.id,
-    value: n.label,
+    value: n.name || n.id,
     symbolSize: 50,
     itemStyle: {
       color: 'var(--accent-blue)',
@@ -44,8 +45,8 @@ const renderGraph = (graphData: any) => {
   }))
   
   const links = graphData.edges.map((e: any) => ({
-    source: e.from,
-    target: e.to,
+    source: e.source,
+    target: e.target,
     lineStyle: {
       color: '#A3B8CC',
       curveness: 0.2,
@@ -142,7 +143,7 @@ onUnmounted(() => {
             v-show="ns.name !== 'default'"
           />
         </el-select>
-        <el-button @click="fetchGraph" type="primary" plain :icon="'Refresh'">Refresh</el-button>
+        <el-button @click="fetchGraph" type="primary" plain :icon="Refresh">Refresh</el-button>
       </div>
     </div>
     

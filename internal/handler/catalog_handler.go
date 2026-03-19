@@ -72,6 +72,7 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Namespace   string `json:"namespace"`
 		ServiceName string `json:"service_name"`
 		InstanceID  string `json:"instance_id"`
 	}
@@ -79,7 +80,7 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.catalog.Heartbeat(req.ServiceName, req.InstanceID); err != nil {
+	if err := h.catalog.Heartbeat(req.Namespace, req.ServiceName, req.InstanceID); err != nil {
 		h.handleLeaderRedirect(w, err)
 		return
 	}
@@ -87,7 +88,8 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleListServices(w http.ResponseWriter, r *http.Request) {
-	services, err := h.catalog.ListServices()
+	namespace := r.URL.Query().Get("namespace")
+	services, err := h.catalog.ListServices(namespace)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -103,8 +105,13 @@ func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	healthy := r.URL.Query().Get("passing") == "true"
+	namespace := r.URL.Query().Get("namespace")
+	consumerService := r.URL.Query().Get("consumer_service")
+	if consumerService != "" {
+		h.catalog.RecordDependency(namespace, consumerService, name)
+	}
 
-	instances, err := h.catalog.GetService(name, healthy)
+	instances, err := h.catalog.GetService(namespace, name, healthy)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -131,8 +138,9 @@ func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetSubscribers(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[len("/v1/catalog/service/"):]
 	name := strings.TrimSuffix(path, "/subscribers")
+	namespace := r.URL.Query().Get("namespace")
 
-	subscribers := h.catalog.GetSubscribers(name)
+	subscribers := h.catalog.GetSubscribers(namespace, name)
 	if subscribers == nil {
 		subscribers = []string{}
 	}

@@ -7,6 +7,7 @@ import (
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
+	"google.golang.org/grpc/metadata"
 )
 
 // RegistryServer implements the RegistryService gRPC interface.
@@ -34,11 +35,11 @@ func (s *RegistryServer) Register(ctx context.Context, req *pb.RegisterRequest) 
 		Metadata:    pbi.Metadata,
 		Datacenter:  pbi.Datacenter,
 	}
-	
+
 	if err := s.catalog.Register(inst); err != nil {
 		return nil, err
 	}
-	
+
 	logger.Info("[gRPC] Registered service: %s (%s)", inst.ServiceName, inst.ID)
 	return &pb.RegisterResponse{Success: true}, nil
 }
@@ -66,10 +67,7 @@ func (s *RegistryServer) SetInstanceStatus(ctx context.Context, req *pb.SetInsta
 }
 
 func (s *RegistryServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
-	// We might need a HeartbeatNS in catalog if it were supported fully in the API. 
-	// Due to backward compatibility, Heartbeat is still using just ServiceName and InstanceID.
-	// But let's pass it if catalog supports it. Currently catalog.Heartbeat only takes service, instance.
-	err := s.catalog.Heartbeat(req.ServiceName, req.InstanceId)
+	err := s.catalog.Heartbeat(req.Namespace, req.ServiceName, req.InstanceId)
 	if err != nil {
 		return &pb.HeartbeatResponse{Success: false}, nil
 	}
@@ -77,22 +75,27 @@ func (s *RegistryServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 }
 
 func (s *RegistryServer) Discover(ctx context.Context, req *pb.DiscoverRequest) (*pb.DiscoverResponse, error) {
-	instances, err := s.catalog.GetService(req.ServiceName, req.HealthyOnly)
+	if consumer := consumerServiceFromContext(ctx); consumer != "" {
+		s.catalog.RecordDependency(req.Namespace, consumer, req.ServiceName)
+	}
+
+	instances, err := s.catalog.GetService(req.Namespace, req.ServiceName, req.HealthyOnly)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &pb.DiscoverResponse{Instances: toProtoInstances(instances)}, nil
 }
 
 func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_WatchServer) error {
-	ch := make(chan []*model.Instance, 10)
-	
-	s.catalog.Subscribe(req.ServiceName, ch)
-	defer s.catalog.Unsubscribe(req.ServiceName, ch)
+	ch := make(chan service.WatchEvent, 10)
+	consumerService := consumerServiceFromContext(stream.Context())
+
+	s.catalog.Subscribe(req.Namespace, req.ServiceName, consumerService, ch)
+	defer s.catalog.Unsubscribe(req.Namespace, req.ServiceName, ch)
 
 	// Send initial state
-	initial, _ := s.catalog.GetService(req.ServiceName, false)
+	initial, _ := s.catalog.GetService(req.Namespace, req.ServiceName, false)
 	if err := stream.Send(&pb.WatchResponse{Action: "update", Instances: toProtoInstances(initial)}); err != nil {
 		return err
 	}
@@ -101,12 +104,24 @@ func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_W
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case insts := <-ch:
-			if err := stream.Send(&pb.WatchResponse{Action: "update", Instances: toProtoInstances(insts)}); err != nil {
+		case evt := <-ch:
+			if err := stream.Send(&pb.WatchResponse{Action: evt.Action, Instances: toProtoInstances(evt.Instances)}); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func consumerServiceFromContext(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	values := md.Get("x-consumer-service")
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 func toProtoInstances(instances []*model.Instance) []*pb.ServiceInstance {

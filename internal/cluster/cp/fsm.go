@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
 	hraft "github.com/hashicorp/raft"
+	"github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
 )
@@ -15,23 +15,24 @@ import (
 type CommandType string
 
 const (
-	CmdRegister      CommandType = "register"
-	CmdDeregister    CommandType = "deregister"
-	CmdHeartbeat     CommandType = "heartbeat"
-	CmdAddAPIKey     CommandType = "add_api_key"
-	CmdDeleteAPIKey  CommandType = "delete_api_key"
-	CmdAddUser       CommandType = "add_user"
-	CmdDeleteUser    CommandType = "delete_user"
-	CmdSetMode       CommandType = "set_mode"
-	CmdSetEnv        CommandType = "set_env"
-	CmdSetSeeds      CommandType = "set_seeds"
-	CmdSetLogLevel   CommandType = "set_log_level"
+	CmdRegister     CommandType = "register"
+	CmdDeregister   CommandType = "deregister"
+	CmdHeartbeat    CommandType = "heartbeat"
+	CmdAddAPIKey    CommandType = "add_api_key"
+	CmdDeleteAPIKey CommandType = "delete_api_key"
+	CmdAddUser      CommandType = "add_user"
+	CmdDeleteUser   CommandType = "delete_user"
+	CmdSetMode      CommandType = "set_mode"
+	CmdSetEnv       CommandType = "set_env"
+	CmdSetSeeds     CommandType = "set_seeds"
+	CmdSetLogLevel  CommandType = "set_log_level"
 )
 
 // Command represents a Raft log command.
 type Command struct {
 	Type        CommandType     `json:"type"`
 	Instance    *model.Instance `json:"instance,omitempty"`
+	Namespace   string          `json:"namespace,omitempty"`
 	ServiceName string          `json:"service_name,omitempty"`
 	InstanceID  string          `json:"instance_id,omitempty"`
 	APIKey      *model.APIKey   `json:"api_key,omitempty"`
@@ -67,10 +68,10 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		f.registry.Register(cmd.Instance)
 		return nil
 	case CmdDeregister:
-		_, ok := f.registry.Deregister(cmd.ServiceName, cmd.InstanceID)
+		_, ok := f.registry.Services.DeregisterNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		return ok
 	case CmdHeartbeat:
-		_, ok := f.registry.Heartbeat(cmd.ServiceName, cmd.InstanceID)
+		_, ok := f.registry.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		return ok
 	case CmdAddAPIKey:
 		f.registry.AddAPIKey(cmd.APIKey)

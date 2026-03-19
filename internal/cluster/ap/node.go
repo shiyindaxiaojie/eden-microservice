@@ -20,6 +20,11 @@ type Node struct {
 	PM       *cluster.PeerManager
 }
 
+type syncDiscoveryPayload struct {
+	ServicesByNamespace map[string]map[string]map[string]*model.Instance `json:"services_by_namespace"`
+	Namespaces          []*model.Namespace                               `json:"namespaces"`
+}
+
 // NewNode creates an AP mode node.
 func NewNode(cfg *config.Config, registry *store.Registry) *Node {
 	n := &Node{
@@ -56,7 +61,7 @@ func (n *Node) fullSync() {
 
 	// Pick a random peer
 	target := peers[time.Now().UnixNano()%int64(len(peers))]
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -72,13 +77,18 @@ func (n *Node) fullSync() {
 		return
 	}
 
-	var remoteServices map[string]map[string]*model.Instance
-	if err := json.Unmarshal(resp.Data, &remoteServices); err != nil {
+	var payload syncDiscoveryPayload
+	if err := json.Unmarshal(resp.Data, &payload); err != nil {
 		logger.Error("[AP Node] unmarshal error during full sync: %v", err)
 		return
 	}
 
-	n.Registry.Services.Merge(remoteServices)
+	if len(payload.ServicesByNamespace) > 0 {
+		n.Registry.Services.MergeNS(payload.ServicesByNamespace)
+	}
+	if len(payload.Namespaces) > 0 {
+		n.Registry.Namespaces.Restore(payload.Namespaces)
+	}
 	logger.Info("[AP Node] Full sync completed with %s", target.ID)
 }
 
@@ -109,11 +119,11 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 		}
 	case "deregister":
 		if d, ok := data.(map[string]string); ok {
-			n.Registry.Deregister(d["service_name"], d["instance_id"])
+			n.Registry.Services.DeregisterNS(d["namespace"], d["service_name"], d["instance_id"])
 		}
 	case "heartbeat":
 		if d, ok := data.(map[string]string); ok {
-			n.Registry.Heartbeat(d["service_name"], d["instance_id"])
+			n.Registry.HeartbeatNS(d["namespace"], d["service_name"], d["instance_id"])
 		}
 	case "add_api_key":
 		if k, ok := data.(*model.APIKey); ok {

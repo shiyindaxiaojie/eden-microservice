@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 // RegistryNode represents a single registry server node with pooled connections.
@@ -111,11 +113,13 @@ type Client struct {
 	cache *LocalCache
 
 	// Cluster state
-	allNodes     []*RegistryNode
-	lastTopology string
-	mu           sync.RWMutex
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
+	allNodes        []*RegistryNode
+	lastTopology    string
+	mu              sync.RWMutex
+	stopCh          chan struct{}
+	wg              sync.WaitGroup
+	identityMu      sync.RWMutex
+	consumerService string
 }
 
 // Config represents the Eden client configuration.
@@ -174,11 +178,12 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 	// If it fails, and we have cache, we'll rely on cache.
 	c.syncNodes()
 
-	logger.Info("[Registry Init] Client init, transport: %s, seeds: %v, namespace: %s, cacheDir: %s", 
+	logger.Info("[Registry Init] Client init, transport: %s, seeds: %v, namespace: %s, cacheDir: %s",
 		cfg.Transport, cfg.Addresses, cfg.Namespace, cfg.CacheDir)
 
 	// Start background node discovery
 	c.startNodeDiscovery()
+	c.startCacheRefresh()
 
 	return c, nil
 }
@@ -375,7 +380,7 @@ func (c *Client) executeWithFailover(opName string, fn func(node *RegistryNode) 
 }
 
 func (c *Client) Register(instance *registry.ServiceInstance) error {
-	return c.executeWithFailover("Register", func(node *RegistryNode) error {
+	err := c.executeWithFailover("Register", func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			client, err := node.getClient(c.transport)
 			if err != nil {
@@ -384,12 +389,12 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			
+
 			pi := toProtoInstance(instance)
 			if c.namespace != "" {
 				pi.Namespace = c.namespace
 			}
-			
+
 			_, err = client.Register(ctx, &pb.RegisterRequest{
 				Instance: pi,
 			})
@@ -426,6 +431,14 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 		}
 		return nil
 	})
+	if err == nil {
+		c.identityMu.Lock()
+		if c.consumerService == "" {
+			c.consumerService = instance.ServiceName
+		}
+		c.identityMu.Unlock()
+	}
+	return err
 }
 
 func (c *Client) Deregister(instance *registry.ServiceInstance) error {
@@ -486,6 +499,7 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+			ctx = c.withConsumerService(ctx)
 			resp, err := client.Discover(ctx, &pb.DiscoverRequest{
 				Namespace:   c.namespace,
 				ServiceName: serviceName,
@@ -499,14 +513,17 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 			return nil
 		}
 
-		url := fmt.Sprintf("%s/v1/catalog/service/%s?passing=true", node.HTTPAddr, serviceName)
+		reqURL := fmt.Sprintf("%s/v1/catalog/service/%s?passing=true", node.HTTPAddr, serviceName)
 		if c.namespace != "" {
-			url += "&namespace=" + c.namespace
+			reqURL += "&namespace=" + c.namespace
 		}
-		if !strings.HasPrefix(url, "http") {
-			url = "http://" + url
+		if consumerService := c.getConsumerService(); consumerService != "" {
+			reqURL += "&consumer_service=" + neturl.QueryEscape(consumerService)
 		}
-		req, _ := http.NewRequest("GET", url, nil)
+		if !strings.HasPrefix(reqURL, "http") {
+			reqURL = "http://" + reqURL
+		}
+		req, _ := http.NewRequest("GET", reqURL, nil)
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
 		if err != nil {
@@ -603,6 +620,7 @@ func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceI
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
+		ctx = c.withConsumerService(ctx)
 		// Monitor stopCh to cancel the watch
 		go func() {
 			select {
@@ -710,6 +728,37 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 		}
 		return nil
 	})
+}
+
+func (c *Client) startCacheRefresh() {
+	if c.cache == nil {
+		return
+	}
+
+	c.cache.StartBackgroundSyncer(30*time.Second, func() map[string][]*registry.ServiceInstance {
+		result := make(map[string][]*registry.ServiceInstance)
+		for _, serviceName := range c.cache.ServiceNames() {
+			instances, err := c.Discovery(serviceName)
+			if err == nil {
+				result[serviceName] = instances
+			}
+		}
+		return result
+	}, c.stopCh)
+}
+
+func (c *Client) getConsumerService() string {
+	c.identityMu.RLock()
+	defer c.identityMu.RUnlock()
+	return c.consumerService
+}
+
+func (c *Client) withConsumerService(ctx context.Context) context.Context {
+	consumerService := c.getConsumerService()
+	if consumerService == "" {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, "x-consumer-service", consumerService)
 }
 
 // Close shuts down the client, closing all pooled connections.

@@ -22,6 +22,11 @@ type ClusterServer struct {
 	replicator Replicator
 }
 
+type syncDiscoveryPayload struct {
+	ServicesByNamespace map[string]map[string]map[string]*model.Instance `json:"services_by_namespace"`
+	Namespaces          []*model.Namespace                               `json:"namespaces"`
+}
+
 // NewClusterServer creates a new gRPC cluster server.
 func NewClusterServer(registry *store.Registry, replicator Replicator) *ClusterServer {
 	return &ClusterServer{
@@ -146,8 +151,11 @@ func (s *ClusterServer) ReplicateLog(ctx context.Context, req *pb.ReplicateLogRe
 }
 
 func (s *ClusterServer) SyncDiscovery(ctx context.Context, req *pb.SyncDiscoveryRequest) (*pb.SyncDiscoveryResponse, error) {
-	allServices := s.registry.Services.GetAll()
-	data, err := json.Marshal(allServices)
+	payload := syncDiscoveryPayload{
+		ServicesByNamespace: s.registry.Services.GetAllNS(),
+		Namespaces:          s.registry.Namespaces.List(),
+	}
+	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}

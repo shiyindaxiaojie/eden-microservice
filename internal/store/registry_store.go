@@ -1,8 +1,8 @@
 package store
 
 import (
-	"time"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
+	"time"
 )
 
 // ServiceSummary holds counts for a single service.
@@ -57,86 +57,126 @@ func (r *Registry) Heartbeat(serviceName, instanceID string) (*model.Instance, b
 	return r.Services.Heartbeat(serviceName, instanceID)
 }
 
-func (r *Registry) GetMode() string { return r.Config.GetMode() }
-func (r *Registry) GetEnvironment() string { return r.Config.GetEnvironment() }
-func (r *Registry) GetSeeds() []string { return r.Config.GetSeeds() }
-func (r *Registry) GetLogLevel() string { return r.Config.GetLogLevel() }
-func (r *Registry) Stats() Stats { return r.Services.Stats() }
-func (r *Registry) GetUser(u string) (*model.User, bool) { return r.Auth.GetUser(u) }
+func (r *Registry) HeartbeatNS(namespace, serviceName, instanceID string) (*model.Instance, bool) {
+	return r.Services.HeartbeatNS(namespace, serviceName, instanceID)
+}
+
+func (r *Registry) GetMode() string                          { return r.Config.GetMode() }
+func (r *Registry) GetEnvironment() string                   { return r.Config.GetEnvironment() }
+func (r *Registry) GetSeeds() []string                       { return r.Config.GetSeeds() }
+func (r *Registry) GetLogLevel() string                      { return r.Config.GetLogLevel() }
+func (r *Registry) Stats() Stats                             { return r.Services.Stats() }
+func (r *Registry) GetUser(u string) (*model.User, bool)     { return r.Auth.GetUser(u) }
 func (r *Registry) GetAPIKey(k string) (*model.APIKey, bool) { return r.Auth.GetAPIKey(k) }
-func (r *Registry) ListServices() []ServiceSummary { return r.Services.ListServices() }
-func (r *Registry) GetServiceHealthy(n string) []*model.Instance { return r.Services.GetServiceHealthy(n) }
+func (r *Registry) ListServices() []ServiceSummary           { return r.Services.ListServices() }
+func (r *Registry) ListServicesNS(namespace string) []ServiceSummary {
+	return r.Services.ListServicesNS(namespace)
+}
+func (r *Registry) GetServiceHealthy(n string) []*model.Instance {
+	return r.Services.GetServiceHealthy(n)
+}
+func (r *Registry) GetServiceHealthyNS(namespace, name string) []*model.Instance {
+	return r.Services.GetServiceHealthyNS(namespace, name)
+}
 func (r *Registry) GetService(n string) []*model.Instance { return r.Services.GetService(n) }
-func (r *Registry) ListUsers() []*model.User { return r.Auth.ListUsers() }
-func (r *Registry) AddUser(u *model.User) { r.Auth.AddUser(u); r.Auth.Save() }
-func (r *Registry) DeleteUser(u string) { r.Auth.DeleteUser(u); r.Auth.Save() }
+func (r *Registry) GetServiceNS(namespace, name string) []*model.Instance {
+	return r.Services.GetServiceNS(namespace, name)
+}
+func (r *Registry) ListUsers() []*model.User     { return r.Auth.ListUsers() }
+func (r *Registry) AddUser(u *model.User)        { r.Auth.AddUser(u); r.Auth.Save() }
+func (r *Registry) DeleteUser(u string)          { r.Auth.DeleteUser(u); r.Auth.Save() }
 func (r *Registry) ListAPIKeys() []*model.APIKey { return r.Auth.ListAPIKeys() }
-func (r *Registry) AddAPIKey(k *model.APIKey) { r.Auth.AddAPIKey(k); r.Auth.Save() }
-func (r *Registry) DeleteAPIKey(k string) { r.Auth.DeleteAPIKey(k); r.Auth.Save() }
-func (r *Registry) SetMode(m string) { r.Config.SetMode(m); r.Config.Save() }
-func (r *Registry) SetEnvironment(e string) { r.Config.SetEnvironment(e); r.Config.Save() }
-func (r *Registry) SetSeeds(s []string) { r.Config.SetSeeds(s); r.Config.Save() }
-func (r *Registry) SetLogLevel(l string) { r.Config.SetLogLevel(l); r.Config.Save() }
-func (r *Registry) ListEvents() []*model.Event { return r.Events.List() }
+func (r *Registry) AddAPIKey(k *model.APIKey)    { r.Auth.AddAPIKey(k); r.Auth.Save() }
+func (r *Registry) DeleteAPIKey(k string)        { r.Auth.DeleteAPIKey(k); r.Auth.Save() }
+func (r *Registry) SetMode(m string)             { r.Config.SetMode(m); r.Config.Save() }
+func (r *Registry) SetEnvironment(e string)      { r.Config.SetEnvironment(e); r.Config.Save() }
+func (r *Registry) SetSeeds(s []string)          { r.Config.SetSeeds(s); r.Config.Save() }
+func (r *Registry) SetLogLevel(l string)         { r.Config.SetLogLevel(l); r.Config.Save() }
+func (r *Registry) ListEvents() []*model.Event   { return r.Events.List() }
 func (r *Registry) MarkCritical(ttl time.Duration) ([]*model.Instance, []*model.Instance) {
 	return r.Services.MarkCritical(ttl)
 }
 
 // Namespace convenience methods
-func (r *Registry) ListNamespaces() []*model.Namespace { return r.Namespaces.List() }
+func (r *Registry) ListNamespaces() []*model.Namespace       { return r.Namespaces.List() }
 func (r *Registry) CreateNamespace(ns *model.Namespace) bool { return r.Namespaces.Create(ns) }
 func (r *Registry) UpdateNamespace(ns *model.Namespace) bool { return r.Namespaces.Update(ns) }
-func (r *Registry) DeleteNamespace(name string) bool { return r.Namespaces.Delete(name) }
+func (r *Registry) DeleteNamespace(name string) bool         { return r.Namespaces.Delete(name) }
 func (r *Registry) SetInstanceStatus(ns, svc, id string, status model.HealthStatus) (*model.Instance, bool) {
 	return r.Services.SetInstanceStatus(ns, svc, id, status)
 }
 
 // SnapshotData represents the full state for Raft/Persistence.
 type SnapshotData struct {
-	Services map[string][]*model.Instance `json:"services"`
-	APIKeys     map[string]*model.APIKey     `json:"api_keys"`
-	Users       map[string]*model.User       `json:"users"`
-	Mode        string                       `json:"mode"`
-	Environment string                       `json:"environment"`
-	Seeds       []string                     `json:"seeds"`
+	Services     map[string][]*model.Instance            `json:"services,omitempty"`
+	ServicesByNS map[string]map[string][]*model.Instance `json:"services_by_namespace,omitempty"`
+	Namespaces   []*model.Namespace                      `json:"namespaces,omitempty"`
+	APIKeys      map[string]*model.APIKey                `json:"api_keys"`
+	Users        map[string]*model.User                  `json:"users"`
+	Mode         string                                  `json:"mode"`
+	Environment  string                                  `json:"environment"`
+	Seeds        []string                                `json:"seeds"`
 }
 
 // Snapshot returns a deep copy of all data.
 func (r *Registry) Snapshot() *SnapshotData {
-	allServices := r.Services.GetAll()
-	services := make(map[string][]*model.Instance, len(allServices))
-	for name, m := range allServices {
-		list := make([]*model.Instance, 0, len(m))
-		for _, inst := range m {
-			cp := *inst
-			list = append(list, &cp)
+	allServices := r.Services.GetAllNS()
+	servicesByNS := make(map[string]map[string][]*model.Instance, len(allServices))
+	for ns, services := range allServices {
+		nsCopy := make(map[string][]*model.Instance, len(services))
+		for name, m := range services {
+			list := make([]*model.Instance, 0, len(m))
+			for _, inst := range m {
+				cp := *inst
+				list = append(list, &cp)
+			}
+			nsCopy[name] = list
 		}
-		services[name] = list
+		servicesByNS[ns] = nsCopy
 	}
 
 	snap := &SnapshotData{
-		Services:    services,
-		APIKeys:     r.Auth.GetAllAPIKeys(),
-		Users:       r.Auth.GetAllUsers(),
-		Mode:        r.Config.GetMode(),
-		Environment: r.Config.GetEnvironment(),
-		Seeds:       r.Config.GetSeeds(),
+		ServicesByNS: servicesByNS,
+		Namespaces:   r.Namespaces.List(),
+		APIKeys:      r.Auth.GetAllAPIKeys(),
+		Users:        r.Auth.GetAllUsers(),
+		Mode:         r.Config.GetMode(),
+		Environment:  r.Config.GetEnvironment(),
+		Seeds:        r.Config.GetSeeds(),
 	}
 	return snap
 }
 
 // Restore replaces the registry from snapshot data.
 func (r *Registry) Restore(data *SnapshotData) {
-	services := make(map[string]map[string]*model.Instance, len(data.Services))
-	for name, list := range data.Services {
-		m := make(map[string]*model.Instance, len(list))
-		for _, inst := range list {
-			m[inst.ID] = inst
+	if len(data.ServicesByNS) > 0 {
+		services := make(map[string]map[string]map[string]*model.Instance, len(data.ServicesByNS))
+		for ns, nsServices := range data.ServicesByNS {
+			services[ns] = make(map[string]map[string]*model.Instance, len(nsServices))
+			for name, list := range nsServices {
+				m := make(map[string]*model.Instance, len(list))
+				for _, inst := range list {
+					m[inst.ID] = inst
+				}
+				services[ns][name] = m
+			}
 		}
-		services[name] = m
+		r.Services.RestoreNS(services)
+	} else {
+		services := make(map[string]map[string]*model.Instance, len(data.Services))
+		for name, list := range data.Services {
+			m := make(map[string]*model.Instance, len(list))
+			for _, inst := range list {
+				m[inst.ID] = inst
+			}
+			services[name] = m
+		}
+		r.Services.Restore(services)
 	}
 
-	r.Services.Restore(services)
+	if len(data.Namespaces) > 0 {
+		r.Namespaces.Restore(data.Namespaces)
+	}
 	r.Auth.Restore(data.Users, data.APIKeys)
 	r.Config.Restore(data.Mode, data.Environment, "", data.Seeds)
 

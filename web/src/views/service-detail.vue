@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox, ElMessage } from 'element-plus'
-import { getServiceInstances, setInstanceStatus, type Instance } from '../api/registry'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getServiceInstances, getSubscribers, setInstanceStatus, type Instance } from '../api/registry'
 import { useI18n } from '../utils/i18n'
 import { ArrowLeft, Refresh, Grid, Menu, Connection, Monitor } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+
 const serviceName = ref(route.params.name as string)
+const namespace = ref((route.query.namespace as string) || 'default')
 const instances = ref<Instance[]>([])
+const subscriberCount = ref(0)
 const loading = ref(true)
 const userRole = ref(localStorage.getItem('user_role') || 'admin')
 const canManage = computed(() => userRole.value === 'admin' || userRole.value === 'developer')
@@ -23,10 +26,10 @@ const filteredInstances = computed(() => {
   let res = instances.value
   if (searchIP.value) {
     const q = searchIP.value.toLowerCase()
-    res = res.filter(i => `${i.host}:${i.port}`.toLowerCase().includes(q))
+    res = res.filter((i) => `${i.host}:${i.port}`.toLowerCase().includes(q))
   }
   if (filterHealth.value) {
-    res = res.filter(i => i.status === filterHealth.value)
+    res = res.filter((i) => i.status === filterHealth.value)
   }
   return res
 })
@@ -34,8 +37,12 @@ const filteredInstances = computed(() => {
 async function fetchInstances() {
   loading.value = true
   try {
-    const res = await getServiceInstances(serviceName.value)
-    instances.value = res.data || []
+    const [instancesRes, subscribersRes] = await Promise.all([
+      getServiceInstances(serviceName.value, namespace.value),
+      getSubscribers(serviceName.value, namespace.value)
+    ])
+    instances.value = instancesRes.data || []
+    subscriberCount.value = (subscribersRes.data || []).length
   } catch (e) {
     console.error('fetch instances failed', e)
   } finally {
@@ -55,20 +62,19 @@ function formatMeta(meta: Record<string, string>) {
 
 async function handleSetStatus(inst: Instance, status: 'online' | 'offline') {
   try {
-    let msg = `Are you sure to put instance ${inst.host}:${inst.port} ${status}?`
-    if (locale.value === 'zh') {
-      msg = `确定将实例 ${inst.host}:${inst.port} 标记为${status === 'online' ? '上线' : '下线'}吗？`
-    }
+    const msg = locale.value === 'zh'
+      ? `确定将实例 ${inst.host}:${inst.port} 标记为${status === 'online' ? '上线' : '下线'}吗？`
+      : `Are you sure to put instance ${inst.host}:${inst.port} ${status}?`
     await ElMessageBox.confirm(
       msg,
       status === 'online' ? 'Online Confirmation' : 'Offline Confirmation',
-      { 
-        confirmButtonText: t.value.common.confirm, 
-        cancelButtonText: t.value.common.cancel, 
-        type: status === 'offline' ? 'warning' : 'info' 
+      {
+        confirmButtonText: t.value.common.confirm,
+        cancelButtonText: t.value.common.cancel,
+        type: status === 'offline' ? 'warning' : 'info'
       }
     )
-    await setInstanceStatus(inst.namespace || '', inst.service_name, inst.id, status)
+    await setInstanceStatus(inst.namespace || namespace.value, inst.service_name, inst.id, status)
     ElMessage.success(status === 'online' ? 'Instance Online' : 'Instance Offline')
     fetchInstances()
   } catch {
@@ -81,9 +87,8 @@ onMounted(fetchInstances)
 
 <template>
   <div>
-    <!-- Back -->
     <div style="margin-bottom: 20px;">
-      <el-button text @click="router.push('/services')" style="color: var(--text-secondary)">
+      <el-button text @click="router.push({ path: '/services', query: { namespace } })" style="color: var(--text-secondary)">
         <el-icon><ArrowLeft /></el-icon> {{ t.detail.backToServices }}
       </el-button>
       <el-button text @click="fetchInstances" style="color: var(--text-secondary); margin-left: 8px;">
@@ -94,9 +99,10 @@ onMounted(fetchInstances)
     <h3 class="section-title" style="margin-bottom: 24px;">
       {{ t.services.service }}: <span style="color: var(--accent-blue);">{{ serviceName }}</span>
       <el-tag size="small" effect="dark" style="margin-left: 12px;">{{ filteredInstances.length }} {{ t.detail.instanceCount }}</el-tag>
+      <el-tag size="small" type="info" effect="plain" style="margin-left: 12px;">{{ namespace }}</el-tag>
+      <el-tag size="small" type="warning" effect="plain" style="margin-left: 12px;">{{ subscriberCount }} {{ t.services.subscribers || 'Subscribers' }}</el-tag>
     </h3>
 
-    <!-- Filters and View Toggle -->
     <div class="search-bar" style="display: flex; gap: 16px; margin-bottom: 24px;">
       <el-input
         v-model="searchIP"
@@ -116,13 +122,11 @@ onMounted(fetchInstances)
       </el-radio-group>
     </div>
 
-    <!-- Empty State -->
     <div v-if="!loading && filteredInstances.length === 0" class="empty-state">
       <el-icon><Monitor /></el-icon>
       <p>No instances found</p>
     </div>
 
-    <!-- Grid View -->
     <div v-if="viewMode === 'grid'" class="service-grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
       <div
         v-for="(inst, idx) in filteredInstances"
@@ -140,27 +144,30 @@ onMounted(fetchInstances)
           <div style="font-size: 13px; color: var(--text-muted);">
             Weight: <span style="color: var(--text-primary);">{{ inst.weight }}</span> | DC: <span style="color: var(--text-primary);">{{ inst.datacenter || '-' }}</span>
           </div>
+          <div style="font-size: 13px; color: var(--text-muted);">
+            Namespace: <span style="color: var(--text-primary);">{{ inst.namespace || namespace }}</span>
+          </div>
           <div>
             <el-tag v-if="inst.status === 'passing'" type="success" size="small" effect="dark">Passing</el-tag>
             <el-tag v-else type="danger" size="small" effect="dark">Critical</el-tag>
           </div>
         </div>
-        <div class="card-actions" v-if="canManage" style="display: flex; gap: 8px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-color);">
-          <el-button 
-            v-if="inst.status !== 'passing'" 
-            type="success" 
-            size="small" 
-            plain 
+        <div v-if="canManage" class="card-actions" style="display: flex; gap: 8px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-color);">
+          <el-button
+            v-if="inst.status !== 'passing'"
+            type="success"
+            size="small"
+            plain
             @click="handleSetStatus(inst, 'online')"
             style="flex: 1;"
           >
             Online
           </el-button>
-          <el-button 
-            v-if="inst.status !== 'critical'" 
-            type="danger" 
-            size="small" 
-            plain 
+          <el-button
+            v-if="inst.status !== 'critical'"
+            type="danger"
+            size="small"
+            plain
             @click="handleSetStatus(inst, 'offline')"
             style="flex: 1;"
           >
@@ -170,12 +177,14 @@ onMounted(fetchInstances)
       </div>
     </div>
 
-    <!-- List View -->
     <div v-else class="glass-table-wrapper">
       <el-table :data="filteredInstances" v-loading="loading" height="100%" style="width: 100%">
         <el-table-column :label="t.detail.instanceId" prop="id" min-width="160" />
         <el-table-column :label="t.common.address" min-width="160">
           <template #default="{ row }"><span class="ip-address">{{ row.host }}:{{ row.port }}</span></template>
+        </el-table-column>
+        <el-table-column label="Namespace" min-width="120">
+          <template #default="{ row }">{{ row.namespace || namespace }}</template>
         </el-table-column>
         <el-table-column :label="t.detail.healthStatus" min-width="100">
           <template #default="{ row }">

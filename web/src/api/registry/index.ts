@@ -62,11 +62,13 @@ export interface RegistryEvent {
   timestamp: string
 }
 
-export const getServices = () => api.get<ServiceSummary[]>('/v1/catalog/services')
-export const getServiceInstances = (name: string) => api.get<Instance[]>(`/v1/catalog/service/${name}`)
+export const getServices = (namespace = '') => api.get<ServiceSummary[]>(`/v1/catalog/services${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
+export const getServiceInstances = (name: string, namespace = '') =>
+  api.get<Instance[]>(`/v1/catalog/service/${encodeURIComponent(name)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
 export const setInstanceStatus = (namespace: string, serviceName: string, instanceId: string, status: string) =>
   api.post('/v1/catalog/instance/status', { namespace, service_name: serviceName, instance_id: instanceId, status })
-export const getSubscribers = (name: string) => api.get<string[]>(`/v1/catalog/service/${name}/subscribers`)
+export const getSubscribers = (name: string, namespace = '') =>
+  api.get<string[]>(`/v1/catalog/service/${encodeURIComponent(name)}/subscribers${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
 export const getDependencyGraph = (namespace: string) => api.get<any>(`/v1/catalog/dependency-graph?namespace=${namespace}`)
 
 export const getNamespaces = () => api.get<Namespace[]>('/v1/namespaces')

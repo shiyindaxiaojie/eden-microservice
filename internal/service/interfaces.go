@@ -1,22 +1,29 @@
 package service
 
 import (
-	"time"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	"time"
 )
+
+// WatchEvent represents a service watch notification.
+type WatchEvent struct {
+	Action    string
+	Instances []*model.Instance
+}
 
 // CatalogService handles service registration and discovery.
 type CatalogService interface {
 	Register(inst *model.Instance) error
 	SetInstanceStatus(namespace, serviceName, instanceID string, status string) error
-	Heartbeat(serviceName, instanceID string) error
-	ListServices() ([]interface{}, error)
-	GetService(name string, healthyOnly bool) ([]*model.Instance, error)
-	Subscribe(serviceName string, ch chan []*model.Instance)
-	Unsubscribe(serviceName string, ch chan []*model.Instance)
-	GetSubscribers(serviceName string) []string
+	Heartbeat(namespace, serviceName, instanceID string) error
+	ListServices(namespace string) ([]interface{}, error)
+	GetService(namespace, name string, healthyOnly bool) ([]*model.Instance, error)
+	Subscribe(namespace, serviceName, consumerService string, ch chan WatchEvent)
+	Unsubscribe(namespace, serviceName string, ch chan WatchEvent)
+	GetSubscribers(namespace, serviceName string) []string
+	RecordDependency(namespace, consumerService, providerService string)
 	GetDependencyGraph(namespace string) map[string]interface{}
 
 	// Namespace management
@@ -49,7 +56,7 @@ type SettingsService interface {
 	GetEnvironment() string
 	GetSeeds() []string
 	SetSeeds(seeds []string) error
-	SaveSeedsLocal(seeds []string) // save locally only, no broadcast
+	SaveSeedsLocal(seeds []string)      // save locally only, no broadcast
 	SaveSettingLocal(key, value string) // save setting locally, no broadcast
 }
 

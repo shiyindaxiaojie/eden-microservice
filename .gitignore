@@ -5,6 +5,8 @@
 *.dll
 *.so
 *.dylib
+.gocache
+.gomodcache
 
 # 依赖目录
 /vendor/

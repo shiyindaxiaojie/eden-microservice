@@ -24,7 +24,7 @@ func NewLocalCache(cacheDir string) *LocalCache {
 	if cacheDir == "" {
 		return nil
 	}
-	
+
 	err := os.MkdirAll(cacheDir, 0755)
 	if err != nil {
 		logger.Warn("[Registry SDK] Failed to create cache directory %s: %v", cacheDir, err)
@@ -44,7 +44,7 @@ func (c *LocalCache) Load() {
 	if c == nil || c.cacheFile == "" {
 		return
 	}
-	
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -108,6 +108,22 @@ func (c *LocalCache) Get(serviceName string) ([]*registry.ServiceInstance, bool)
 		result = append(result, &cp)
 	}
 	return result, true
+}
+
+// ServiceNames returns the cached service names.
+func (c *LocalCache) ServiceNames() []string {
+	if c == nil {
+		return nil
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	names := make([]string, 0, len(c.services))
+	for name := range c.services {
+		names = append(names, name)
+	}
+	return names
 }
 
 // Update caches new instances for a service and saves to disk.

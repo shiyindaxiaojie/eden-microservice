@@ -118,6 +118,26 @@ func (s *NamespaceStore) Exists(name string) bool {
 	return ok
 }
 
+// Restore replaces namespaces from snapshot data.
+func (s *NamespaceStore) Restore(namespaces []*model.Namespace) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.namespaces = make(map[string]*model.Namespace, len(namespaces)+1)
+	for _, ns := range namespaces {
+		cp := *ns
+		s.namespaces[cp.Name] = &cp
+	}
+	if _, ok := s.namespaces[model.DefaultNamespace]; !ok {
+		s.namespaces[model.DefaultNamespace] = &model.Namespace{
+			Name:        model.DefaultNamespace,
+			Description: "Default namespace",
+			CreatedAt:   time.Now().Format(time.RFC3339),
+		}
+	}
+	s.saveNoLock()
+}
+
 func (s *NamespaceStore) load() {
 	if s.dataPath == "" {
 		return
