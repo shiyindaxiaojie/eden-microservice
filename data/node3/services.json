@@ -1,4 +1,20 @@
 {
+  "auth-center": [
+    {
+      "id": "auth-center-1",
+      "service_name": "auth-center",
+      "host": "127.0.0.1",
+      "port": 9002,
+      "weight": 100,
+      "dc": "",
+      "metadata": {
+        "version": "1.0.0"
+      },
+      "status": "passing",
+      "last_heartbeat": "2026-03-19T13:18:44.8468959+08:00",
+      "registered_at": "2026-03-19T13:17:14.8443871+08:00"
+    }
+  ],
   "order-center": [
     {
       "id": "order-center-1",
@@ -11,8 +27,24 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-19T10:47:13.0402977+08:00",
-      "registered_at": "2026-03-19T10:32:20.2369868+08:00"
+      "last_heartbeat": "2026-03-19T13:18:46.3944333+08:00",
+      "registered_at": "2026-03-19T13:17:16.3917949+08:00"
+    }
+  ],
+  "user-center": [
+    {
+      "id": "user-center-1",
+      "service_name": "user-center",
+      "host": "127.0.0.1",
+      "port": 9001,
+      "weight": 100,
+      "dc": "",
+      "metadata": {
+        "version": "1.0.0"
+      },
+      "status": "passing",
+      "last_heartbeat": "2026-03-19T13:18:53.0136421+08:00",
+      "registered_at": "2026-03-19T13:17:13.0109129+08:00"
     }
   ]
 }

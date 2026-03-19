@@ -106,6 +106,16 @@ func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
 	return p.client, nil
 }
 
+// GetConn returns the underlying gRPC connection for multiplexing other services.
+func (p *Peer) GetConn() (*grpc.ClientConn, error) {
+	if _, err := p.GetClient(); err != nil {
+		return nil, err
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.conn, nil
+}
+
 // resolveGRPCAddr fetches gRPC address from the peer's HTTP endpoint.
 // This performs network IO and must NOT be called with any lock held.
 func (p *Peer) resolveGRPCAddr() (string, error) {

@@ -62,6 +62,7 @@ type CPNode interface {
 	Apply(cmd interface{}, timeout time.Duration) error
 	IsLeader() bool
 	LeaderAddr() string
+	LeaderID() string
 	Join(nodeID, addr string) error
 	Members() (interface{}, error)
 	RemoveServer(nodeID string) error

@@ -216,3 +216,21 @@ func (n *Node) LeaderAddr() string {
 	addr, _ := n.Raft.LeaderWithID()
 	return string(addr)
 }
+
+// LeaderID returns the node ID (HTTP address) of the current leader.
+func (n *Node) LeaderID() string {
+	leaderAddr, _ := n.Raft.LeaderWithID()
+	if leaderAddr == "" {
+		return ""
+	}
+	configFuture := n.Raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		return ""
+	}
+	for _, srv := range configFuture.Configuration().Servers {
+		if srv.Address == leaderAddr {
+			return string(srv.ID)
+		}
+	}
+	return ""
+}
