@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 	"google.golang.org/grpc"
@@ -106,10 +107,11 @@ type Client struct {
 	transport  string // "http", "grpc" (default), "quic"
 
 	// Cluster state
-	allNodes []*RegistryNode
-	mu       sync.RWMutex
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
+	allNodes     []*RegistryNode
+	lastTopology string
+	mu           sync.RWMutex
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
 }
 
 // Config represents the Eden client configuration.
@@ -161,6 +163,8 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 	// Synchronous initial node discovery to resolve gRPC addresses
 	c.syncNodes()
 
+	logger.Info("[Registry] Client initialized with transport: %s, initial seeds: %v", cfg.Transport, cfg.Addresses)
+
 	// Start background node discovery
 	c.startNodeDiscovery()
 
@@ -190,7 +194,7 @@ func (c *Client) startNodeDiscovery() {
 func (c *Client) syncNodes() {
 	var members []map[string]interface{}
 
-	err := c.tryAny(func(node *RegistryNode) error {
+	err := c.tryAny("SyncNodes", func(node *RegistryNode) error {
 		addr := node.HTTPAddr
 		if addr == "" {
 			addr = node.GRPCAddr
@@ -268,12 +272,29 @@ func (c *Client) syncNodes() {
 	if len(newNodes) > 0 {
 		c.mu.Lock()
 		c.allNodes = newNodes
+
+		var nodeDesc []string
+		for _, n := range newNodes {
+			nodeDesc = append(nodeDesc, fmt.Sprintf("%s(healthy=%v)", n.ID, n.healthy))
+		}
+		descStr := strings.Join(nodeDesc, ", ")
+		changed := false
+		if c.lastTopology != descStr {
+			c.lastTopology = descStr
+			changed = true
+		}
 		c.mu.Unlock()
+		
+		if changed {
+			logger.Info("[Registry] Cluster topology updated. Total nodes: %d -> [%s]", len(newNodes), descStr)
+		} else {
+			logger.Debug("[Registry] Cluster topology remains unchanged. Total nodes: %d", len(newNodes))
+		}
 	}
 }
 
 // tryAny is a simple failover helper for syncNodes itself (avoids circular dependency).
-func (c *Client) tryAny(fn func(node *RegistryNode) error) error {
+func (c *Client) tryAny(opName string, fn func(node *RegistryNode) error) error {
 	c.mu.RLock()
 	nodes := make([]*RegistryNode, len(c.allNodes))
 	copy(nodes, c.allNodes)
@@ -281,10 +302,12 @@ func (c *Client) tryAny(fn func(node *RegistryNode) error) error {
 
 	var lastErr error
 	for _, node := range nodes {
+		logger.Debug("[Registry] Executing internal '%s' via node %s (%s)", opName, node.ID, node.HTTPAddr)
 		if err := fn(node); err == nil {
 			return nil
 		} else {
 			lastErr = err
+			logger.Warn("[Registry] Internal '%s' failed on node %s: %v", opName, node.ID, err)
 		}
 	}
 	return lastErr
@@ -311,20 +334,28 @@ func (c *Client) sortedNodes() []*RegistryNode {
 }
 
 // executeWithFailover tries each node in order (healthy first), marking failures.
-func (c *Client) executeWithFailover(fn func(node *RegistryNode) error) error {
+func (c *Client) executeWithFailover(opName string, fn func(node *RegistryNode) error) error {
 	nodes := c.sortedNodes()
 
 	var lastErr error
 	for _, node := range nodes {
+		addr := node.GRPCAddr
+		if c.transport == "http" || addr == "" {
+			addr = node.HTTPAddr
+		}
+		logger.Info("[Registry] Executing '%s' via node %s (%s)", opName, node.ID, addr)
+
 		if err := fn(node); err == nil {
 			return nil
 		} else {
 			lastErr = err
+			logger.Warn("[Registry] '%s' failed on node %s: %v. Marking unhealthy and failing over...", opName, node.ID, err)
 			// Mark node as unhealthy on connection failure to trigger fast failover
 			node.markUnhealthy()
 		}
 	}
 
+	logger.Error("[Registry] All available nodes failed for operation '%s'", opName)
 	// All nodes failed — trigger immediate refresh in background
 	go c.syncNodes()
 
@@ -332,7 +363,7 @@ func (c *Client) executeWithFailover(fn func(node *RegistryNode) error) error {
 }
 
 func (c *Client) Register(instance *registry.ServiceInstance) error {
-	return c.executeWithFailover(func(node *RegistryNode) error {
+	return c.executeWithFailover("Register", func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			client, err := node.getClient(c.transport)
 			if err != nil {
@@ -379,7 +410,7 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 }
 
 func (c *Client) Deregister(instance *registry.ServiceInstance) error {
-	return c.executeWithFailover(func(node *RegistryNode) error {
+	return c.executeWithFailover("Deregister", func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			client, err := node.getClient(c.transport)
 			if err != nil {
@@ -422,7 +453,7 @@ func (c *Client) Deregister(instance *registry.ServiceInstance) error {
 
 func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, error) {
 	var instances []*registry.ServiceInstance
-	err := c.executeWithFailover(func(node *RegistryNode) error {
+	err := c.executeWithFailover("Discovery", func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			client, err := node.getClient(c.transport)
 			if err != nil {
@@ -526,8 +557,10 @@ func (c *Client) Subscribe(serviceName string, callback func([]*registry.Service
 func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceInstance)) bool {
 	nodes := c.sortedNodes()
 	for _, node := range nodes {
+		logger.Debug("[Registry] Attempting to Watch service '%s' via node %s", serviceName, node.ID)
 		client, err := node.getClient(c.transport)
 		if err != nil {
+			logger.Warn("[Registry] Failed to get client for Watch on node %s: %v", node.ID, err)
 			continue
 		}
 
@@ -543,15 +576,18 @@ func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceI
 
 		stream, err := client.Watch(ctx, &pb.WatchRequest{ServiceName: serviceName})
 		if err != nil {
+			logger.Warn("[Registry] Failed to establish Watch stream on node %s: %v", node.ID, err)
 			cancel()
 			node.markUnhealthy()
 			continue
 		}
 
+		logger.Info("[Registry] Successfully established Watch stream for '%s' via node %s", serviceName, node.ID)
 		// Successfully connected — read events
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
+				logger.Warn("[Registry] Watch stream for '%s' on node %s disconnected: %v", serviceName, node.ID, err)
 				cancel()
 				node.markUnhealthy()
 				// Trigger immediate node refresh
@@ -590,7 +626,7 @@ func (c *Client) pollSubscribe(serviceName string, callback func([]*registry.Ser
 }
 
 func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
-	return c.executeWithFailover(func(node *RegistryNode) error {
+	return c.executeWithFailover("Heartbeat", func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			client, err := node.getClient(c.transport)
 			if err != nil {
