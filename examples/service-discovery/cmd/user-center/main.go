@@ -21,9 +21,12 @@ var registryAddr string
 func init() {
 	regAddr := os.Getenv("REGISTRY_ADDR")
 	if regAddr == "" {
-		regAddr = "http://127.0.0.1:8500"
+		// Client only needs a single entrypoint. It will automatically discover the rest
+		// of the cluster nodes via the /v1/cluster/members endpoint.
+		registryAddr = "http://127.0.0.1:8500"
+	} else {
+		registryAddr = regAddr
 	}
-	registryAddr = regAddr
 }
 
 var servicePort = envOr("SERVICE_PORT", "9001")

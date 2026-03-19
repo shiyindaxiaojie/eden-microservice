@@ -1,0 +1,18 @@
+{
+  "user-center": [
+    {
+      "id": "user-center-1",
+      "service_name": "user-center",
+      "host": "127.0.0.1",
+      "port": 9001,
+      "weight": 100,
+      "dc": "",
+      "metadata": {
+        "version": "1.0.0"
+      },
+      "status": "passing",
+      "last_heartbeat": "2026-03-19T10:09:42.6337699+08:00",
+      "registered_at": "2026-03-19T09:41:42.0556248+08:00"
+    }
+  ]
+}

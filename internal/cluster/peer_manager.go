@@ -77,22 +77,18 @@ func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
 		return c, nil
 	}
 
-	// Double check and create under full lock
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	
-	if p.client != nil {
-		return p.client, nil
+	// Resolve gRPC address outside any lock (involves network IO)
+	if err := p.Resolve(); err != nil {
+		return nil, err
 	}
 
-	// Resolve gRPC address if needed
-	if p.grpcAddr == "" {
-		p.mu.Unlock() // Release lock for network IO
-		err := p.Resolve()
-		p.mu.Lock() // Re-lock
-		if err != nil {
-			return nil, err
-		}
+	// Now create connection under lock
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Double check after acquiring lock
+	if p.client != nil {
+		return p.client, nil
 	}
 
 	addr := p.grpcAddr
@@ -110,32 +106,31 @@ func (p *Peer) GetClient() (pb.ClusterServiceClient, error) {
 	return p.client, nil
 }
 
-// Resolve fetches node info to get the gRPC address.
-func (p *Peer) Resolve() error {
+// resolveGRPCAddr fetches gRPC address from the peer's HTTP endpoint.
+// This performs network IO and must NOT be called with any lock held.
+func (p *Peer) resolveGRPCAddr() (string, error) {
 	client := http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(p.ID + "/v1/node/info")
 	if err != nil {
-		return fmt.Errorf("failed to call info for %s: %w", p.ID, err)
+		return "", fmt.Errorf("failed to call info for %s: %w", p.ID, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to call info for %s: status %d", p.ID, resp.StatusCode)
+		return "", fmt.Errorf("failed to call info for %s: status %d", p.ID, resp.StatusCode)
 	}
 
 	var info struct {
 		GRPCAddr string `json:"grpc_addr"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return fmt.Errorf("failed to decode info for %s: %w", p.ID, err)
+		return "", fmt.Errorf("failed to decode info for %s: %w", p.ID, err)
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.grpcAddr = info.GRPCAddr
+	addr := info.GRPCAddr
 	// Normalize if needed (if it's just :port)
-	if strings.Contains(p.grpcAddr, ":") {
-		host, port, _ := net.SplitHostPort(strings.TrimPrefix(p.grpcAddr, ":"))
+	if strings.Contains(addr, ":") {
+		host, port, _ := net.SplitHostPort(strings.TrimPrefix(addr, ":"))
 		if host == "" {
 			// Extract host from ID
 			idHost := strings.TrimPrefix(strings.TrimPrefix(p.ID, "http://"), "https://")
@@ -143,10 +138,32 @@ func (p *Peer) Resolve() error {
 				idHost = h
 			}
 			if port == "" {
-				port = strings.TrimPrefix(p.grpcAddr, ":")
+				port = strings.TrimPrefix(addr, ":")
 			}
-			p.grpcAddr = idHost + ":" + port
+			addr = idHost + ":" + port
 		}
+	}
+	return addr, nil
+}
+
+// Resolve fetches node info to get the gRPC address.
+func (p *Peer) Resolve() error {
+	p.mu.RLock()
+	alreadyResolved := p.grpcAddr != ""
+	p.mu.RUnlock()
+	if alreadyResolved {
+		return nil
+	}
+
+	addr, err := p.resolveGRPCAddr()
+	if err != nil {
+		return err
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.grpcAddr == "" {
+		p.grpcAddr = addr
 	}
 	return nil
 }

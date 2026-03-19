@@ -3,51 +3,113 @@ package eden
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/quic-go/quic-go"
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"crypto/tls"
-	"net"
-	"github.com/quic-go/quic-go"
 )
 
+// RegistryNode represents a single registry server node with pooled connections.
 type RegistryNode struct {
 	ID       string
 	HTTPAddr string
 	GRPCAddr string
 	QUICAddr string
-	Status   string
+
+	// Connection pool (per-node long-lived connection)
+	mu     sync.Mutex
+	conn   *grpc.ClientConn
+	client pb.RegistryServiceClient
+
+	// Health tracking
+	healthy     bool
+	lastFailure time.Time
+}
+
+// getClient returns a cached gRPC client, creating the connection if needed.
+func (n *RegistryNode) getClient(transport string) (pb.RegistryServiceClient, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.client != nil {
+		return n.client, nil
+	}
+
+	addr := n.GRPCAddr
+	if addr == "" {
+		return nil, fmt.Errorf("no gRPC address for node %s", n.ID)
+	}
+
+	var conn *grpc.ClientConn
+	var err error
+	if transport == "quic" && n.QUICAddr != "" {
+		conn, err = dialQUIC(n.QUICAddr)
+	} else {
+		conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	n.conn = conn
+	n.client = pb.NewRegistryServiceClient(conn)
+	return n.client, nil
+}
+
+// closeConn closes the pooled connection and resets the client.
+func (n *RegistryNode) closeConn() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.conn != nil {
+		n.conn.Close()
+		n.conn = nil
+		n.client = nil
+	}
+}
+
+// markUnhealthy marks the node as unhealthy and closes its connection.
+func (n *RegistryNode) markUnhealthy() {
+	n.mu.Lock()
+	n.healthy = false
+	n.lastFailure = time.Now()
+	n.mu.Unlock()
+	n.closeConn()
+}
+
+// isHealthy returns whether the node is considered healthy.
+func (n *RegistryNode) isHealthy() bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.healthy
 }
 
 // Ensure Client implements registry.Registry.
 var _ registry.Registry = (*Client)(nil)
 
-// Client implements the Eden native registry client.
+// Client implements the Eden native registry client with connection pooling and failover.
 type Client struct {
 	addresses  []string
 	apiKey     string
 	datacenter string
 	client     *http.Client
-	
-	// gRPC support
-	grpcConn   *grpc.ClientConn
-	grpcClient pb.RegistryServiceClient
-	transport  string
-	
+	transport  string // "http", "grpc" (default), "quic"
+
 	// Cluster state
-	allNodes   []*RegistryNode
-	mu         sync.RWMutex
-	stopCh     chan struct{}
-	wg         sync.WaitGroup
+	allNodes []*RegistryNode
+	mu       sync.RWMutex
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
 }
 
 // Config represents the Eden client configuration.
@@ -74,9 +136,12 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 		return nil, fmt.Errorf("eden: at least one address required")
 	}
 
-	initialNodes := make([]*RegistryNode, 0)
+	initialNodes := make([]*RegistryNode, 0, len(cfg.Addresses))
 	for _, addr := range cfg.Addresses {
-		node := &RegistryNode{HTTPAddr: addr}
+		node := &RegistryNode{
+			HTTPAddr: addr,
+			healthy:  true,
+		}
 		if !strings.HasPrefix(addr, "http") {
 			node.GRPCAddr = addr
 		}
@@ -93,23 +158,23 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 		stopCh:     make(chan struct{}),
 	}
 
-	// 1. First sync is synchronous to ensure we have initial node data (gRPC addresses) 
-	// before any Register or Heartbeat calls are made from the caller goroutine.
+	// Synchronous initial node discovery to resolve gRPC addresses
 	c.syncNodes()
 
-	// 2. Start background node discovery for updates
+	// Start background node discovery
 	c.startNodeDiscovery()
 
 	return c, nil
 }
 
+// startNodeDiscovery runs background node sync every 30 seconds.
 func (c *Client) startNodeDiscovery() {
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-		ticker := time.NewTicker(2 * time.Minute)
+		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ticker.C:
@@ -121,20 +186,21 @@ func (c *Client) startNodeDiscovery() {
 	}()
 }
 
+// syncNodes fetches the cluster member list and updates node state.
 func (c *Client) syncNodes() {
 	var members []map[string]interface{}
 
-	// Try all known addresses until one responds
-	err := c.executeWithFailover(func(node *RegistryNode) error {
+	err := c.tryAny(func(node *RegistryNode) error {
 		addr := node.HTTPAddr
-		if addr == "" { addr = node.GRPCAddr } // Fallback to guess if only gRPC addr known
-		
+		if addr == "" {
+			addr = node.GRPCAddr
+		}
+
 		url := addr
 		if !strings.HasPrefix(url, "http") {
 			url = "http://" + url
 		}
 		if !strings.Contains(url, ":") || strings.HasSuffix(url, "://") {
-			// Append port if missing (heuristic)
 			url += "8500"
 		}
 		url += "/v1/cluster/members"
@@ -150,29 +216,64 @@ func (c *Client) syncNodes() {
 		return json.NewDecoder(resp.Body).Decode(&members)
 	})
 
-	if err == nil {
-		newNodes := make([]*RegistryNode, 0)
-		for _, m := range members {
-			if m["status"] == "Online" {
-				node := &RegistryNode{
-					ID:       fmt.Sprintf("%v", m["id"]),
-					HTTPAddr: fmt.Sprintf("%v", m["http_addr"]),
-					GRPCAddr: fmt.Sprintf("%v", m["grpc_addr"]),
-					QUICAddr: fmt.Sprintf("%v", m["quic_addr"]),
-					Status:   "Online",
-				}
-				newNodes = append(newNodes, node)
-			}
+	if err != nil {
+		return
+	}
+
+	newNodes := make([]*RegistryNode, 0, len(members))
+	c.mu.RLock()
+	existingMap := make(map[string]*RegistryNode, len(c.allNodes))
+	for _, n := range c.allNodes {
+		key := n.HTTPAddr
+		if key == "" {
+			key = n.GRPCAddr
 		}
-		if len(newNodes) > 0 {
-			c.mu.Lock()
-			c.allNodes = newNodes
-			c.mu.Unlock()
+		existingMap[key] = n
+	}
+	c.mu.RUnlock()
+
+	for _, m := range members {
+		status, _ := m["status"].(string)
+		httpAddr := fmt.Sprintf("%v", m["http_addr"])
+		grpcAddr := fmt.Sprintf("%v", m["grpc_addr"])
+		quicAddr := fmt.Sprintf("%v", m["quic_addr"])
+		nodeID := fmt.Sprintf("%v", m["id"])
+
+		// Reuse existing node to preserve connection pool
+		if existing, ok := existingMap[httpAddr]; ok {
+			existing.mu.Lock()
+			existing.ID = nodeID
+			existing.GRPCAddr = grpcAddr
+			existing.QUICAddr = quicAddr
+			existing.healthy = (status == "Online")
+			existing.mu.Unlock()
+			newNodes = append(newNodes, existing)
+			delete(existingMap, httpAddr)
+		} else {
+			newNodes = append(newNodes, &RegistryNode{
+				ID:       nodeID,
+				HTTPAddr: httpAddr,
+				GRPCAddr: grpcAddr,
+				QUICAddr: quicAddr,
+				healthy:  (status == "Online"),
+			})
 		}
+	}
+
+	// Close connections for removed nodes
+	for _, old := range existingMap {
+		old.closeConn()
+	}
+
+	if len(newNodes) > 0 {
+		c.mu.Lock()
+		c.allNodes = newNodes
+		c.mu.Unlock()
 	}
 }
 
-func (c *Client) executeWithFailover(fn func(node *RegistryNode) error) error {
+// tryAny is a simple failover helper for syncNodes itself (avoids circular dependency).
+func (c *Client) tryAny(fn func(node *RegistryNode) error) error {
 	c.mu.RLock()
 	nodes := make([]*RegistryNode, len(c.allNodes))
 	copy(nodes, c.allNodes)
@@ -189,25 +290,55 @@ func (c *Client) executeWithFailover(fn func(node *RegistryNode) error) error {
 	return lastErr
 }
 
+// sortedNodes returns a copy of allNodes with healthy nodes first.
+func (c *Client) sortedNodes() []*RegistryNode {
+	c.mu.RLock()
+	nodes := make([]*RegistryNode, len(c.allNodes))
+	copy(nodes, c.allNodes)
+	c.mu.RUnlock()
+
+	// Stable partition: healthy nodes first, unhealthy last
+	healthy := make([]*RegistryNode, 0, len(nodes))
+	unhealthy := make([]*RegistryNode, 0)
+	for _, n := range nodes {
+		if n.isHealthy() {
+			healthy = append(healthy, n)
+		} else {
+			unhealthy = append(unhealthy, n)
+		}
+	}
+	return append(healthy, unhealthy...)
+}
+
+// executeWithFailover tries each node in order (healthy first), marking failures.
+func (c *Client) executeWithFailover(fn func(node *RegistryNode) error) error {
+	nodes := c.sortedNodes()
+
+	var lastErr error
+	for _, node := range nodes {
+		if err := fn(node); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			// Mark node as unhealthy on connection failure to trigger fast failover
+			node.markUnhealthy()
+		}
+	}
+
+	// All nodes failed — trigger immediate refresh in background
+	go c.syncNodes()
+
+	return lastErr
+}
+
 func (c *Client) Register(instance *registry.ServiceInstance) error {
 	return c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
-			addr := node.GRPCAddr
-			if addr == "" {
-				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			client, err := node.getClient(c.transport)
+			if err != nil {
+				return err
 			}
-			
-			var conn *grpc.ClientConn
-			var err error
-			if c.transport == "quic" {
-				conn, err = c.dialQUIC(addr)
-			} else {
-				conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			}
-			if err != nil { return err }
-			defer conn.Close()
-			
-			client := pb.NewRegistryServiceClient(conn)
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_, err = client.Register(ctx, &pb.RegisterRequest{
@@ -216,7 +347,7 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 			return err
 		}
 
-		// HTTP
+		// HTTP fallback
 		body := map[string]interface{}{
 			"id":           instance.ID,
 			"service_name": instance.ServiceName,
@@ -228,13 +359,17 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 		}
 		data, _ := json.Marshal(body)
 		url := node.HTTPAddr
-		if !strings.HasPrefix(url, "http") { url = "http://" + url }
+		if !strings.HasPrefix(url, "http") {
+			url = "http://" + url
+		}
 		url += "/v1/catalog/register"
 
 		req, _ := http.NewRequest("POST", url, bytes.NewReader(data))
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("status %d", resp.StatusCode)
@@ -246,22 +381,11 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 func (c *Client) Deregister(instance *registry.ServiceInstance) error {
 	return c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
-			addr := node.GRPCAddr
-			if addr == "" {
-				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			client, err := node.getClient(c.transport)
+			if err != nil {
+				return err
 			}
 
-			var conn *grpc.ClientConn
-			var err error
-			if c.transport == "quic" {
-				conn, err = c.dialQUIC(addr)
-			} else {
-				conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			}
-			if err != nil { return err }
-			defer conn.Close()
-
-			client := pb.NewRegistryServiceClient(conn)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_, err = client.Deregister(ctx, &pb.DeregisterRequest{
@@ -277,13 +401,17 @@ func (c *Client) Deregister(instance *registry.ServiceInstance) error {
 		}
 		data, _ := json.Marshal(body)
 		url := node.HTTPAddr
-		if !strings.HasPrefix(url, "http") { url = "http://" + url }
+		if !strings.HasPrefix(url, "http") {
+			url = "http://" + url
+		}
 		url += "/v1/catalog/deregister"
 
 		req, _ := http.NewRequest("POST", url, bytes.NewReader(data))
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("status %d", resp.StatusCode)
@@ -296,22 +424,11 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 	var instances []*registry.ServiceInstance
 	err := c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
-			addr := node.GRPCAddr
-			if addr == "" {
-				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			client, err := node.getClient(c.transport)
+			if err != nil {
+				return err
 			}
-			
-			var conn *grpc.ClientConn
-			var err error
-			if c.transport == "quic" {
-				conn, err = c.dialQUIC(addr)
-			} else {
-				conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			}
-			if err != nil { return err }
-			defer conn.Close()
 
-			client := pb.NewRegistryServiceClient(conn)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			resp, err := client.Discover(ctx, &pb.DiscoverRequest{
@@ -319,17 +436,23 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 				HealthyOnly: true,
 				Datacenter:  c.datacenter,
 			})
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			instances = fromProtoInstances(resp.Instances)
 			return nil
 		}
 
 		url := fmt.Sprintf("%s/v1/catalog/service/%s?passing=true", node.HTTPAddr, serviceName)
-		if !strings.HasPrefix(url, "http") { url = "http://" + url }
+		if !strings.HasPrefix(url, "http") {
+			url = "http://" + url
+		}
 		req, _ := http.NewRequest("GET", url, nil)
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -346,7 +469,9 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 			Metadata    map[string]string `json:"metadata"`
 			Datacenter  string            `json:"datacenter"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&edenInstances); err != nil { return err }
+		if err := json.NewDecoder(resp.Body).Decode(&edenInstances); err != nil {
+			return err
+		}
 
 		result := make([]*registry.ServiceInstance, 0, len(edenInstances))
 		for _, ei := range edenInstances {
@@ -368,75 +493,110 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 	return instances, err
 }
 
+// Subscribe watches for service changes using gRPC Watch with auto-reconnect.
+// Falls back to polling if gRPC Watch is unavailable.
 func (c *Client) Subscribe(serviceName string, callback func([]*registry.ServiceInstance)) error {
-	if c.grpcClient != nil {
-		s, err := c.grpcClient.Watch(context.Background(), &pb.WatchRequest{
-			ServiceName: serviceName,
-		})
-		if err != nil {
-			return err
-		}
-		
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			for {
-				resp, err := s.Recv()
-				if err != nil {
-					return // End of stream or error
-				}
-				callback(fromProtoInstances(resp.Instances))
-			}
-		}()
-		return nil
-	}
-
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-		ticker := time.NewTicker(3 * time.Second)
-		defer ticker.Stop()
-
-		var lastHash string
 		for {
 			select {
 			case <-c.stopCh:
 				return
-			case <-ticker.C:
-				instances, err := c.Discovery(serviceName)
-				if err != nil {
-					continue
-				}
-				hash := instancesHash(instances)
-				if hash != lastHash {
-					lastHash = hash
-					callback(instances)
+			default:
+			}
+
+			// Try gRPC Watch on the first healthy node
+			if c.transport == "grpc" || c.transport == "quic" {
+				if c.tryWatch(serviceName, callback) {
+					continue // Watch ended, retry
 				}
 			}
+
+			// Fallback to polling
+			c.pollSubscribe(serviceName, callback)
+			return
 		}
 	}()
 	return nil
 }
 
+// tryWatch attempts to establish a gRPC Watch stream. Returns true if it connected
+// (and the stream ended), false if it could not connect at all.
+func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceInstance)) bool {
+	nodes := c.sortedNodes()
+	for _, node := range nodes {
+		client, err := node.getClient(c.transport)
+		if err != nil {
+			continue
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		// Monitor stopCh to cancel the watch
+		go func() {
+			select {
+			case <-c.stopCh:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+
+		stream, err := client.Watch(ctx, &pb.WatchRequest{ServiceName: serviceName})
+		if err != nil {
+			cancel()
+			node.markUnhealthy()
+			continue
+		}
+
+		// Successfully connected — read events
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				cancel()
+				node.markUnhealthy()
+				// Trigger immediate node refresh
+				go c.syncNodes()
+				break
+			}
+			callback(fromProtoInstances(resp.Instances))
+		}
+		return true
+	}
+	return false
+}
+
+// pollSubscribe polls Discovery at regular intervals as a Watch fallback.
+func (c *Client) pollSubscribe(serviceName string, callback func([]*registry.ServiceInstance)) {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	var lastHash string
+	for {
+		select {
+		case <-c.stopCh:
+			return
+		case <-ticker.C:
+			instances, err := c.Discovery(serviceName)
+			if err != nil {
+				continue
+			}
+			hash := instancesHash(instances)
+			if hash != lastHash {
+				lastHash = hash
+				callback(instances)
+			}
+		}
+	}
+}
+
 func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 	return c.executeWithFailover(func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
-			addr := node.GRPCAddr
-			if addr == "" {
-				return fmt.Errorf("no gRPC address known for node %s", node.ID)
+			client, err := node.getClient(c.transport)
+			if err != nil {
+				return err
 			}
-			
-			var conn *grpc.ClientConn
-			var err error
-			if c.transport == "quic" {
-				conn, err = c.dialQUIC(addr)
-			} else {
-				conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			}
-			if err != nil { return err }
-			defer conn.Close()
 
-			client := pb.NewRegistryServiceClient(conn)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			_, err = client.Heartbeat(ctx, &pb.HeartbeatRequest{
@@ -452,13 +612,17 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 		}
 		data, _ := json.Marshal(body)
 		url := node.HTTPAddr
-		if !strings.HasPrefix(url, "http") { url = "http://" + url }
+		if !strings.HasPrefix(url, "http") {
+			url = "http://" + url
+		}
 		url += "/v1/catalog/heartbeat"
 
 		req, _ := http.NewRequest("POST", url, bytes.NewReader(data))
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("status %d", resp.StatusCode)
@@ -467,31 +631,22 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 	})
 }
 
+// Close shuts down the client, closing all pooled connections.
 func (c *Client) Close() error {
 	close(c.stopCh)
-	if c.grpcConn != nil {
-		c.grpcConn.Close()
+
+	c.mu.RLock()
+	nodes := c.allNodes
+	c.mu.RUnlock()
+	for _, n := range nodes {
+		n.closeConn()
 	}
+
 	c.wg.Wait()
 	return nil
 }
 
 // --- helpers ---
-
-func (c *Client) pickHttpAddr() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if len(c.allNodes) == 0 {
-		return ""
-	}
-	node := c.allNodes[0]
-	addr := node.HTTPAddr
-	if addr == "" { addr = node.GRPCAddr } // Guestimate
-	if !strings.HasPrefix(addr, "http") {
-		return "http://" + addr
-	}
-	return addr
-}
 
 func (c *Client) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
@@ -518,6 +673,23 @@ func (c *Client) post(path string, body interface{}) error {
 		return fmt.Errorf("eden %s: status %d, body: %s", path, resp.StatusCode, string(respBody))
 	}
 	return nil
+}
+
+func (c *Client) pickHttpAddr() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.allNodes) == 0 {
+		return ""
+	}
+	node := c.allNodes[0]
+	addr := node.HTTPAddr
+	if addr == "" {
+		addr = node.GRPCAddr
+	}
+	if !strings.HasPrefix(addr, "http") {
+		return "http://" + addr
+	}
+	return addr
 }
 
 func toProtoInstance(inst *registry.ServiceInstance) *pb.ServiceInstance {
@@ -549,12 +721,12 @@ func fromProtoInstances(pbList []*pb.ServiceInstance) []*registry.ServiceInstanc
 	return result
 }
 
-func (c *Client) dialQUIC(addr string) (*grpc.ClientConn, error) {
+func dialQUIC(addr string) (*grpc.ClientConn, error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"h3"},
 	}
-	
+
 	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
 		conn, err := quic.DialAddr(ctx, addr, tlsConf, nil)
 		if err != nil {
@@ -566,7 +738,7 @@ func (c *Client) dialQUIC(addr string) (*grpc.ClientConn, error) {
 		}
 		return &quicStreamConn{conn: conn, Stream: stream}, nil
 	}
-	
+
 	return grpc.Dial(addr, grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
 }
 

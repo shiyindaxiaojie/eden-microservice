@@ -275,9 +275,9 @@ func (s *ServiceStore) Merge(remote map[string]map[string]*model.Instance) {
 			}
 		}
 	}
-	
+
 	if changed {
-		s.Save()
+		s.saveNoLock()
 	}
 }
 
@@ -286,7 +286,7 @@ func (s *ServiceStore) Restore(services map[string]map[string]*model.Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.services = services
-	s.Save()
+	s.saveNoLock()
 }
 
 func (s *ServiceStore) Load() {
@@ -312,17 +312,24 @@ func (s *ServiceStore) Load() {
 }
 
 func (s *ServiceStore) Save() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	s.saveNoLock()
+}
+
+// saveNoLock persists services to disk. Caller must hold s.mu (read or write).
+func (s *ServiceStore) saveNoLock() {
 	if s.dataPath == "" {
 		return
 	}
 	os.MkdirAll(s.dataPath, 0755)
 	file := filepath.Join(s.dataPath, "services.json")
-	all := s.GetAll()
-	output := make(map[string][]*model.Instance, len(all))
-	for name, m := range all {
-		list := make([]*model.Instance, 0, len(m))
-		for _, inst := range m {
-			list = append(list, inst)
+	output := make(map[string][]*model.Instance, len(s.services))
+	for name, instances := range s.services {
+		list := make([]*model.Instance, 0, len(instances))
+		for _, inst := range instances {
+			cp := *inst
+			list = append(list, &cp)
 		}
 		output[name] = list
 	}

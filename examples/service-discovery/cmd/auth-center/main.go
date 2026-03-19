@@ -16,7 +16,9 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
 
-var registryAddr = envOr("REGISTRY_ADDR", "127.0.0.1:9000")
+// Client only needs a single entrypoint (e.g., LB or an active node).
+// It discovers the full cluster topography dynamically.
+var registryAddr = envOr("REGISTRY_ADDR", "http://127.0.0.1:8500")
 var servicePort = envOr("SERVICE_PORT", "9002")
 
 func main() {

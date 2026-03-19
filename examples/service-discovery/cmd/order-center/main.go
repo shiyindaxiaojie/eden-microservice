@@ -23,7 +23,8 @@ var servicePort = envOr("SERVICE_PORT", "9003")
 func init() {
 	regAddr := os.Getenv("REGISTRY_ADDR")
 	if regAddr == "" {
-		registryAddr = "127.0.0.1:9000" // Changed default registry address
+		// Client only needs one node to discover the rest of the cluster
+		registryAddr = "http://127.0.0.1:8500"
 	} else {
 		registryAddr = regAddr
 	}
