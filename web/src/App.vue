@@ -1,88 +1,93 @@
-<script setup lang="ts">
-import { useRoute, useRouter } from 'vue-router'
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Moon, Sunny, QuestionFilled, ArrowDown } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowDown, Moon, QuestionFilled, Sunny } from '@element-plus/icons-vue'
 import { useI18n } from './utils/i18n'
 import logo from './assets/logo.png'
 
 const { locale, t, toggleLocale } = useI18n()
-
-
 const route = useRoute()
 const router = useRouter()
 
 const userRole = ref(localStorage.getItem('user_role') || '')
 const username = ref(localStorage.getItem('username') || '')
 const nickname = ref(localStorage.getItem('nickname') || '')
+const theme = ref('light')
 
-watch(() => route.path, () => {
-  userRole.value = localStorage.getItem('user_role') || ''
-  username.value = localStorage.getItem('username') || ''
-  nickname.value = localStorage.getItem('nickname') || ''
-})
+watch(
+  () => route.path,
+  () => {
+    userRole.value = localStorage.getItem('user_role') || ''
+    username.value = localStorage.getItem('username') || ''
+    nickname.value = localStorage.getItem('nickname') || ''
+  },
+)
 
 const navItems = computed(() => {
   const items = [
     { path: '/', label: t.value.nav.dashboard, icon: 'Odometer' },
     { path: '/services', label: t.value.nav.services, icon: 'Grid' },
     { path: '/namespaces', label: t.value.nav.namespaces, icon: 'Collection' },
-    { path: '/dependency-graph', label: t.value.nav.dependencies, icon: 'Share' },
     { path: '/cluster', label: t.value.nav.cluster, icon: 'Connection' },
     { path: '/rbac', label: t.value.nav.accessControl, icon: 'Lock' },
     { path: '/settings', label: t.value.nav.settings, icon: 'Setting' },
   ]
-  
-  if (userRole.value === 'admin') return items
-  return items.filter(i => i.path === '/' || i.path === '/services' || i.path === '/cluster' || i.path === '/namespaces' || i.path === '/dependency-graph')
-})
 
+  if (userRole.value === 'admin') return items
+  return items.filter((item) => ['/', '/services', '/namespaces', '/cluster'].includes(item.path))
+})
 
 const currentTitle = computed(() => {
   if (route.path === '/') return t.value.nav.dashboard
   if (route.path.startsWith('/services')) return t.value.nav.services
+  if (route.path.startsWith('/namespaces')) return t.value.nav.namespaces
   if (route.path.startsWith('/cluster')) return t.value.nav.cluster
   if (route.path.startsWith('/rbac')) return t.value.nav.accessControl
   if (route.path.startsWith('/settings')) return t.value.nav.settings
   if (route.path.startsWith('/docs')) return t.value.nav.docs
-  return (route.meta.title as string) || 'Registry'
+  return 'Eden Registry'
 })
+
+watch(
+  [() => route.fullPath, locale],
+  () => {
+    document.title = `${currentTitle.value} - Eden Registry`
+  },
+  { immediate: true },
+)
 
 function handleLogout() {
   localStorage.clear()
   router.push('/login')
 }
 
-
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
 }
 
-// Theme logic
-const theme = ref('light')
-
-const toggleTheme = () => {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  applyTheme(theme.value)
-  setCookie('theme', theme.value, 365)
-}
-
-const applyTheme = (t: string) => {
-  document.documentElement.setAttribute('data-theme', t)
-  if (t === 'dark') {
+function applyTheme(nextTheme: string) {
+  document.documentElement.setAttribute('data-theme', nextTheme)
+  if (nextTheme === 'dark') {
     document.documentElement.classList.add('dark')
   } else {
     document.documentElement.classList.remove('dark')
   }
 }
 
-const setCookie = (name: string, value: string, daysUp: number) => {
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  applyTheme(theme.value)
+  setCookie('theme', theme.value, 365)
+}
+
+function setCookie(name: string, value: string, daysUp: number) {
   const expires = new Date()
   expires.setTime(expires.getTime() + daysUp * 24 * 60 * 60 * 1000)
   document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`
 }
 
-const getCookie = (name: string) => {
+function getCookie(name: string) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
   return match ? match[2] : null
 }
@@ -98,9 +103,8 @@ onMounted(() => {
   <div v-if="route.meta.public" class="public-layout" :class="theme">
     <router-view />
   </div>
-  
+
   <div v-else class="app-layout" :class="theme">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
@@ -124,7 +128,7 @@ onMounted(() => {
       </nav>
     </aside>
 
-    <div v-if="!route.meta.public" class="main-content">
+    <div class="main-content">
       <header class="main-header">
         <h1>{{ currentTitle }}</h1>
         <div class="header-actions">
@@ -136,11 +140,11 @@ onMounted(() => {
             <el-icon><QuestionFilled /></el-icon>
           </router-link>
 
-          <div class="header-btn" @click="toggleLocale" :title="locale === 'en' ? 'Switch to Chinese' : 'Switch to English'">
-            <span class="lang-text">{{ locale === 'en' ? 'En' : '中' }}</span>
+          <div class="header-btn" @click="toggleLocale" :title="locale === 'en' ? t.common.switchToChinese : t.common.switchToEnglish">
+            <span class="lang-text">{{ locale === 'en' ? '中' : 'EN' }}</span>
           </div>
 
-          <div class="header-btn" @click="toggleTheme" :title="theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'">
+          <div class="header-btn" @click="toggleTheme" :title="theme === 'dark' ? t.settings.light : t.settings.dark">
             <el-icon v-if="theme === 'dark'"><Sunny /></el-icon>
             <el-icon v-else><Moon /></el-icon>
           </div>

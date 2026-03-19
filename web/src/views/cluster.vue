@@ -1,16 +1,58 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getClusterMembers, getClusterStats, addClusterMember, removeClusterMember, type ClusterMember, type ClusterStats } from '../api/registry'
-import { useI18n } from '../utils/i18n'
-import { Guide, Plus, Delete } from '@element-plus/icons-vue'
+﻿<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Connection, Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import {
+  addClusterMember,
+  getClusterMembers,
+  getClusterStats,
+  removeClusterMember,
+  type ClusterMember,
+  type ClusterStats,
+} from '../api/registry'
+import { useI18n } from '../utils/i18n'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const members = ref<ClusterMember[]>([])
 const stats = ref<ClusterStats | null>(null)
 const loading = ref(true)
 const showAddDialog = ref(false)
+const search = ref('')
 const addForms = ref([{ protocol: 'http://', host: '', port: '' }])
+
+const filteredMembers = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return members.value.filter((member) => {
+    if (!query) return true
+    return [member.id, member.address, member.http_addr, member.grpc_addr, member.raft_addr, member.quic_addr]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+  })
+})
+
+const clusterHint = computed(() =>
+  locale.value === 'zh'
+    ? '统一查看节点状态、协议地址和当前集群角色。'
+    : 'Inspect node status, protocol endpoints, and the current cluster role in one place.',
+)
+const nodeSearchPlaceholder = computed(() =>
+  locale.value === 'zh' ? '搜索节点 ID 或协议地址' : 'Search node id or endpoint address',
+)
+const invalidAddressMessage = computed(() =>
+  locale.value === 'zh' ? '请填写有效的节点地址信息' : 'Please enter valid address information',
+)
+const addFailedMessage = computed(() => (locale.value === 'zh' ? '添加失败' : 'Add failed'))
+const removeConfirm = (row: ClusterMember) =>
+  locale.value === 'zh'
+    ? `确定移除节点 ${row.id} (${row.address}) 吗？`
+    : `Are you sure you want to remove node ${row.id} (${row.address})?`
+const emptyNodesLabel = computed(() => (locale.value === 'zh' ? '暂无节点数据' : 'No nodes found'))
+const leaderValue = computed(() => stats.value?.leader_addr || '-')
+const modeValue = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.environment === 'standalone') return t.value.settings.singleTitle
+  return stats.value.mode === 'cp' ? t.value.settings.cpTitle : t.value.settings.apTitle
+})
 
 function addNodeRow() {
   addForms.value.push({ protocol: 'http://', host: '', port: '' })
@@ -22,78 +64,79 @@ function removeNodeRow(index: number) {
     addNodeRow()
   }
 }
+
 async function fetchCluster() {
   loading.value = true
   try {
     const [membersRes, statsRes] = await Promise.all([getClusterMembers(), getClusterStats()])
     members.value = membersRes.data || []
     stats.value = statsRes.data
-  } catch (e) {
-    console.error('fetch cluster failed', e)
+  } catch (error) {
+    console.error('fetch cluster failed', error)
   } finally {
     loading.value = false
   }
 }
 
 async function handleAdd() {
-  const addresses = addForms.value
-    .filter(f => f.host && f.port)
-    .map(f => `${f.protocol}${f.host}:${f.port}`)
+  const addresses = addForms.value.filter((form) => form.host && form.port).map((form) => `${form.protocol}${form.host}:${form.port}`)
 
   if (addresses.length === 0) {
-    ElMessage.warning('Please enter valid address information')
+    ElMessage.warning(invalidAddressMessage.value)
     return
   }
+
   try {
     await addClusterMember({ addresses })
     ElMessage.success(t.value.common.success)
     showAddDialog.value = false
     addForms.value = [{ protocol: 'http://', host: '', port: '' }]
-    fetchCluster()
-  } catch (e: any) {
-    const data = e.response?.data
+    await fetchCluster()
+  } catch (error: any) {
+    const data = error.response?.data
     if (data?.error === 'not leader' && data?.leader) {
-      const tip = t.value.settings.notLeaderTip.replace('{addr}', data.leader)
-      ElMessage.warning(tip)
+      ElMessage.warning(t.value.settings.notLeaderTip.replace('{addr}', data.leader))
     } else {
-      ElMessage.error(data?.error || 'Add failed')
+      ElMessage.error(data?.error || addFailedMessage.value)
     }
   }
 }
 
 async function handleRemove(row: ClusterMember) {
   try {
-    await ElMessageBox.confirm(
-      `确定要移除节点 ${row.id} (${row.address}) 吗？`,
-      t.value.common.warning,
-      { type: 'warning' }
-    )
+    await ElMessageBox.confirm(removeConfirm(row), t.value.common.warning, { type: 'warning' })
     await removeClusterMember(row.address, row.id)
     ElMessage.success(t.value.common.success)
-    fetchCluster()
-  } catch {}
+    await fetchCluster()
+  } catch {
+    // ignore cancel
+  }
 }
 
 function roleTagType(role: string) {
   switch (role) {
-    case 'Leader':    return 'success'
-    case 'Follower':  return 'info'
-    case 'Candidate': return 'warning'
-    case 'Local':     return 'primary'
-    case 'Standalone': return 'primary'
-    case 'Peer':      return 'info'
-    default:          return 'info'
+    case 'Leader':
+      return 'danger'
+    case 'Follower':
+      return 'primary'
+    case 'Candidate':
+      return 'warning'
+    case 'Local':
+    case 'Standalone':
+      return 'success'
+    default:
+      return 'info'
   }
 }
 
 function getRoleName(role: string) {
-  const r = role.toLowerCase()
-  if (r.includes('leader'))    return t.value.cluster.roles.leader
-  if (r.includes('follower'))  return t.value.cluster.roles.follower
-  if (r.includes('candidate')) return t.value.cluster.roles.candidate
-  if (r.includes('local'))     return t.value.cluster.roles.local
-  if (r.includes('standalone')) return t.value.cluster.roles.standalone
-  if (r.includes('peer'))      return t.value.cluster.roles.peer
+  const normalized = role.toLowerCase()
+  if (normalized.includes('leader')) return t.value.cluster.roles.leader
+  if (normalized.includes('follower')) return t.value.cluster.roles.follower
+  if (normalized.includes('candidate')) return t.value.cluster.roles.candidate
+  if (normalized.includes('local')) return t.value.cluster.roles.local
+  if (normalized.includes('standalone')) return t.value.cluster.roles.standalone
+  if (normalized.includes('peer')) return t.value.cluster.roles.peer
   return role
 }
 
@@ -101,133 +144,113 @@ onMounted(fetchCluster)
 </script>
 
 <template>
-  <div class="cluster-page">
-    <!-- Cluster Summary Header -->
-    <div class="cluster-hero glass-card">
-      <div class="hero-main">
-        <div class="hero-icon">
-          <el-icon><Guide /></el-icon>
-        </div>
-        <div class="hero-content">
-          <div class="hero-title">
-            {{ t.cluster.nodeList }}
-            <el-tag 
-              v-if="stats" 
-              :class="stats.environment === 'standalone' ? '' : (stats.mode === 'cp' ? 'tag-cp' : 'tag-ap')" 
-              :type="stats.environment === 'standalone' ? 'info' : ''"
-              effect="dark" 
-              size="small"
-              class="mode-tag"
-            >
-              {{ stats.environment === 'standalone' ? t.settings.singleTitle : (stats.mode === 'cp' ? t.settings.cpTitle : t.settings.apTitle) }}
-            </el-tag>
-          </div>
-          <div class="hero-subtitle">
-            {{ stats?.node_count || 0 }} {{ t.cluster.nodeCount }} — 
-            <template v-if="stats?.mode === 'cp'">
-              {{ stats?.leader_addr ? t.cluster.leaderAddr + ': ' + stats.leader_addr : t.dashboard.noEvents }}
-            </template>
-            <template v-else>
-              {{ t.cluster.currentNode }}: {{ stats?.leader_addr || '-' }}
-            </template>
-          </div>
-        </div>
+  <div class="page-stack cluster-page">
+    <section class="compact-hero">
+      <div class="hero-copy-compact">
+        <p class="hero-kicker">{{ t.nav.cluster }}</p>
+        <h2 class="hero-heading">{{ t.cluster.nodeList }}</h2>
+        <p class="hero-desc">{{ clusterHint }}</p>
       </div>
-      
-      <div class="hero-stats">
-        <div class="hero-stat-item">
-          <div class="stat-label">{{ t.cluster.role }}</div>
-          <div class="stat-value">
-            <el-tag :type="roleTagType(stats?.role || '')" size="small" effect="plain">
-              {{ getRoleName(stats?.role || '') }}
-            </el-tag>
+      <div class="cluster-actions">
+        <div class="mini-stat-grid cluster-mini-stats">
+          <div class="mini-stat">
+            <span class="mini-stat-label">{{ t.cluster.nodeCount }}</span>
+            <strong class="mini-stat-value">{{ stats?.node_count ?? 0 }}</strong>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-stat-label">{{ t.cluster.role }}</span>
+            <strong class="mini-stat-value cluster-stat-text">{{ getRoleName(stats?.role || '-') }}</strong>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-stat-label">{{ t.settings.consistency }}</span>
+            <strong class="mini-stat-value cluster-stat-text">{{ modeValue }}</strong>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-stat-label">{{ t.cluster.leaderAddr }}</span>
+            <strong class="mini-stat-value cluster-stat-text">{{ leaderValue }}</strong>
           </div>
         </div>
-        <div class="hero-stat-item">
-          <div class="stat-label">{{ t.dashboard.healthRate }}</div>
-          <div class="stat-value health">
-            {{ stats?.health_rate ? stats.health_rate.toFixed(0) + '%' : '-' }}
-          </div>
-        </div>
-        
-        <!-- Add Node Action moved to far right -->
-        <div class="hero-action-item" v-if="stats?.environment === 'cluster' || stats?.mode === 'cp'">
-          <el-button type="primary" :icon="Plus" @click="showAddDialog = true" class="add-node-btn">
+        <div class="cluster-action-row">
+          <el-button size="large" :icon="Refresh" @click="fetchCluster">{{ t.common.refresh }}</el-button>
+          <el-button v-if="stats?.environment === 'cluster' || stats?.mode === 'cp'" type="primary" size="large" :icon="Plus" @click="showAddDialog = true">
             {{ t.cluster.addNode }}
           </el-button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Table Section -->
-    <div class="glass-table-wrapper">
-      <el-table :data="members" v-loading="loading" style="width: 100%">
-        <el-table-column :label="t.cluster.nodeId" min-width="200">
-          <template #default="{ row }">
-            <div class="node-id-cell">
-              <span class="node-id-text">{{ row.id }}</span>
-              <el-tag 
-                v-if="row.is_local" 
-                size="small" 
-                type="primary" 
-                effect="plain" 
-                color="rgba(64, 158, 255, 0.1)"
-                class="current-tag"
-              >
-                {{ t.cluster.currentNode }}
-              </el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t.cluster.address" min-width="280">
-          <template #default="{ row }">
-            <div class="address-tags">
-              <el-tag v-if="row.http_addr" size="small" type="primary" class="addr-tag" effect="light">
-                <span class="addr-proto">HTTP</span> <span class="mono-addr">{{ row.http_addr }}</span>
-              </el-tag>
-              <el-tag v-if="row.grpc_addr" size="small" type="success" class="addr-tag" effect="light">
-                <span class="addr-proto">GRPC</span> <span class="mono-addr">{{ row.grpc_addr }}</span>
-              </el-tag>
-              <el-tag v-if="row.raft_addr" size="small" type="warning" class="addr-tag" effect="light">
-                <span class="addr-proto">RAFT</span> <span class="mono-addr">{{ row.raft_addr }}</span>
-              </el-tag>
-              <el-tag v-if="row.quic_addr" size="small" type="info" class="addr-tag" effect="light">
-                <span class="addr-proto">QUIC</span> <span class="mono-addr">{{ row.quic_addr }}</span>
-              </el-tag>
-              <!-- Fallback to ordinary address for older APIs or standalone -->
-              <span v-if="!row.http_addr" class="mono-addr">{{ row.address }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t.cluster.role" min-width="120">
-          <template #default="{ row }">
-            <el-tag :type="roleTagType(row.role)" size="small" effect="dark">{{ getRoleName(row.role) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t.cluster.status" min-width="120">
-          <template #default="{ row }">
-            <div class="status-cell">
-              <span class="status-dot" :class="row.status === 'Online' ? 'active' : 'inactive'"></span>
-              <span>{{ row.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t.common.actions" width="100" fixed="right">
-          <template #default="{ row }">
-            <el-button 
-              v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')" 
-              link 
-              type="danger" 
-              :icon="Delete" 
-              @click="handleRemove(row)"
-            />
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+    <section class="panel-toolbar cluster-toolbar">
+      <el-input v-model="search" :prefix-icon="Search" :placeholder="nodeSearchPlaceholder" clearable size="large" class="cluster-search" />
+    </section>
 
-    <!-- Add Member Dialog -->
-    <el-dialog v-model="showAddDialog" :title="t.cluster.addNode" width="550px" class="premium-dialog" @close="addForms = [{ protocol: 'http://', host: '', port: '' }]">
+    <section v-loading="loading">
+      <div v-if="!loading && filteredMembers.length === 0" class="empty-panel">
+        <div class="empty-state">
+          <el-icon><Connection /></el-icon>
+          <p>{{ emptyNodesLabel }}</p>
+        </div>
+      </div>
+
+      <div v-else class="glass-table-wrapper cluster-table-wrap">
+        <el-table :data="filteredMembers" style="width: 100%">
+          <el-table-column :label="t.cluster.nodeId" min-width="220">
+            <template #default="{ row }">
+              <div class="node-id-cell">
+                <div class="node-badge">{{ row.id?.slice(0, 2)?.toUpperCase() || 'N' }}</div>
+                <div class="node-main">
+                  <div class="node-main-row">
+                    <strong>{{ row.id }}</strong>
+                    <el-tag v-if="row.is_local" size="small" effect="plain" type="success">{{ t.cluster.currentNode }}</el-tag>
+                  </div>
+                  <span>{{ getRoleName(row.role) }}</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t.cluster.address" min-width="360">
+            <template #default="{ row }">
+              <div class="address-tags">
+                <el-tag v-if="row.http_addr" size="small" effect="plain" class="addr-tag"><span class="addr-proto">HTTP</span>{{ row.http_addr }}</el-tag>
+                <el-tag v-if="row.grpc_addr" size="small" type="success" effect="plain" class="addr-tag"><span class="addr-proto">GRPC</span>{{ row.grpc_addr }}</el-tag>
+                <el-tag v-if="row.raft_addr" size="small" type="warning" effect="plain" class="addr-tag"><span class="addr-proto">RAFT</span>{{ row.raft_addr }}</el-tag>
+                <el-tag v-if="row.quic_addr" size="small" type="info" effect="plain" class="addr-tag"><span class="addr-proto">QUIC</span>{{ row.quic_addr }}</el-tag>
+                <span v-if="!row.http_addr" class="mono-addr">{{ row.address }}</span>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t.cluster.status" min-width="120">
+            <template #default="{ row }">
+              <div class="status-cell">
+                <span class="status-dot" :class="row.status === 'Online' ? 'active' : 'inactive'"></span>
+                <span>{{ row.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t.cluster.role" min-width="130">
+            <template #default="{ row }">
+              <el-tag :type="roleTagType(row.role)" size="small" effect="dark">{{ getRoleName(row.role) }}</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t.common.actions" width="110" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
+                link
+                type="danger"
+                :icon="Delete"
+                @click="handleRemove(row)"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </section>
+
+    <el-dialog v-model="showAddDialog" :title="t.cluster.addNode" width="560px" append-to-body @close="addForms = [{ protocol: 'http://', host: '', port: '' }]">
       <div class="add-node-form">
         <div v-for="(form, index) in addForms" :key="index" class="node-input-row">
           <el-select v-model="form.protocol" class="protocol-select">
@@ -237,26 +260,9 @@ onMounted(fetchCluster)
           <el-input v-model="form.host" placeholder="127.0.0.1" class="host-input" />
           <span class="colon-separator">:</span>
           <el-input v-model="form.port" placeholder="8501" class="port-input" />
-          
           <div class="row-actions">
-            <el-button 
-              type="primary" 
-              circle 
-              :icon="Plus" 
-              size="small" 
-              plain
-              v-if="index === addForms.length - 1"
-              @click="addNodeRow"
-            />
-            <el-button 
-              type="danger" 
-              circle 
-              :icon="Delete" 
-              size="small" 
-              plain
-              v-if="addForms.length > 1"
-              @click="removeNodeRow(index)"
-            />
+            <el-button v-if="index === addForms.length - 1" type="primary" circle :icon="Plus" size="small" plain @click="addNodeRow" />
+            <el-button v-if="addForms.length > 1" type="danger" circle :icon="Delete" size="small" plain @click="removeNodeRow(index)" />
           </div>
         </div>
       </div>
@@ -269,247 +275,162 @@ onMounted(fetchCluster)
 </template>
 
 <style scoped>
-.cluster-hero {
-  margin-bottom: 32px;
-  padding: 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-radius: 20px;
-  background: linear-gradient(135deg, var(--bg-card), rgba(59, 130, 246, 0.05));
-}
-
-.hero-main {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.hero-icon {
-  width: 64px;
-  height: 64px;
-  background: var(--bg-glass);
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  color: var(--accent-blue);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-}
-
-.hero-title {
-  font-size: 24px;
-  font-weight: 700;
+.cluster-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.mode-tag {
-  font-size: 11px;
-  height: 20px;
-  border-radius: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.cluster-mini-stats {
+  min-width: 0;
+  width: auto;
 }
 
-.hero-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
+.cluster-stat-text {
+  font-size: 18px;
+  line-height: 1.25;
 }
 
+.cluster-action-row {
+  display: flex;
+  gap: 8px;
+}
 
-.hero-stats {
+.cluster-search {
+  flex: 1;
+}
+
+.cluster-table-wrap {
+  border-radius: 20px;
+}
+
+.node-id-cell {
   display: flex;
   align-items: center;
-  gap: 48px;
-  padding-right: 20px;
+  gap: 14px;
 }
 
-.hero-action-item {
-  margin-left: 24px;
-}
-
-.add-node-btn {
-  height: 48px;
-  padding: 0 24px;
-  font-weight: 600;
-  border-radius: 12px;
-  box-shadow: 0 8px 16px rgba(var(--accent-blue-rgb), 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.add-node-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(var(--accent-blue-rgb), 0.3);
-}
-
-.hero-stat-item .stat-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-.hero-stat-item .stat-value {
-  font-size: 20px;
+.node-badge {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(6, 182, 212, 0.12));
+  color: var(--accent-blue);
   font-weight: 700;
 }
 
-.hero-stat-item .stat-value.health {
-  color: var(--accent-green);
+.node-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
+.node-main-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-.glass-card {
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+.node-main span,
+.mono-addr {
+  color: var(--text-secondary);
+}
+
+.address-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.addr-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+}
+
+.addr-proto {
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.08em;
 }
 
 .status-cell {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  position: relative;
 }
 
 .status-dot.active {
   background-color: var(--accent-green);
-  box-shadow: 0 0 8px var(--accent-green);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
 }
 
 .status-dot.inactive {
   background-color: var(--text-muted);
 }
 
-.status-dot.active::after {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: 50%;
-  border: 1px solid var(--accent-green);
-  opacity: 0.5;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(1.8); opacity: 0; }
-}
-
-.mono-addr {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.node-id-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.node-id-text {
-  font-weight: 500;
-}
-
-.current-tag {
-  border-radius: 4px;
-  border-style: solid;
-  font-size: 11px;
-  height: 20px;
-  line-height: 18px;
-  padding: 0 6px;
-}
-
-.tag-cp {
-  background-color: #f97316 !important;
-  border-color: #f97316 !important;
-  color: white !important;
-}
-
-.tag-ap {
-  background-color: #10b981 !important;
-  border-color: #10b981 !important;
-  color: white !important;
-}
-
-/* Address Tags */
-.address-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.addr-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: fit-content;
-  padding: 0 8px;
-  border-radius: 6px;
-}
-.addr-proto {
-  font-weight: 700;
-  font-size: 10px;
-  margin-right: 6px;
-  opacity: 0.8;
-}
-
-/* Add Node Form */
 .add-node-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 8px 0;
 }
+
 .node-input-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg-card);
-  padding: 8px;
-  border-radius: 12px;
+  padding: 10px;
+  border-radius: 16px;
   border: 1px solid var(--border-color);
-  transition: all 0.2s ease;
+  background: var(--bg-card);
 }
-.node-input-row:hover {
-  border-color: var(--accent-blue);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
+
 .protocol-select {
   width: 100px;
 }
+
 .host-input {
   flex: 1;
 }
-.colon-separator {
-  font-weight: bold;
-  color: var(--text-muted);
-}
+
 .port-input {
-  width: 80px;
+  width: 90px;
 }
+
+.colon-separator {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
 .row-actions {
   display: flex;
   gap: 4px;
-  min-width: 64px;
-  justify-content: center;
+}
+
+@media (max-width: 980px) {
+  .cluster-mini-stats,
+  .cluster-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cluster-actions {
+    align-items: stretch;
+  }
 }
 </style>
+
+
+

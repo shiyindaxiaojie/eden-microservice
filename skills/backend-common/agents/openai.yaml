@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eden Go Backend"
+  short_description: "Go backend conventions and architecture for eden-go-registry."
+  default_prompt: "Use $backend-common to implement or review Go backend changes in eden-go-registry."

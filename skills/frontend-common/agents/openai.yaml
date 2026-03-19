@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eden Web Frontend"
+  short_description: "Vue 3 admin UI conventions for eden-go-registry."
+  default_prompt: "Use $frontend-common to implement or review frontend changes in eden-go-registry."
