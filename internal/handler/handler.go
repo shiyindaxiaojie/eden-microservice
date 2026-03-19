@@ -55,15 +55,31 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) registerRoutes() {
 	// --- Catalog API (Service Registration & Discovery) ---
 	h.mux.Handle("/v1/catalog/register", h.APIKeyMiddleware(http.HandlerFunc(h.handleRegister)))
-	h.mux.Handle("/v1/catalog/deregister", h.ConsolidatedAuthMiddleware("admin", "developer")(http.HandlerFunc(h.handleDeregister)))
+	h.mux.Handle("/v1/catalog/instance/status", h.ConsolidatedAuthMiddleware("admin", "developer")(http.HandlerFunc(h.handleSetInstanceStatus)))
 	h.mux.Handle("/v1/catalog/heartbeat", h.APIKeyMiddleware(http.HandlerFunc(h.handleHeartbeat)))
 	h.mux.HandleFunc("/v1/catalog/services", h.handleListServices)
 	h.mux.HandleFunc("/v1/catalog/service/", h.handleGetService)
+	h.mux.HandleFunc("/v1/catalog/dependency-graph", h.handleDependencyGraph)
+
+	// --- Namespace API ---
+	adminOrDev := h.RBACMiddleware("admin", "developer")
+	h.mux.Handle("/v1/namespaces", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleListNamespaces))))
+	h.mux.Handle("/v1/namespace", h.AuthMiddleware(adminOrDev(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			h.handleCreateNamespace(w, r)
+		case http.MethodPut:
+			h.handleUpdateNamespace(w, r)
+		case http.MethodDelete:
+			h.handleDeleteNamespace(w, r)
+		default:
+			httpError(w, http.StatusMethodNotAllowed, "POST, PUT or DELETE required")
+		}
+	}))))
 
 	// --- Cluster & Management API ---
 	h.mux.HandleFunc("/v1/node/info", h.handleNodeInfo)
 	adminOnly := h.RBACMiddleware("admin")
-	adminOrDev := h.RBACMiddleware("admin", "developer")
 
 	h.mux.Handle("/v1/cluster/join", h.AuthMiddleware(adminOnly(http.HandlerFunc(h.handleJoin))))
 	h.mux.Handle("/v1/cluster/members", h.AuthMiddleware(adminOrDev(http.HandlerFunc(h.handleMembers))))

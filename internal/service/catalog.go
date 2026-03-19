@@ -21,6 +21,8 @@ type catalogService struct {
 	apNode APNode
 	mu     sync.RWMutex
 	subs   map[string][]chan []*model.Instance
+	// Track dependencies: subscriberService -> set of providerServices
+	deps   map[string]map[string]bool
 }
 
 func NewCatalogService(s *store.Registry, cp CPNode, ap APNode) CatalogService {
@@ -29,6 +31,7 @@ func NewCatalogService(s *store.Registry, cp CPNode, ap APNode) CatalogService {
 		cpNode: cp,
 		apNode: ap,
 		subs:   make(map[string][]chan []*model.Instance),
+		deps:   make(map[string]map[string]bool),
 	}
 	s.Services.NotifyFunc = svc.handleNotify
 	return svc
@@ -50,20 +53,21 @@ func (s *catalogService) Register(inst *model.Instance) error {
 	return nil
 }
 
-func (s *catalogService) Deregister(serviceName, instanceID string) error {
-	mode := s.store.GetMode()
-	if mode == "cp" && s.cpNode != nil {
-		if !s.cpNode.IsLeader() {
-			return s.forwardToLeader("deregister", nil, serviceName, instanceID)
-		}
-		cmd := cp.Command{Type: cp.CmdDeregister, ServiceName: serviceName, InstanceID: instanceID}
-		return s.cpNode.Apply(cmd, 5*time.Second)
+func (s *catalogService) SetInstanceStatus(namespace, serviceName, instanceID string, status string) error {
+	var healthStatus model.HealthStatus
+	switch status {
+	case "online":
+		healthStatus = model.HealthPassing
+	case "offline":
+		healthStatus = model.HealthCritical
+	default:
+		return fmt.Errorf("invalid status: %s, must be 'online' or 'offline'", status)
 	}
-	data := map[string]string{"service_name": serviceName, "instance_id": instanceID}
-	if s.apNode != nil {
-		return s.apNode.Apply("deregister", data, false)
+
+	_, ok := s.store.SetInstanceStatus(namespace, serviceName, instanceID, healthStatus)
+	if !ok {
+		return fmt.Errorf("instance not found: %s/%s", serviceName, instanceID)
 	}
-	s.store.Deregister(serviceName, instanceID)
 	return nil
 }
 
@@ -86,9 +90,19 @@ func (s *catalogService) Heartbeat(serviceName, instanceID string) error {
 
 func (s *catalogService) ListServices() ([]interface{}, error) {
 	services := s.store.ListServices()
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	result := make([]interface{}, len(services))
 	for i, svc := range services {
-		result[i] = svc
+		subCount := len(s.subs[svc.Name])
+		result[i] = map[string]interface{}{
+			"name":             svc.Name,
+			"instance_count":   svc.InstanceCount,
+			"healthy_count":    svc.HealthyCount,
+			"subscriber_count": subCount,
+		}
 	}
 	return result, nil
 }
@@ -116,6 +130,94 @@ func (s *catalogService) Unsubscribe(serviceName string, ch chan []*model.Instan
 			break
 		}
 	}
+}
+
+func (s *catalogService) GetSubscribers(serviceName string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Return consumer service names that depend on this service
+	var consumers []string
+	for consumer, providers := range s.deps {
+		if providers[serviceName] {
+			consumers = append(consumers, consumer)
+		}
+	}
+	return consumers
+}
+
+func (s *catalogService) GetDependencyGraph(namespace string) map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Collect all service names from store
+	services := s.store.ListServices()
+	nodeSet := make(map[string]bool)
+	for _, svc := range services {
+		nodeSet[svc.Name] = true
+	}
+
+	// Build nodes
+	nodes := make([]map[string]interface{}, 0)
+	for _, svc := range services {
+		nodes = append(nodes, map[string]interface{}{
+			"id":             svc.Name,
+			"name":           svc.Name,
+			"instance_count": svc.InstanceCount,
+			"healthy_count":  svc.HealthyCount,
+		})
+	}
+
+	// Build edges from dependency tracking
+	edges := make([]map[string]string, 0)
+	for consumer, providers := range s.deps {
+		for provider := range providers {
+			edges = append(edges, map[string]string{
+				"source": consumer,
+				"target": provider,
+			})
+			// Ensure nodes exist
+			if !nodeSet[consumer] {
+				nodes = append(nodes, map[string]interface{}{
+					"id":   consumer,
+					"name": consumer,
+				})
+				nodeSet[consumer] = true
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"nodes": nodes,
+		"edges": edges,
+	}
+}
+
+// RecordDependency records that consumerService depends on providerService.
+func (s *catalogService) RecordDependency(consumerService, providerService string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.deps[consumerService] == nil {
+		s.deps[consumerService] = make(map[string]bool)
+	}
+	s.deps[consumerService][providerService] = true
+}
+
+// Namespace management
+func (s *catalogService) ListNamespaces() []*model.Namespace {
+	return s.store.ListNamespaces()
+}
+
+func (s *catalogService) CreateNamespace(ns *model.Namespace) bool {
+	return s.store.CreateNamespace(ns)
+}
+
+func (s *catalogService) UpdateNamespace(ns *model.Namespace) bool {
+	return s.store.UpdateNamespace(ns)
+}
+
+func (s *catalogService) DeleteNamespace(name string) bool {
+	return s.store.DeleteNamespace(name)
 }
 
 func (s *catalogService) handleNotify(serviceName string, instances []*model.Instance) {
@@ -183,8 +285,6 @@ func (s *catalogService) forwardToLeader(action string, inst *model.Instance, se
 				Datacenter:  inst.Datacenter,
 			},
 		})
-	case "deregister":
-		_, err = client.Deregister(ctx, &pb.DeregisterRequest{ServiceName: serviceName, InstanceId: instanceID})
 	case "heartbeat":
 		_, err = client.Heartbeat(ctx, &pb.HeartbeatRequest{ServiceName: serviceName, InstanceId: instanceID})
 	}

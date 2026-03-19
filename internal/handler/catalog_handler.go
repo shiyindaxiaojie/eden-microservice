@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 )
@@ -34,21 +35,32 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleDeregister(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleSetInstanceStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
 	}
 	var req struct {
+		Namespace   string `json:"namespace"`
 		ServiceName string `json:"service_name"`
 		InstanceID  string `json:"instance_id"`
+		Status      string `json:"status"` // "online" or "offline"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+		return
+	}
+	if req.ServiceName == "" || req.InstanceID == "" {
+		httpError(w, http.StatusBadRequest, "service_name and instance_id required")
+		return
+	}
+	if req.Status != "online" && req.Status != "offline" {
+		httpError(w, http.StatusBadRequest, "status must be 'online' or 'offline'")
 		return
 	}
 
-	if err := h.catalog.Deregister(req.ServiceName, req.InstanceID); err != nil {
-		h.handleLeaderRedirect(w, err)
+	if err := h.catalog.SetInstanceStatus(req.Namespace, req.ServiceName, req.InstanceID, req.Status); err != nil {
+		httpError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
@@ -85,8 +97,13 @@ func (h *Handler) handleListServices(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Path[len("/v1/catalog/service/"):]
+	// Strip trailing /subscribers if present
+	if strings.HasSuffix(name, "/subscribers") {
+		h.handleGetSubscribers(w, r)
+		return
+	}
 	healthy := r.URL.Query().Get("passing") == "true"
-	
+
 	instances, err := h.catalog.GetService(name, healthy)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
@@ -109,4 +126,25 @@ func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, instances)
+}
+
+func (h *Handler) handleGetSubscribers(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path[len("/v1/catalog/service/"):]
+	name := strings.TrimSuffix(path, "/subscribers")
+
+	subscribers := h.catalog.GetSubscribers(name)
+	if subscribers == nil {
+		subscribers = []string{}
+	}
+	jsonOK(w, subscribers)
+}
+
+func (h *Handler) handleDependencyGraph(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	graph := h.catalog.GetDependencyGraph(namespace)
+	jsonOK(w, graph)
 }

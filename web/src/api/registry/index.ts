@@ -1,17 +1,26 @@
 import api from '../index'
 
+export interface Namespace {
+  name: string
+  description?: string
+  created_at: string
+  updated_at?: string
+}
 export interface ServiceSummary {
   name: string
   instance_count: number
   healthy_count: number
+  subscriber_count?: number
 }
 
 export interface Instance {
   id: string
   service_name: string
+  namespace?: string
   host: string
   port: number
   weight: number
+  datacenter: string
   metadata: Record<string, string>
   status: 'passing' | 'critical'
   last_heartbeat: string
@@ -55,8 +64,15 @@ export interface RegistryEvent {
 
 export const getServices = () => api.get<ServiceSummary[]>('/v1/catalog/services')
 export const getServiceInstances = (name: string) => api.get<Instance[]>(`/v1/catalog/service/${name}`)
-export const deregisterInstance = (serviceName: string, instanceId: string) =>
-  api.post('/v1/catalog/deregister', { service_name: serviceName, instance_id: instanceId })
+export const setInstanceStatus = (namespace: string, serviceName: string, instanceId: string, status: string) =>
+  api.post('/v1/catalog/instance/status', { namespace, service_name: serviceName, instance_id: instanceId, status })
+export const getSubscribers = (name: string) => api.get<string[]>(`/v1/catalog/service/${name}/subscribers`)
+export const getDependencyGraph = (namespace: string) => api.get<any>(`/v1/catalog/dependency-graph?namespace=${namespace}`)
+
+export const getNamespaces = () => api.get<Namespace[]>('/v1/namespaces')
+export const createNamespace = (data: Partial<Namespace>) => api.post('/v1/namespace', data)
+export const updateNamespace = (data: Partial<Namespace>) => api.put('/v1/namespace', data)
+export const deleteNamespace = (name: string) => api.delete(`/v1/namespace?name=${name}`)
 
 export const getClusterMembers = () => api.get<ClusterMember[]>('/v1/cluster/members')
 export const getClusterStats = () => api.get<ClusterStats>('/v1/cluster/stats')

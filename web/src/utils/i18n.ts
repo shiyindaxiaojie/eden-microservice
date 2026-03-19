@@ -7,6 +7,8 @@ export const messages = {
     nav: {
       dashboard: 'Overview',
       services: 'Services',
+      namespaces: 'Namespaces',
+      dependencies: 'Dependencies',
       cluster: 'Nodes',
       accessControl: 'RBAC',
       settings: 'Settings',
@@ -56,6 +58,7 @@ export const messages = {
       instances: 'Instances',
       healthy: 'Healthy',
       service: 'Service',
+      subscribers: 'Subscribers',
     },
     detail: {
       backToServices: 'Back to Services',
@@ -181,6 +184,8 @@ export const messages = {
     nav: {
       dashboard: '概览',
       services: '服务列表',
+      namespaces: '命名空间',
+      dependencies: '依赖关系',
       cluster: '节点列表',
       accessControl: '访问控制',
       settings: '系统设置',
@@ -230,6 +235,7 @@ export const messages = {
       instances: '实例',
       healthy: '健康',
       service: '服务',
+      subscribers: '订阅者',
     },
     detail: {
       backToServices: '返回服务列表',

@@ -27,6 +27,7 @@ func (s *RegistryServer) Register(ctx context.Context, req *pb.RegisterRequest) 
 	inst := &model.Instance{
 		ID:          pbi.Id,
 		ServiceName: pbi.ServiceName,
+		Namespace:   pbi.Namespace,
 		Host:        pbi.Host,
 		Port:        int(pbi.Port),
 		Weight:      int(pbi.Weight),
@@ -43,17 +44,31 @@ func (s *RegistryServer) Register(ctx context.Context, req *pb.RegisterRequest) 
 }
 
 func (s *RegistryServer) Deregister(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	err := s.catalog.Deregister(req.ServiceName, req.InstanceId)
+	err := s.catalog.SetInstanceStatus(req.Namespace, req.ServiceName, req.InstanceId, "offline")
 	success := err == nil
-	
-	logger.Info("[gRPC] Deregistered service: %s (%s) success=%v", req.ServiceName, req.InstanceId, success)
+
+	logger.Info("[gRPC] Set instance offline (legacy): %s (%s) namespace=%s success=%v", req.ServiceName, req.InstanceId, req.Namespace, success)
 	if err != nil {
 		return &pb.DeregisterResponse{Success: false}, nil
 	}
 	return &pb.DeregisterResponse{Success: true}, nil
 }
 
+func (s *RegistryServer) SetInstanceStatus(ctx context.Context, req *pb.SetInstanceStatusRequest) (*pb.SetInstanceStatusResponse, error) {
+	err := s.catalog.SetInstanceStatus(req.Namespace, req.ServiceName, req.InstanceId, req.Status)
+	success := err == nil
+
+	logger.Info("[gRPC] Set instance status %s: %s (%s) namespace=%s success=%v", req.Status, req.ServiceName, req.InstanceId, req.Namespace, success)
+	if err != nil {
+		return &pb.SetInstanceStatusResponse{Success: false}, nil
+	}
+	return &pb.SetInstanceStatusResponse{Success: true}, nil
+}
+
 func (s *RegistryServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
+	// We might need a HeartbeatNS in catalog if it were supported fully in the API. 
+	// Due to backward compatibility, Heartbeat is still using just ServiceName and InstanceID.
+	// But let's pass it if catalog supports it. Currently catalog.Heartbeat only takes service, instance.
 	err := s.catalog.Heartbeat(req.ServiceName, req.InstanceId)
 	if err != nil {
 		return &pb.HeartbeatResponse{Success: false}, nil
@@ -78,7 +93,7 @@ func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_W
 
 	// Send initial state
 	initial, _ := s.catalog.GetService(req.ServiceName, false)
-	if err := stream.Send(&pb.WatchResponse{Instances: toProtoInstances(initial)}); err != nil {
+	if err := stream.Send(&pb.WatchResponse{Action: "update", Instances: toProtoInstances(initial)}); err != nil {
 		return err
 	}
 
@@ -87,7 +102,7 @@ func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_W
 		case <-stream.Context().Done():
 			return nil
 		case insts := <-ch:
-			if err := stream.Send(&pb.WatchResponse{Instances: toProtoInstances(insts)}); err != nil {
+			if err := stream.Send(&pb.WatchResponse{Action: "update", Instances: toProtoInstances(insts)}); err != nil {
 				return err
 			}
 		}
@@ -100,6 +115,7 @@ func toProtoInstances(instances []*model.Instance) []*pb.ServiceInstance {
 		pbInstances = append(pbInstances, &pb.ServiceInstance{
 			Id:          inst.ID,
 			ServiceName: inst.ServiceName,
+			Namespace:   inst.Namespace,
 			Host:        inst.Host,
 			Port:        int32(inst.Port),
 			Weight:      int32(inst.Weight),

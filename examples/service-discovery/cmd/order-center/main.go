@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/eden"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
@@ -67,7 +67,7 @@ func main() {
 
 	// Subscribe to user-center changes
 	client.Subscribe("user-center", func(instances []*registry.ServiceInstance) {
-		logger.Info("[Subscribe] user-center updated: %d instances", len(instances))
+		logger.Info("[Registry Subscribe] user-center updated: %d instances", len(instances))
 		for _, inst := range instances {
 			logger.Info("  - %s:%d (healthy=%v)", inst.Host, inst.Port, inst.Healthy)
 		}

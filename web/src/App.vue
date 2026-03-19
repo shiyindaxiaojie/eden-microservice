@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { computed, onMounted, ref, watch } from 'vue'
-import { Moon, Sunny, Cpu, QuestionFilled, ArrowDown } from '@element-plus/icons-vue'
+import { Moon, Sunny, QuestionFilled, ArrowDown } from '@element-plus/icons-vue'
 import { useI18n } from './utils/i18n'
 import logo from './assets/logo.png'
 
@@ -25,13 +25,15 @@ const navItems = computed(() => {
   const items = [
     { path: '/', label: t.value.nav.dashboard, icon: 'Odometer' },
     { path: '/services', label: t.value.nav.services, icon: 'Grid' },
+    { path: '/namespaces', label: t.value.nav.namespaces, icon: 'Collection' },
+    { path: '/dependency-graph', label: t.value.nav.dependencies, icon: 'Share' },
     { path: '/cluster', label: t.value.nav.cluster, icon: 'Connection' },
     { path: '/rbac', label: t.value.nav.accessControl, icon: 'Lock' },
     { path: '/settings', label: t.value.nav.settings, icon: 'Setting' },
   ]
   
   if (userRole.value === 'admin') return items
-  return items.filter(i => i.path === '/' || i.path === '/services' || i.path === '/cluster')
+  return items.filter(i => i.path === '/' || i.path === '/services' || i.path === '/cluster' || i.path === '/namespaces' || i.path === '/dependency-graph')
 })
 
 

@@ -14,6 +14,7 @@ const (
 type Instance struct {
 	ID          string            `json:"id"`
 	ServiceName string            `json:"service_name"`
+	Namespace   string            `json:"namespace,omitempty"`
 	Host        string            `json:"host"`
 	Port        int               `json:"port"`
 	Weight      int               `json:"weight"`
@@ -22,6 +23,25 @@ type Instance struct {
 	Status      HealthStatus      `json:"status"`
 	LastHeartbeat time.Time       `json:"last_heartbeat"`
 	RegisteredAt  time.Time       `json:"registered_at"`
+}
+
+// Namespace represents a logical namespace for service isolation.
+type Namespace struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
+// DefaultNamespace is the namespace used when none is specified.
+const DefaultNamespace = "default"
+
+// EffectiveNamespace returns the namespace, defaulting to "default" if empty.
+func (inst *Instance) EffectiveNamespace() string {
+	if inst.Namespace == "" {
+		return DefaultNamespace
+	}
+	return inst.Namespace
 }
 
 // Service holds a named collection of instances.

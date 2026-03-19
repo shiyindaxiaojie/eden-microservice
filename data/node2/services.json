@@ -1,0 +1,34 @@
+{
+  "auth-center": [
+    {
+      "id": "auth-center-1",
+      "service_name": "auth-center",
+      "host": "127.0.0.1",
+      "port": 9002,
+      "weight": 100,
+      "dc": "",
+      "metadata": {
+        "version": "1.0.0"
+      },
+      "status": "passing",
+      "last_heartbeat": "2026-03-19T15:01:17.2541143+08:00",
+      "registered_at": "2026-03-19T13:48:57.2516075+08:00"
+    }
+  ],
+  "order-center": [
+    {
+      "id": "order-center-1",
+      "service_name": "order-center",
+      "host": "127.0.0.1",
+      "port": 9003,
+      "weight": 100,
+      "dc": "",
+      "metadata": {
+        "version": "1.0.0"
+      },
+      "status": "passing",
+      "last_heartbeat": "2026-03-19T15:01:18.9564214+08:00",
+      "registered_at": "2026-03-19T13:48:58.9540552+08:00"
+    }
+  ]
+}

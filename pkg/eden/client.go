@@ -103,8 +103,12 @@ type Client struct {
 	addresses  []string
 	apiKey     string
 	datacenter string
+	namespace  string
 	client     *http.Client
 	transport  string // "http", "grpc" (default), "quic"
+
+	// Cache
+	cache *LocalCache
 
 	// Cluster state
 	allNodes     []*RegistryNode
@@ -119,6 +123,8 @@ type Config struct {
 	Addresses  []string
 	APIKey     string
 	Datacenter string
+	Namespace  string
+	CacheDir   string
 	Transport  string // "http", "grpc" (default), "quic"
 }
 
@@ -128,6 +134,8 @@ func New(addresses []string, apiKey, datacenter string) (*Client, error) {
 		Addresses:  addresses,
 		APIKey:     apiKey,
 		Datacenter: datacenter,
+		Namespace:  "",
+		CacheDir:   "",
 		Transport:  "grpc",
 	})
 }
@@ -155,15 +163,19 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 		allNodes:   initialNodes,
 		apiKey:     cfg.APIKey,
 		datacenter: cfg.Datacenter,
+		namespace:  cfg.Namespace,
 		transport:  cfg.Transport,
+		cache:      NewLocalCache(cfg.CacheDir),
 		client:     &http.Client{Timeout: 5 * time.Second},
 		stopCh:     make(chan struct{}),
 	}
 
-	// Synchronous initial node discovery to resolve gRPC addresses
+	// Synchronous initial node discovery to resolve gRPC addresses.
+	// If it fails, and we have cache, we'll rely on cache.
 	c.syncNodes()
 
-	logger.Info("[Registry] Client initialized with transport: %s, initial seeds: %v", cfg.Transport, cfg.Addresses)
+	logger.Info("[Registry Init] Client init, transport: %s, seeds: %v, namespace: %s, cacheDir: %s", 
+		cfg.Transport, cfg.Addresses, cfg.Namespace, cfg.CacheDir)
 
 	// Start background node discovery
 	c.startNodeDiscovery()
@@ -284,11 +296,11 @@ func (c *Client) syncNodes() {
 			changed = true
 		}
 		c.mu.Unlock()
-		
+
 		if changed {
-			logger.Info("[Registry] Cluster topology updated. Total nodes: %d -> [%s]", len(newNodes), descStr)
+			logger.Info("[Registry Nodes] Cluster topology updated. Total nodes: %d -> [%s]", len(newNodes), descStr)
 		} else {
-			logger.Debug("[Registry] Cluster topology remains unchanged. Total nodes: %d", len(newNodes))
+			logger.Debug("[Registry Nodes] Cluster topology remains unchanged. Total nodes: %d", len(newNodes))
 		}
 	}
 }
@@ -302,12 +314,12 @@ func (c *Client) tryAny(opName string, fn func(node *RegistryNode) error) error 
 
 	var lastErr error
 	for _, node := range nodes {
-		logger.Debug("[Registry] Executing internal '%s' via node %s (%s)", opName, node.ID, node.HTTPAddr)
+		logger.Debug("[Registry Nodes] Executing '%s' via node %s (%s)", opName, node.ID, node.HTTPAddr)
 		if err := fn(node); err == nil {
 			return nil
 		} else {
 			lastErr = err
-			logger.Warn("[Registry] Internal '%s' failed on node %s: %v", opName, node.ID, err)
+			logger.Warn("[Registry Nodes] '%s' failed on node %s: %v", opName, node.ID, err)
 		}
 	}
 	return lastErr
@@ -343,19 +355,19 @@ func (c *Client) executeWithFailover(opName string, fn func(node *RegistryNode) 
 		if c.transport == "http" || addr == "" {
 			addr = node.HTTPAddr
 		}
-		logger.Info("[Registry] Executing '%s' via node %s (%s)", opName, node.ID, addr)
+		logger.Info("[Registry %s] Executing via node %s (%s)", opName, node.ID, addr)
 
 		if err := fn(node); err == nil {
 			return nil
 		} else {
 			lastErr = err
-			logger.Warn("[Registry] '%s' failed on node %s: %v. Marking unhealthy and failing over...", opName, node.ID, err)
+			logger.Warn("[Registry %s] Failed on node %s: %v. Marking unhealthy and failing over...", opName, node.ID, err)
 			// Mark node as unhealthy on connection failure to trigger fast failover
 			node.markUnhealthy()
 		}
 	}
 
-	logger.Error("[Registry] All available nodes failed for operation '%s'", opName)
+	logger.Error("[Registry %s] All available nodes failed", opName)
 	// All nodes failed — trigger immediate refresh in background
 	go c.syncNodes()
 
@@ -372,8 +384,14 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+			
+			pi := toProtoInstance(instance)
+			if c.namespace != "" {
+				pi.Namespace = c.namespace
+			}
+			
 			_, err = client.Register(ctx, &pb.RegisterRequest{
-				Instance: toProtoInstance(instance),
+				Instance: pi,
 			})
 			return err
 		}
@@ -382,6 +400,7 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 		body := map[string]interface{}{
 			"id":           instance.ID,
 			"service_name": instance.ServiceName,
+			"namespace":    c.namespace,
 			"host":         instance.Host,
 			"port":         instance.Port,
 			"weight":       instance.Weight,
@@ -419,23 +438,28 @@ func (c *Client) Deregister(instance *registry.ServiceInstance) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, err = client.Deregister(ctx, &pb.DeregisterRequest{
+			_, err = client.SetInstanceStatus(ctx, &pb.SetInstanceStatusRequest{
+				Namespace:   c.namespace,
 				ServiceName: instance.ServiceName,
 				InstanceId:  instance.ID,
+				Status:      "offline",
 			})
 			return err
 		}
 
+		// HTTP fallback
 		body := map[string]string{
+			"namespace":    c.namespace,
 			"service_name": instance.ServiceName,
 			"instance_id":  instance.ID,
+			"status":       "offline",
 		}
 		data, _ := json.Marshal(body)
 		url := node.HTTPAddr
 		if !strings.HasPrefix(url, "http") {
 			url = "http://" + url
 		}
-		url += "/v1/catalog/deregister"
+		url += "/v1/catalog/instance/status"
 
 		req, _ := http.NewRequest("POST", url, bytes.NewReader(data))
 		c.setHeaders(req)
@@ -463,6 +487,7 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			resp, err := client.Discover(ctx, &pb.DiscoverRequest{
+				Namespace:   c.namespace,
 				ServiceName: serviceName,
 				HealthyOnly: true,
 				Datacenter:  c.datacenter,
@@ -475,6 +500,9 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 		}
 
 		url := fmt.Sprintf("%s/v1/catalog/service/%s?passing=true", node.HTTPAddr, serviceName)
+		if c.namespace != "" {
+			url += "&namespace=" + c.namespace
+		}
 		if !strings.HasPrefix(url, "http") {
 			url = "http://" + url
 		}
@@ -521,6 +549,16 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 		return nil
 	})
 
+	if err != nil {
+		// Fallback to cache if discovery fails
+		if cachedInstances, ok := c.cache.Get(serviceName); ok {
+			logger.Warn("[Registry SDK] Discovery failed, using local cache for %s", serviceName)
+			return cachedInstances, nil
+		}
+	} else if len(instances) > 0 {
+		c.cache.Update(serviceName, instances)
+	}
+
 	return instances, err
 }
 
@@ -557,10 +595,10 @@ func (c *Client) Subscribe(serviceName string, callback func([]*registry.Service
 func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceInstance)) bool {
 	nodes := c.sortedNodes()
 	for _, node := range nodes {
-		logger.Debug("[Registry] Attempting to Watch service '%s' via node %s", serviceName, node.ID)
+		logger.Debug("[Registry Subscribe] Attempting for service '%s' via node %s", serviceName, node.ID)
 		client, err := node.getClient(c.transport)
 		if err != nil {
-			logger.Warn("[Registry] Failed to get client for Watch on node %s: %v", node.ID, err)
+			logger.Warn("[Registry Subscribe] Failed to get client for node %s: %v", node.ID, err)
 			continue
 		}
 
@@ -574,27 +612,32 @@ func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceI
 			}
 		}()
 
-		stream, err := client.Watch(ctx, &pb.WatchRequest{ServiceName: serviceName})
+		stream, err := client.Watch(ctx, &pb.WatchRequest{
+			Namespace:   c.namespace,
+			ServiceName: serviceName,
+		})
 		if err != nil {
-			logger.Warn("[Registry] Failed to establish Watch stream on node %s: %v", node.ID, err)
+			logger.Warn("[Registry Subscribe] Failed to establish stream on node %s: %v", node.ID, err)
 			cancel()
 			node.markUnhealthy()
 			continue
 		}
 
-		logger.Info("[Registry] Successfully established Watch stream for '%s' via node %s", serviceName, node.ID)
+		logger.Info("[Registry Subscribe] Successfully established for '%s' via node %s", serviceName, node.ID)
 		// Successfully connected — read events
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
-				logger.Warn("[Registry] Watch stream for '%s' on node %s disconnected: %v", serviceName, node.ID, err)
+				logger.Warn("[Registry Subscribe] Stream for '%s' on node %s disconnected: %v", serviceName, node.ID, err)
 				cancel()
 				node.markUnhealthy()
 				// Trigger immediate node refresh
 				go c.syncNodes()
 				break
 			}
-			callback(fromProtoInstances(resp.Instances))
+			insts := fromProtoInstances(resp.Instances)
+			c.cache.Update(serviceName, insts)
+			callback(insts)
 		}
 		return true
 	}
@@ -636,6 +679,7 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			_, err = client.Heartbeat(ctx, &pb.HeartbeatRequest{
+				Namespace:   c.namespace,
 				ServiceName: instance.ServiceName,
 				InstanceId:  instance.ID,
 			})
@@ -643,6 +687,7 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 		}
 
 		body := map[string]string{
+			"namespace":    c.namespace,
 			"service_name": instance.ServiceName,
 			"instance_id":  instance.ID,
 		}

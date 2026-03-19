@@ -10,12 +10,20 @@ import (
 // CatalogService handles service registration and discovery.
 type CatalogService interface {
 	Register(inst *model.Instance) error
-	Deregister(serviceName, instanceID string) error
+	SetInstanceStatus(namespace, serviceName, instanceID string, status string) error
 	Heartbeat(serviceName, instanceID string) error
 	ListServices() ([]interface{}, error)
 	GetService(name string, healthyOnly bool) ([]*model.Instance, error)
 	Subscribe(serviceName string, ch chan []*model.Instance)
 	Unsubscribe(serviceName string, ch chan []*model.Instance)
+	GetSubscribers(serviceName string) []string
+	GetDependencyGraph(namespace string) map[string]interface{}
+
+	// Namespace management
+	ListNamespaces() []*model.Namespace
+	CreateNamespace(ns *model.Namespace) bool
+	UpdateNamespace(ns *model.Namespace) bool
+	DeleteNamespace(name string) bool
 }
 
 // AuthService handles authentication and user lookup.

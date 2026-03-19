@@ -44,6 +44,18 @@ const routes = [
     meta: { title: 'Login', public: true }
   },
   {
+    path: '/namespaces',
+    name: 'Namespaces',
+    component: () => import('../views/namespace.vue'),
+    meta: { title: 'Namespaces' }
+  },
+  {
+    path: '/dependency-graph',
+    name: 'DependencyGraph',
+    component: () => import('../views/dependency-graph.vue'),
+    meta: { title: 'Dependencies' }
+  },
+  {
     path: '/docs',
     name: 'Docs',
     component: () => import('../views/docs.vue'),

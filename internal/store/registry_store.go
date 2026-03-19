@@ -23,21 +23,23 @@ type Stats struct {
 
 // Registry is the unified entry point for data access, aggregating specialized stores.
 type Registry struct {
-	Services *ServiceStore
-	Auth     *AuthStore
-	Config   *ConfigStore
-	Events   *EventStore
-	dataPath string
+	Services   *ServiceStore
+	Auth       *AuthStore
+	Config     *ConfigStore
+	Events     *EventStore
+	Namespaces *NamespaceStore
+	dataPath   string
 }
 
 // NewRegistry creates a new registry with persistence path.
 func NewRegistry(dataPath string) *Registry {
 	r := &Registry{
-		Services: NewServiceStore(dataPath),
-		Auth:     NewAuthStore(dataPath),
-		Config:   NewConfigStore(dataPath),
-		Events:   NewEventStore(1000, dataPath),
-		dataPath: dataPath,
+		Services:   NewServiceStore(dataPath),
+		Auth:       NewAuthStore(dataPath),
+		Config:     NewConfigStore(dataPath),
+		Events:     NewEventStore(1000, dataPath),
+		Namespaces: NewNamespaceStore(dataPath),
+		dataPath:   dataPath,
 	}
 	return r
 }
@@ -78,6 +80,15 @@ func (r *Registry) SetLogLevel(l string) { r.Config.SetLogLevel(l); r.Config.Sav
 func (r *Registry) ListEvents() []*model.Event { return r.Events.List() }
 func (r *Registry) MarkCritical(ttl time.Duration) ([]*model.Instance, []*model.Instance) {
 	return r.Services.MarkCritical(ttl)
+}
+
+// Namespace convenience methods
+func (r *Registry) ListNamespaces() []*model.Namespace { return r.Namespaces.List() }
+func (r *Registry) CreateNamespace(ns *model.Namespace) bool { return r.Namespaces.Create(ns) }
+func (r *Registry) UpdateNamespace(ns *model.Namespace) bool { return r.Namespaces.Update(ns) }
+func (r *Registry) DeleteNamespace(name string) bool { return r.Namespaces.Delete(name) }
+func (r *Registry) SetInstanceStatus(ns, svc, id string, status model.HealthStatus) (*model.Instance, bool) {
+	return r.Services.SetInstanceStatus(ns, svc, id, status)
 }
 
 // SnapshotData represents the full state for Raft/Persistence.
