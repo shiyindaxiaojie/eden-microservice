@@ -3,6 +3,7 @@ package eden
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	neturl "net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -113,13 +115,15 @@ type Client struct {
 	cache *LocalCache
 
 	// Cluster state
-	allNodes        []*RegistryNode
-	lastTopology    string
-	mu              sync.RWMutex
-	stopCh          chan struct{}
-	wg              sync.WaitGroup
-	identityMu      sync.RWMutex
-	consumerService string
+	allNodes         []*RegistryNode
+	lastTopology     string
+	mu               sync.RWMutex
+	stopCh           chan struct{}
+	wg               sync.WaitGroup
+	identityMu       sync.RWMutex
+	consumerService  string
+	subscriptions    map[string]struct{}
+	topologyChecksum string
 }
 
 // Config represents the Eden client configuration.
@@ -163,15 +167,16 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 	}
 
 	c := &Client{
-		addresses:  cfg.Addresses,
-		allNodes:   initialNodes,
-		apiKey:     cfg.APIKey,
-		datacenter: cfg.Datacenter,
-		namespace:  cfg.Namespace,
-		transport:  cfg.Transport,
-		cache:      NewLocalCache(cfg.CacheDir),
-		client:     &http.Client{Timeout: 5 * time.Second},
-		stopCh:     make(chan struct{}),
+		addresses:     cfg.Addresses,
+		allNodes:      initialNodes,
+		apiKey:        cfg.APIKey,
+		datacenter:    cfg.Datacenter,
+		namespace:     cfg.Namespace,
+		transport:     cfg.Transport,
+		cache:         NewLocalCache(cfg.CacheDir),
+		client:        &http.Client{Timeout: 5 * time.Second},
+		stopCh:        make(chan struct{}),
+		subscriptions: make(map[string]struct{}),
 	}
 
 	// Synchronous initial node discovery to resolve gRPC addresses.
@@ -437,6 +442,7 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 			c.consumerService = instance.ServiceName
 		}
 		c.identityMu.Unlock()
+		go c.reportTopology()
 	}
 	return err
 }
@@ -582,6 +588,9 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 // Subscribe watches for service changes using gRPC Watch with auto-reconnect.
 // Falls back to polling if gRPC Watch is unavailable.
 func (c *Client) Subscribe(serviceName string, callback func([]*registry.ServiceInstance)) error {
+	c.rememberSubscription(serviceName)
+	go c.reportTopology()
+
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
@@ -751,6 +760,90 @@ func (c *Client) getConsumerService() string {
 	c.identityMu.RLock()
 	defer c.identityMu.RUnlock()
 	return c.consumerService
+}
+
+func (c *Client) rememberSubscription(serviceName string) {
+	if serviceName == "" {
+		return
+	}
+
+	c.identityMu.Lock()
+	defer c.identityMu.Unlock()
+	c.subscriptions[serviceName] = struct{}{}
+}
+
+func (c *Client) topologySnapshot() (string, []string, string) {
+	c.identityMu.RLock()
+	defer c.identityMu.RUnlock()
+
+	if c.consumerService == "" || len(c.subscriptions) == 0 {
+		return "", nil, ""
+	}
+
+	providers := make([]string, 0, len(c.subscriptions))
+	for serviceName := range c.subscriptions {
+		if serviceName == "" || serviceName == c.consumerService {
+			continue
+		}
+		providers = append(providers, serviceName)
+	}
+	if len(providers) == 0 {
+		return c.consumerService, nil, ""
+	}
+	sort.Strings(providers)
+	payload, _ := json.Marshal(map[string]interface{}{
+		"namespace": c.namespace,
+		"consumer":  c.consumerService,
+		"providers": providers,
+	})
+	sum := sha256.Sum256(payload)
+	return c.consumerService, providers, fmt.Sprintf("%x", sum[:])
+}
+
+func (c *Client) reportTopology() {
+	consumerService, providers, checksum := c.topologySnapshot()
+	if consumerService == "" || checksum == "" {
+		return
+	}
+
+	c.identityMu.RLock()
+	lastChecksum := c.topologyChecksum
+	c.identityMu.RUnlock()
+	if checksum == lastChecksum {
+		return
+	}
+
+	err := c.executeWithFailover("TopologyReport", func(node *RegistryNode) error {
+		body := map[string]interface{}{
+			"namespace":        c.namespace,
+			"consumer_service": consumerService,
+			"providers":        providers,
+			"checksum":         checksum,
+		}
+		data, _ := json.Marshal(body)
+		reqURL := node.HTTPAddr
+		if !strings.HasPrefix(reqURL, "http") {
+			reqURL = "http://" + reqURL
+		}
+		reqURL += "/v1/catalog/topology/report"
+
+		req, _ := http.NewRequest("POST", reqURL, bytes.NewReader(data))
+		c.setHeaders(req)
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("status %d", resp.StatusCode)
+		}
+		return nil
+	})
+	if err == nil {
+		c.identityMu.Lock()
+		c.topologyChecksum = checksum
+		c.identityMu.Unlock()
+	}
 }
 
 func (c *Client) withConsumerService(ctx context.Context) context.Context {

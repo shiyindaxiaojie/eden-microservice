@@ -28,6 +28,7 @@ type Registry struct {
 	Config     *ConfigStore
 	Events     *EventStore
 	Namespaces *NamespaceStore
+	Topology   *TopologyStore
 	dataPath   string
 }
 
@@ -39,6 +40,7 @@ func NewRegistry(dataPath string) *Registry {
 		Config:     NewConfigStore(dataPath),
 		Events:     NewEventStore(1000, dataPath),
 		Namespaces: NewNamespaceStore(dataPath),
+		Topology:   NewTopologyStore(dataPath),
 		dataPath:   dataPath,
 	}
 	return r
@@ -108,14 +110,15 @@ func (r *Registry) SetInstanceStatus(ns, svc, id string, status model.HealthStat
 
 // SnapshotData represents the full state for Raft/Persistence.
 type SnapshotData struct {
-	Services     map[string][]*model.Instance            `json:"services,omitempty"`
-	ServicesByNS map[string]map[string][]*model.Instance `json:"services_by_namespace,omitempty"`
-	Namespaces   []*model.Namespace                      `json:"namespaces,omitempty"`
-	APIKeys      map[string]*model.APIKey                `json:"api_keys"`
-	Users        map[string]*model.User                  `json:"users"`
-	Mode         string                                  `json:"mode"`
-	Environment  string                                  `json:"environment"`
-	Seeds        []string                                `json:"seeds"`
+	Services        map[string][]*model.Instance                `json:"services,omitempty"`
+	ServicesByNS    map[string]map[string][]*model.Instance     `json:"services_by_namespace,omitempty"`
+	Namespaces      []*model.Namespace                          `json:"namespaces,omitempty"`
+	TopologyReports map[string]map[string]*model.TopologyReport `json:"topology_reports,omitempty"`
+	APIKeys         map[string]*model.APIKey                    `json:"api_keys"`
+	Users           map[string]*model.User                      `json:"users"`
+	Mode            string                                      `json:"mode"`
+	Environment     string                                      `json:"environment"`
+	Seeds           []string                                    `json:"seeds"`
 }
 
 // Snapshot returns a deep copy of all data.
@@ -136,13 +139,14 @@ func (r *Registry) Snapshot() *SnapshotData {
 	}
 
 	snap := &SnapshotData{
-		ServicesByNS: servicesByNS,
-		Namespaces:   r.Namespaces.List(),
-		APIKeys:      r.Auth.GetAllAPIKeys(),
-		Users:        r.Auth.GetAllUsers(),
-		Mode:         r.Config.GetMode(),
-		Environment:  r.Config.GetEnvironment(),
-		Seeds:        r.Config.GetSeeds(),
+		ServicesByNS:    servicesByNS,
+		Namespaces:      r.Namespaces.List(),
+		TopologyReports: r.Topology.Snapshot(),
+		APIKeys:         r.Auth.GetAllAPIKeys(),
+		Users:           r.Auth.GetAllUsers(),
+		Mode:            r.Config.GetMode(),
+		Environment:     r.Config.GetEnvironment(),
+		Seeds:           r.Config.GetSeeds(),
 	}
 	return snap
 }
@@ -176,6 +180,9 @@ func (r *Registry) Restore(data *SnapshotData) {
 
 	if len(data.Namespaces) > 0 {
 		r.Namespaces.Restore(data.Namespaces)
+	}
+	if len(data.TopologyReports) > 0 {
+		r.Topology.Restore(data.TopologyReports)
 	}
 	r.Auth.Restore(data.Users, data.APIKeys)
 	r.Config.Restore(data.Mode, data.Environment, "", data.Seeds)

@@ -13,6 +13,36 @@ export interface ServiceSummary {
   subscriber_count?: number
 }
 
+export interface TopologyInstance {
+  id: string
+  host: string
+  port: number
+  status: 'passing' | 'critical'
+  datacenter?: string
+}
+
+export interface TopologyNode {
+  id: string
+  name: string
+  namespace: string
+  instance_count: number
+  healthy_count: number
+  instances: TopologyInstance[]
+}
+
+export interface TopologyEdge {
+  source: string
+  target: string
+  checksum?: string
+  updated_at?: string
+}
+
+export interface TopologyGraph {
+  namespace: string
+  nodes: TopologyNode[]
+  edges: TopologyEdge[]
+}
+
 export interface Instance {
   id: string
   service_name: string
@@ -70,6 +100,8 @@ export const setInstanceStatus = (namespace: string, serviceName: string, instan
 export const getSubscribers = (name: string, namespace = '') =>
   api.get<string[]>(`/v1/catalog/service/${encodeURIComponent(name)}/subscribers${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
 export const getDependencyGraph = (namespace: string) => api.get<any>(`/v1/catalog/dependency-graph?namespace=${namespace}`)
+export const getTopology = (namespace = '') =>
+  api.get<TopologyGraph>(`/v1/catalog/topology${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
 
 export const getNamespaces = () => api.get<Namespace[]>('/v1/namespaces')
 export const createNamespace = (data: Partial<Namespace>) => api.post('/v1/namespace', data)

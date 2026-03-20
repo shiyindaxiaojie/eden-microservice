@@ -87,6 +87,34 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
+func (h *Handler) handleReportTopology(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+
+	var req struct {
+		Namespace       string   `json:"namespace"`
+		ConsumerService string   `json:"consumer_service"`
+		Providers       []string `json:"providers"`
+		Checksum        string   `json:"checksum"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+		return
+	}
+	if req.ConsumerService == "" {
+		httpError(w, http.StatusBadRequest, "consumer_service required")
+		return
+	}
+
+	changed := h.catalog.ReportTopology(req.Namespace, req.ConsumerService, req.Providers, req.Checksum)
+	jsonOK(w, map[string]interface{}{
+		"status":  "ok",
+		"changed": changed,
+	})
+}
+
 func (h *Handler) handleListServices(w http.ResponseWriter, r *http.Request) {
 	namespace := r.URL.Query().Get("namespace")
 	services, err := h.catalog.ListServices(namespace)
@@ -155,4 +183,13 @@ func (h *Handler) handleDependencyGraph(w http.ResponseWriter, r *http.Request) 
 	namespace := r.URL.Query().Get("namespace")
 	graph := h.catalog.GetDependencyGraph(namespace)
 	jsonOK(w, graph)
+}
+
+func (h *Handler) handleGetTopology(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	jsonOK(w, h.catalog.GetTopology(namespace))
 }

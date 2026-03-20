@@ -25,6 +25,8 @@ type CatalogService interface {
 	GetSubscribers(namespace, serviceName string) []string
 	RecordDependency(namespace, consumerService, providerService string)
 	GetDependencyGraph(namespace string) map[string]interface{}
+	ReportTopology(namespace, consumerService string, providers []string, checksum string) bool
+	GetTopology(namespace string) *model.TopologyGraph
 
 	// Namespace management
 	ListNamespaces() []*model.Namespace

@@ -23,6 +23,7 @@ type Node struct {
 type syncDiscoveryPayload struct {
 	ServicesByNamespace map[string]map[string]map[string]*model.Instance `json:"services_by_namespace"`
 	Namespaces          []*model.Namespace                               `json:"namespaces"`
+	TopologyReports     map[string]map[string]*model.TopologyReport      `json:"topology_reports"`
 }
 
 // NewNode creates an AP mode node.
@@ -88,6 +89,9 @@ func (n *Node) fullSync() {
 	}
 	if len(payload.Namespaces) > 0 {
 		n.Registry.Namespaces.Restore(payload.Namespaces)
+	}
+	if len(payload.TopologyReports) > 0 {
+		n.Registry.Topology.Restore(payload.TopologyReports)
 	}
 	logger.Info("[AP Node] Full sync completed with %s", target.ID)
 }

@@ -10,29 +10,29 @@ import (
 
 // Handler serves the HTTP API for both AP and CP modes.
 type Handler struct {
-	config   *config.Config
-	catalog  service.CatalogService
-	auth     service.AuthService
-	settings service.SettingsService
-	cluster  service.ClusterService
+	config    *config.Config
+	catalog   service.CatalogService
+	auth      service.AuthService
+	settings  service.SettingsService
+	cluster   service.ClusterService
 	nodeCache sync.Map // map[string]config.Config
-	mux      *http.ServeMux
+	mux       *http.ServeMux
 }
 
 // NewHandler creates a unified HTTP handler.
-func NewHandler(cfg *config.Config, 
-	catalog service.CatalogService, 
-	auth service.AuthService, 
-	settings service.SettingsService, 
+func NewHandler(cfg *config.Config,
+	catalog service.CatalogService,
+	auth service.AuthService,
+	settings service.SettingsService,
 	cluster service.ClusterService) *Handler {
 	h := &Handler{
-		config:   cfg,
-		catalog:  catalog,
-		auth:     auth,
-		settings: settings,
-		cluster:  cluster,
+		config:    cfg,
+		catalog:   catalog,
+		auth:      auth,
+		settings:  settings,
+		cluster:   cluster,
 		nodeCache: sync.Map{},
-		mux:      http.NewServeMux(),
+		mux:       http.NewServeMux(),
 	}
 	h.registerRoutes()
 	return h
@@ -57,9 +57,11 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/catalog/register", h.APIKeyMiddleware(http.HandlerFunc(h.handleRegister)))
 	h.mux.Handle("/v1/catalog/instance/status", h.ConsolidatedAuthMiddleware("admin", "developer")(http.HandlerFunc(h.handleSetInstanceStatus)))
 	h.mux.Handle("/v1/catalog/heartbeat", h.APIKeyMiddleware(http.HandlerFunc(h.handleHeartbeat)))
+	h.mux.Handle("/v1/catalog/topology/report", h.APIKeyMiddleware(http.HandlerFunc(h.handleReportTopology)))
 	h.mux.HandleFunc("/v1/catalog/services", h.handleListServices)
 	h.mux.HandleFunc("/v1/catalog/service/", h.handleGetService)
 	h.mux.HandleFunc("/v1/catalog/dependency-graph", h.handleDependencyGraph)
+	h.mux.HandleFunc("/v1/catalog/topology", h.handleGetTopology)
 
 	// --- Namespace API ---
 	adminOrDev := h.RBACMiddleware("admin", "developer")

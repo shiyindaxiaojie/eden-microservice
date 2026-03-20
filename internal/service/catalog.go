@@ -114,12 +114,9 @@ func (s *catalogService) ListServices(namespace string) ([]interface{}, error) {
 
 	services := s.store.Services.ListServicesNS(ns)
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	result := make([]interface{}, len(services))
 	for i, svc := range services {
-		subCount := len(s.getSubscribersNoLock(ns, svc.Name))
+		subCount := len(s.GetSubscribers(ns, svc.Name))
 		result[i] = map[string]interface{}{
 			"name":             svc.Name,
 			"instance_count":   svc.InstanceCount,
@@ -174,10 +171,27 @@ func (s *catalogService) Unsubscribe(namespace, serviceName string, ch chan Watc
 }
 
 func (s *catalogService) GetSubscribers(namespace, serviceName string) []string {
+	ns := s.namespaceKey(namespace)
+	seen := make(map[string]bool)
+	combined := make([]string, 0)
+
+	for _, consumer := range s.getTopologySubscribers(ns, serviceName) {
+		if !seen[consumer] {
+			seen[consumer] = true
+			combined = append(combined, consumer)
+		}
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	return s.getSubscribersNoLock(s.namespaceKey(namespace), serviceName)
+	for _, consumer := range s.getSubscribersNoLock(ns, serviceName) {
+		if !seen[consumer] {
+			seen[consumer] = true
+			combined = append(combined, consumer)
+		}
+	}
+	sort.Strings(combined)
+	return combined
 }
 
 func (s *catalogService) getSubscribersNoLock(namespace, serviceName string) []string {
@@ -195,12 +209,23 @@ func (s *catalogService) getSubscribersNoLock(namespace, serviceName string) []s
 	return consumers
 }
 
+func (s *catalogService) getTopologySubscribers(namespace, serviceName string) []string {
+	reports := s.store.Topology.Reports(namespace)
+	consumers := make([]string, 0)
+	for consumer, report := range reports {
+		for _, provider := range report.Providers {
+			if provider == serviceName {
+				consumers = append(consumers, consumer)
+				break
+			}
+		}
+	}
+	sort.Strings(consumers)
+	return consumers
+}
+
 func (s *catalogService) GetDependencyGraph(namespace string) map[string]interface{} {
 	ns := s.namespaceKey(namespace)
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	services := s.store.Services.ListServicesNS(ns)
 	nodeSet := make(map[string]bool)
 	for _, svc := range services {
@@ -220,6 +245,32 @@ func (s *catalogService) GetDependencyGraph(namespace string) map[string]interfa
 
 	// Build edges from dependency tracking
 	edges := make([]map[string]string, 0)
+	reports := s.store.Topology.Reports(ns)
+	for consumer, report := range reports {
+		for _, provider := range report.Providers {
+			edges = append(edges, map[string]string{
+				"source": consumer,
+				"target": provider,
+			})
+			if !nodeSet[consumer] {
+				nodes = append(nodes, map[string]interface{}{
+					"id":   consumer,
+					"name": consumer,
+				})
+				nodeSet[consumer] = true
+			}
+			if !nodeSet[provider] {
+				nodes = append(nodes, map[string]interface{}{
+					"id":   provider,
+					"name": provider,
+				})
+				nodeSet[provider] = true
+			}
+		}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for consumer, providers := range s.deps[ns] {
 		for provider := range providers {
 			edges = append(edges, map[string]string{
@@ -264,6 +315,102 @@ func (s *catalogService) recordDependencyNoLock(namespace, consumerService, prov
 		s.deps[namespace][consumerService] = make(map[string]bool)
 	}
 	s.deps[namespace][consumerService][providerService] = true
+}
+
+func (s *catalogService) replaceDependenciesNoLock(namespace, consumerService string, providers []string) {
+	if s.deps[namespace] == nil {
+		s.deps[namespace] = make(map[string]map[string]bool)
+	}
+	s.deps[namespace][consumerService] = make(map[string]bool, len(providers))
+	for _, provider := range providers {
+		if provider == "" || provider == consumerService {
+			continue
+		}
+		s.deps[namespace][consumerService][provider] = true
+	}
+}
+
+func (s *catalogService) ReportTopology(namespace, consumerService string, providers []string, checksum string) bool {
+	ns := s.namespaceKey(namespace)
+	changed := s.store.Topology.Report(ns, consumerService, providers, checksum)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.replaceDependenciesNoLock(ns, consumerService, providers)
+	return changed
+}
+
+func (s *catalogService) GetTopology(namespace string) *model.TopologyGraph {
+	ns := s.namespaceKey(namespace)
+	serviceNames := make(map[string]bool)
+	nodes := make([]model.TopologyNode, 0)
+
+	for _, summary := range s.store.Services.ListServicesNS(ns) {
+		serviceNames[summary.Name] = true
+	}
+	reports := s.store.Topology.Reports(ns)
+	for consumer, report := range reports {
+		serviceNames[consumer] = true
+		for _, provider := range report.Providers {
+			serviceNames[provider] = true
+		}
+	}
+
+	names := make([]string, 0, len(serviceNames))
+	for name := range serviceNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		instances := s.store.Services.GetServiceNS(ns, name)
+		topologyInstances := make([]model.TopologyInstance, 0, len(instances))
+		healthyCount := 0
+		for _, instance := range instances {
+			if instance.Status == model.HealthPassing {
+				healthyCount++
+			}
+			topologyInstances = append(topologyInstances, model.TopologyInstance{
+				ID:         instance.ID,
+				Host:       instance.Host,
+				Port:       instance.Port,
+				Status:     instance.Status,
+				Datacenter: instance.Datacenter,
+			})
+		}
+		nodes = append(nodes, model.TopologyNode{
+			ID:            name,
+			Name:          name,
+			Namespace:     ns,
+			InstanceCount: len(instances),
+			HealthyCount:  healthyCount,
+			Instances:     topologyInstances,
+		})
+	}
+
+	edges := make([]model.TopologyEdge, 0)
+	for consumer, report := range reports {
+		for _, provider := range report.Providers {
+			edges = append(edges, model.TopologyEdge{
+				Source:    consumer,
+				Target:    provider,
+				Checksum:  report.Checksum,
+				UpdatedAt: report.UpdatedAt,
+			})
+		}
+	}
+	sort.Slice(edges, func(i, j int) bool {
+		if edges[i].Source == edges[j].Source {
+			return edges[i].Target < edges[j].Target
+		}
+		return edges[i].Source < edges[j].Source
+	})
+
+	return &model.TopologyGraph{
+		Namespace: ns,
+		Nodes:     nodes,
+		Edges:     edges,
+	}
 }
 
 // Namespace management

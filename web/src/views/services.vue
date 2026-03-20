@@ -1,473 +1,504 @@
-﻿<script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Grid, List, RefreshRight, Search } from '@element-plus/icons-vue'
 import {
-  getDependencyGraph,
   getNamespaces,
-  getServiceInstances,
   getServices,
   getSubscribers,
-  type Instance,
+  getTopology,
   type Namespace,
   type ServiceSummary,
+  type TopologyGraph,
+  type TopologyNode,
 } from '../api/registry'
+import TopologyGraphCanvas from '../components/topology-graph.vue'
 import { useI18n } from '../utils/i18n'
-import { CircleCheck, Grid, List, Monitor, Search, Share, User } from '@element-plus/icons-vue'
 
-interface DependencyGraphResponse {
-  namespace: string
-  nodes: Array<{ id: string; name: string }>
-  edges: Array<{ source: string; target: string }>
-}
+type PanelMode = 'catalog' | 'topology'
+type CatalogMode = 'grid' | 'list'
+type HealthFilter = '' | 'healthy' | 'degraded'
 
-interface ServiceDependencyMeta {
-  providers: string[]
-  consumers: string[]
-}
-
-const { t } = useI18n()
+const { locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const services = ref<ServiceSummary[]>([])
+const isZh = computed(() => locale.value === 'zh')
+const text = (zh: string, en: string) => (isZh.value ? zh : en)
+
 const namespaces = ref<Namespace[]>([])
 const currentNamespace = ref((route.query.namespace as string) || 'default')
-const instancesByService = ref<Record<string, Instance[]>>({})
-const dependencyGraph = ref<DependencyGraphResponse>({ namespace: 'default', nodes: [], edges: [] })
-const dependencyMap = ref<Record<string, ServiceDependencyMeta>>({})
+const activePanel = ref<PanelMode>((route.query.view as PanelMode) || 'catalog')
+const catalogMode = ref<CatalogMode>('list')
+const healthFilter = ref<HealthFilter>('')
 const search = ref('')
-const healthFilter = ref<'healthy' | 'degraded' | ''>('')
-const loading = ref(true)
-const viewMode = ref<'grid' | 'list'>('list')
+const loading = ref(false)
+const currentPage = ref(1)
+const pageSize = ref(12)
 
-const subDialogVisible = ref(false)
-const subLoading = ref(false)
-const currentService = ref('')
-const subscribersList = ref<string[]>([])
+const services = ref<ServiceSummary[]>([])
+const topology = ref<TopologyGraph>({ namespace: 'default', nodes: [], edges: [] })
+const subscribersMap = ref<Record<string, string[]>>({})
+const selectedTopologyNode = ref('')
 
-const dependencyDrawerVisible = ref(false)
-const dependencyService = ref('')
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
-const filtered = computed(() => {
+const topologyNodeMap = computed<Record<string, TopologyNode>>(() =>
+  Object.fromEntries(topology.value.nodes.map((node) => [node.id, node])),
+)
+
+const topologyMeta = computed(() => {
+  const upstream: Record<string, string[]> = {}
+  const downstream: Record<string, string[]> = {}
+  for (const edge of topology.value.edges) {
+    if (!upstream[edge.source]) upstream[edge.source] = []
+    if (!downstream[edge.target]) downstream[edge.target] = []
+    upstream[edge.source]!.push(edge.target)
+    downstream[edge.target]!.push(edge.source)
+  }
+  Object.values(upstream).forEach((items) => items.sort())
+  Object.values(downstream).forEach((items) => items.sort())
+  return { upstream, downstream }
+})
+
+const filteredServices = computed(() => {
   const query = search.value.trim().toLowerCase()
   return services.value.filter((service) => {
-    const instances = instancesByService.value[service.name] || []
-    const deps = dependencyMap.value[service.name] || { providers: [], consumers: [] }
+    const topologyNode = topologyNodeMap.value[service.name]
+    const instances = topologyNode?.instances || []
     const matchesSearch =
       !query ||
       service.name.toLowerCase().includes(query) ||
-      instances.some((instance) => `${instance.host}:${instance.port}`.toLowerCase().includes(query)) ||
-      deps.providers.some((name) => name.toLowerCase().includes(query)) ||
-      deps.consumers.some((name) => name.toLowerCase().includes(query))
-
+      instances.some((instance) => `${instance.host}:${instance.port}`.toLowerCase().includes(query))
     const matchesHealth =
       !healthFilter.value ||
       (healthFilter.value === 'healthy'
-        ? service.healthy_count === service.instance_count
+        ? service.instance_count > 0 && service.healthy_count === service.instance_count
         : service.healthy_count < service.instance_count)
-
     return matchesSearch && matchesHealth
   })
 })
 
-const stats = computed(() => {
-  const dependencyCount = dependencyGraph.value.edges.length
-  const relatedCount = services.value.filter((service) => {
-    const meta = dependencyMap.value[service.name]
-    return meta && (meta.providers.length > 0 || meta.consumers.length > 0)
-  }).length
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredServices.value.length / pageSize.value)))
 
-  return {
-    serviceCount: services.value.length,
-    dependencyCount,
-    relatedCount,
-  }
+const pagedServices = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredServices.value.slice(start, start + pageSize.value)
 })
 
-const currentDependencyMeta = computed<ServiceDependencyMeta>(() => {
-  return dependencyMap.value[dependencyService.value] || { providers: [], consumers: [] }
-})
+const selectedNodeDetail = computed<TopologyNode | null>(() => topologyNodeMap.value[selectedTopologyNode.value] || null)
+const selectedUpstream = computed(() => topologyMeta.value.upstream[selectedTopologyNode.value] || [])
+const selectedDownstream = computed(() => topologyMeta.value.downstream[selectedTopologyNode.value] || [])
 
-function buildDependencyMap(serviceNames: string[], graph: DependencyGraphResponse) {
-  const serviceSet = new Set(serviceNames)
-  for (const name of graph.nodes.map((node) => node.id)) {
-    serviceSet.add(name)
-  }
-
-  const map: Record<string, ServiceDependencyMeta> = {}
-  for (const name of serviceSet) {
-    map[name] = { providers: [], consumers: [] }
-  }
-
-  for (const edge of graph.edges) {
-    const consumer = edge.source
-    const provider = edge.target
-
-    if (!map[consumer]) map[consumer] = { providers: [], consumers: [] }
-    if (!map[provider]) map[provider] = { providers: [], consumers: [] }
-
-    if (!map[consumer]!.providers.includes(provider)) {
-      map[consumer]!.providers.push(provider)
-    }
-    if (!map[provider]!.consumers.includes(consumer)) {
-      map[provider]!.consumers.push(consumer)
-    }
-  }
-
-  for (const name of Object.keys(map)) {
-    map[name]!.providers.sort()
-    map[name]!.consumers.sort()
-  }
-
-  dependencyMap.value = map
+function serviceHealthTone(service: ServiceSummary) {
+  if (service.instance_count === 0) return '#94a3b8'
+  if (service.healthy_count === service.instance_count) return '#16a34a'
+  if (service.healthy_count > 0) return '#d97706'
+  return '#dc2626'
 }
 
-function previewNames(names: string[]) {
-  if (names.length === 0) return t.value.common.none
-  return names.slice(0, 2).join(' / ')
+function serviceHealthText(service: ServiceSummary) {
+  if (service.instance_count === 0) return text('无实例', 'No instance')
+  if (service.healthy_count === service.instance_count) return text('健康', 'Healthy')
+  if (service.healthy_count > 0) return text('部分异常', 'Partial')
+  return text('严重异常', 'Critical')
 }
 
-function dependencyTotal(name: string) {
-  const meta = dependencyMap.value[name]
-  if (!meta) return 0
-  return meta.providers.length + meta.consumers.length
+function previewSubscriberCount(serviceName: string) {
+  return subscribersMap.value[serviceName]?.length || 0
 }
 
-function healthRate(service: ServiceSummary) {
-  if (service.instance_count === 0) return 0
-  return (service.healthy_count / service.instance_count) * 100
+function previewAddress(serviceName: string) {
+  const instances = topologyNodeMap.value[serviceName]?.instances || []
+  if (instances.length === 0) return '-'
+  const [first] = instances
+  if (!first) return '-'
+  return `${first.host}:${first.port}`
 }
 
-function barColor(rate: number) {
-  if (rate >= 80) return 'var(--accent-green)'
-  if (rate >= 50) return 'var(--accent-orange)'
-  return 'var(--accent-red)'
-}
-
-function dependencyBadgeType(count: number) {
-  if (count === 0) return 'info'
-  if (count < 3) return 'success'
-  return 'warning'
-}
-
-function openService(name: string) {
+function openService(serviceName: string) {
   router.push({
-    path: `/services/${encodeURIComponent(name)}`,
+    path: `/services/${encodeURIComponent(serviceName)}`,
     query: { namespace: currentNamespace.value },
   })
 }
 
-function openDependencies(name: string) {
-  dependencyService.value = name
-  dependencyDrawerVisible.value = true
+function openTopology(serviceName: string) {
+  selectedTopologyNode.value = serviceName
+  activePanel.value = 'topology'
+}
+
+function selectTopologyNode(nodeId: string) {
+  selectedTopologyNode.value = nodeId
 }
 
 async function fetchNamespaces() {
-  try {
-    const response = await getNamespaces()
-    namespaces.value = response.data || []
-    if (!namespaces.value.find((namespace) => namespace.name === currentNamespace.value) && namespaces.value.length > 0) {
-      currentNamespace.value = namespaces.value[0]!.name
-    }
-  } catch (error) {
-    console.error('fetch namespaces failed', error)
+  const response = await getNamespaces()
+  namespaces.value = response.data || []
+  if (!namespaces.value.find((item) => item.name === currentNamespace.value) && namespaces.value.length > 0) {
+    currentNamespace.value = namespaces.value[0]!.name
   }
 }
 
-async function fetchServices() {
+async function fetchWorkspace() {
   loading.value = true
   try {
-    const [servicesRes, graphRes] = await Promise.all([
+    const [servicesRes, topologyRes] = await Promise.all([
       getServices(currentNamespace.value),
-      getDependencyGraph(currentNamespace.value),
+      getTopology(currentNamespace.value),
     ])
-
     services.value = servicesRes.data || []
-    dependencyGraph.value = graphRes.data || { namespace: currentNamespace.value, nodes: [], edges: [] }
-    buildDependencyMap(
-      services.value.map((service) => service.name),
-      dependencyGraph.value,
-    )
+    topology.value = topologyRes.data || { namespace: currentNamespace.value, nodes: [], edges: [] }
 
-    const entries = await Promise.all(
+    const subscribersEntries = await Promise.all(
       services.value.map(async (service) => {
         try {
-          const detailRes = await getServiceInstances(service.name, currentNamespace.value)
-          return [service.name, detailRes.data || []] as const
+          const response = await getSubscribers(service.name, currentNamespace.value)
+          return [service.name, response.data || []] as const
         } catch {
           return [service.name, []] as const
         }
       }),
     )
-    instancesByService.value = Object.fromEntries(entries)
-  } catch (error) {
-    console.error('fetch services failed', error)
+    subscribersMap.value = Object.fromEntries(subscribersEntries)
+
+    if (!selectedTopologyNode.value || !topologyNodeMap.value[selectedTopologyNode.value]) {
+      selectedTopologyNode.value = topology.value.nodes[0]?.id || ''
+    }
   } finally {
     loading.value = false
   }
 }
 
-async function showSubscribers(name: string) {
-  currentService.value = name
-  subscribersList.value = []
-  subDialogVisible.value = true
-  subLoading.value = true
-  try {
-    const response = await getSubscribers(name, currentNamespace.value)
-    subscribersList.value = response.data || []
-  } catch (error) {
-    console.error('failed to fetch subscribers', error)
-  } finally {
-    subLoading.value = false
-  }
+function restartRefreshLoop() {
+  if (refreshTimer) clearInterval(refreshTimer)
+  refreshTimer = setInterval(() => {
+    fetchWorkspace().catch((error) => console.error('refresh workspace failed', error))
+  }, 5000)
 }
 
-watch(currentNamespace, async (namespace) => {
-  await router.replace({ query: { ...route.query, namespace } })
-  await fetchServices()
+watch([currentNamespace, activePanel], async () => {
+  currentPage.value = 1
+  await router.replace({
+    query: {
+      ...route.query,
+      namespace: currentNamespace.value,
+      view: activePanel.value,
+    },
+  })
+  await fetchWorkspace()
+})
+
+watch([search, healthFilter], () => {
+  currentPage.value = 1
+})
+
+watch(pageSize, () => {
+  currentPage.value = 1
+})
+
+watch(filteredServices, () => {
+  if (currentPage.value > totalPages.value) currentPage.value = totalPages.value
 })
 
 onMounted(async () => {
   await fetchNamespaces()
-  await fetchServices()
+  await fetchWorkspace()
+  restartRefreshLoop()
+})
+
+onBeforeUnmount(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
 
 <template>
-  <div class="services-page">
-    <section class="services-summary-row">
-      <div class="summary-chip summary-chip-namespace">
-        <span>{{ t.services.namespace }}</span>
-        <strong>{{ currentNamespace }}</strong>
-      </div>
-      <div class="summary-chip">
-        <span>{{ t.nav.services }}</span>
-        <strong>{{ stats.serviceCount }}</strong>
-      </div>
-      <div class="summary-chip">
-        <span>{{ t.services.dependency }}</span>
-        <strong>{{ stats.dependencyCount }}</strong>
-      </div>
-      <div class="summary-chip">
-        <span>{{ t.services.viewDependencies }}</span>
-        <strong>{{ stats.relatedCount }}</strong>
-      </div>
-    </section>
+  <div class="services-page-shell">
+    <section class="toolbar-row">
+      <div class="toolbar-left">
+        <el-select v-model="currentNamespace" size="large" class="toolbar-namespace">
+          <el-option
+            v-for="namespace in namespaces"
+            :key="namespace.name"
+            :label="namespace.name"
+            :value="namespace.name"
+          />
+        </el-select>
 
-    <section class="services-controls-row">
-      <el-select v-model="currentNamespace" size="large" class="toolbar-namespace">
-        <el-option v-for="namespace in namespaces" :key="namespace.name" :label="namespace.name" :value="namespace.name" />
-      </el-select>
+        <el-input
+          v-model="search"
+          size="large"
+          clearable
+          :prefix-icon="Search"
+          :placeholder="text('搜索服务或实例 IP:Port', 'Search by service or instance IP:Port')"
+          class="toolbar-search"
+        />
 
-      <el-input
-        v-model="search"
-        :placeholder="t.services.searchPlaceholder"
-        size="large"
-        clearable
-        :prefix-icon="Search"
-        class="toolbar-search"
-      />
-
-      <el-select
-        v-model="healthFilter"
-        size="large"
-        clearable
-        class="toolbar-health"
-        :placeholder="t.services.healthFilter"
-      >
-        <el-option :label="t.services.healthyOption" value="healthy" />
-        <el-option :label="t.services.degradedOption" value="degraded" />
-      </el-select>
-
-      <div class="view-switch-minimal">
-        <button type="button" class="switch-minimal-btn" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'" :title="t.settings.listView">
-          <el-icon><List /></el-icon>
-        </button>
-        <button type="button" class="switch-minimal-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'" :title="t.settings.gridView">
-          <el-icon><Grid /></el-icon>
-        </button>
+        <el-select v-model="healthFilter" size="large" clearable class="toolbar-health" :placeholder="text('健康状态', 'Health')">
+          <el-option :label="text('全部', 'All')" value="" />
+          <el-option :label="text('健康', 'Healthy')" value="healthy" />
+          <el-option :label="text('异常', 'Degraded')" value="degraded" />
+        </el-select>
       </div>
-    </section>
 
-    <section v-loading="loading">
-      <div v-if="!loading && filtered.length === 0" class="empty-panel services-empty-panel">
-        <div class="empty-state">
-          <el-icon><Grid /></el-icon>
-          <p>{{ t.services.noServices }}</p>
+      <div class="toolbar-right">
+        <div class="view-switch">
+          <button type="button" :class="{ active: activePanel === 'catalog' }" @click="activePanel = 'catalog'">
+            {{ text('服务列表', 'Service List') }}
+          </button>
+          <button type="button" :class="{ active: activePanel === 'topology' }" @click="activePanel = 'topology'">
+            {{ text('拓扑图', 'Topology') }}
+          </button>
         </div>
+
+        <div v-if="activePanel === 'catalog'" class="mode-switch">
+          <button type="button" :class="{ active: catalogMode === 'list' }" :title="text('列表视图', 'List View')" @click="catalogMode = 'list'">
+            <el-icon><List /></el-icon>
+          </button>
+          <button type="button" :class="{ active: catalogMode === 'grid' }" :title="text('卡片视图', 'Card View')" @click="catalogMode = 'grid'">
+            <el-icon><Grid /></el-icon>
+          </button>
+        </div>
+
+        <el-button type="primary" :icon="RefreshRight" class="refresh-button" @click="fetchWorkspace">
+          {{ text('刷新', 'Refresh') }}
+        </el-button>
+      </div>
+    </section>
+
+    <section v-if="activePanel === 'catalog'" class="content-stage" v-loading="loading">
+      <div v-if="filteredServices.length === 0 && !loading" class="empty-stage">
+        <strong>{{ text('当前命名空间暂无服务', 'No services in current namespace') }}</strong>
+        <p>{{ text('切换命名空间或等待实例注册后，这里会自动更新。', 'Switch namespace or wait for services to register.') }}</p>
       </div>
 
-      <div v-else-if="viewMode === 'list'" class="services-table-wrap">
-        <el-table :data="filtered" style="width: 100%">
-          <el-table-column prop="name" :label="t.services.service" min-width="200">
-            <template #default="{ row }">
-              <div class="service-name-cell" @click="openService(row.name)">
-                <strong>{{ row.name }}</strong>
-                <span>{{ currentNamespace }}</span>
+      <template v-else>
+        <div class="content-scroll">
+          <div v-if="catalogMode === 'grid'" class="card-grid">
+            <article v-for="service in pagedServices" :key="service.name" class="service-card">
+              <div class="card-head">
+                <div class="service-title">
+                  <strong @click="openService(service.name)">{{ service.name }}</strong>
+                  <span>{{ currentNamespace }}</span>
+                </div>
+                <span class="status-dot" :style="{ backgroundColor: serviceHealthTone(service) }"></span>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column prop="instance_count" :label="t.services.instances" min-width="88" />
-          <el-table-column prop="healthy_count" :label="t.services.healthy" min-width="88">
-            <template #default="{ row }">
-              <span :style="{ color: barColor(healthRate(row)) }">{{ row.healthy_count }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="subscriber_count" :label="t.services.subscribers" min-width="90">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="showSubscribers(row.name)">{{ row.subscriber_count || 0 }}</el-button>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.services.upstream" min-width="180">
-            <template #default="{ row }">
-              <span class="dependency-inline-text">{{ previewNames(dependencyMap[row.name]?.providers || []) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.services.downstream" min-width="180">
-            <template #default="{ row }">
-              <span class="dependency-inline-text">{{ previewNames(dependencyMap[row.name]?.consumers || []) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.services.healthRate" min-width="140">
-            <template #default="{ row }">
-              <div class="health-inline">
-                <span>{{ healthRate(row).toFixed(0) }}%</span>
-                <div class="health-inline-bar">
-                  <div class="fill" :style="{ width: `${healthRate(row)}%`, background: barColor(healthRate(row)) }"></div>
+
+              <div class="service-address">{{ previewAddress(service.name) }}</div>
+
+              <div class="card-meta">
+                <div>
+                  <span>{{ text('实例', 'Instances') }}</span>
+                  <strong>{{ service.instance_count }}</strong>
+                </div>
+                <div>
+                  <span>{{ text('健康', 'Healthy') }}</span>
+                  <strong :style="{ color: serviceHealthTone(service) }">{{ service.healthy_count }}</strong>
+                </div>
+                <div>
+                  <span>{{ text('订阅方', 'Subscribers') }}</span>
+                  <strong>{{ previewSubscriberCount(service.name) }}</strong>
                 </div>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.common.actions" width="120" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="openDependencies(row.name)">{{ t.services.viewDependencies }}</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
 
-      <div v-else class="service-grid services-card-grid-dense">
-        <article v-for="(service, index) in filtered" :key="service.name" class="service-card dense-card" :style="{ animationDelay: `${index * 0.03}s` }">
-          <div class="dense-card-head">
-            <div class="dense-title-block">
-              <div class="svc-name" @click="openService(service.name)">{{ service.name }}</div>
-              <span class="dense-namespace">{{ currentNamespace }}</span>
-            </div>
-            <el-tag size="small" effect="plain" :type="dependencyBadgeType(dependencyTotal(service.name))">
-              {{ dependencyTotal(service.name) }}
-            </el-tag>
+              <div class="card-actions">
+                <span class="health-text" :style="{ color: serviceHealthTone(service) }">{{ serviceHealthText(service) }}</span>
+                <div class="inline-actions">
+                  <button type="button" @click="openTopology(service.name)">{{ text('拓扑', 'Topology') }}</button>
+                  <button type="button" @click="openService(service.name)">{{ text('详情', 'Detail') }}</button>
+                </div>
+              </div>
+            </article>
           </div>
 
-          <div class="dense-stats-row">
-            <span><el-icon><Monitor /></el-icon>{{ service.instance_count }}</span>
-            <span><el-icon><CircleCheck /></el-icon>{{ service.healthy_count }}</span>
-            <button type="button" class="dense-link" @click="showSubscribers(service.name)"><el-icon><User /></el-icon>{{ service.subscriber_count || 0 }}</button>
-          </div>
+          <div v-else class="table-wrap">
+            <el-table :data="pagedServices" height="100%" style="width: 100%">
+              <el-table-column :label="text('服务', 'Service')" min-width="260">
+                <template #default="{ row }">
+                  <div class="service-cell" @click="openService(row.name)">
+                    <strong>{{ row.name }}</strong>
+                    <span>{{ currentNamespace }}</span>
+                  </div>
+                </template>
+              </el-table-column>
 
-          <div class="dense-dependency-row">
-            <div>
-              <label>{{ t.services.upstream }}</label>
-              <strong>{{ previewNames(dependencyMap[service.name]?.providers || []) }}</strong>
-            </div>
-            <div>
-              <label>{{ t.services.downstream }}</label>
-              <strong>{{ previewNames(dependencyMap[service.name]?.consumers || []) }}</strong>
-            </div>
-          </div>
+              <el-table-column :label="text('主实例地址', 'Primary Instance')" min-width="180">
+                <template #default="{ row }">
+                  <span class="table-address">{{ previewAddress(row.name) }}</span>
+                </template>
+              </el-table-column>
 
-          <div class="dense-card-foot">
-            <span class="dense-health">{{ healthRate(service).toFixed(0) }}%</span>
-            <div class="health-inline-bar dense-health-bar">
-              <div class="fill" :style="{ width: `${healthRate(service)}%`, background: barColor(healthRate(service)) }"></div>
-            </div>
-            <el-button link type="primary" @click="openDependencies(service.name)">
-              <el-icon><Share /></el-icon>
-            </el-button>
-          </div>
-        </article>
-      </div>
-    </section>
+              <el-table-column prop="instance_count" :label="text('实例数', 'Instances')" width="90" />
 
-    <el-dialog v-model="subDialogVisible" :title="t.services.subscribersTitle.replace('{service}', currentService)" width="520px" append-to-body>
-      <div v-loading="subLoading" class="dialog-body">
-        <div v-if="subscribersList.length === 0 && !subLoading" class="dialog-empty">{{ t.services.noSubscribers }}</div>
-        <div v-else class="subscribers-list">
-          <div v-for="subscriber in subscribersList" :key="subscriber" class="subscriber-item">
-            <el-icon><User /></el-icon>
-            <span>{{ subscriber }}</span>
+              <el-table-column :label="text('健康数', 'Healthy')" width="90">
+                <template #default="{ row }">
+                  <span :style="{ color: serviceHealthTone(row), fontWeight: 700 }">{{ row.healthy_count }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column :label="text('订阅方', 'Subscribers')" width="100">
+                <template #default="{ row }">{{ previewSubscriberCount(row.name) }}</template>
+              </el-table-column>
+
+              <el-table-column :label="text('状态', 'Status')" width="110">
+                <template #default="{ row }">
+                  <span :style="{ color: serviceHealthTone(row), fontWeight: 600 }">{{ serviceHealthText(row) }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column :label="text('操作', 'Actions')" width="150" fixed="right">
+                <template #default="{ row }">
+                  <div class="inline-actions compact">
+                    <button type="button" @click="openTopology(row.name)">{{ text('拓扑', 'Topology') }}</button>
+                    <button type="button" @click="openService(row.name)">{{ text('详情', 'Detail') }}</button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </div>
-      </div>
-    </el-dialog>
 
-    <el-drawer v-model="dependencyDrawerVisible" :title="`${dependencyService} · ${t.services.dependencyTitle}`" size="420px" append-to-body>
-      <div class="dependency-drawer">
-        <section class="drawer-section">
-          <div class="drawer-section-head">
-            <h4>{{ t.services.upstream }}</h4>
-            <el-tag size="small" effect="plain">{{ currentDependencyMeta.providers.length }}</el-tag>
+        <footer class="stage-footer">
+          <div class="footer-info">
+            <span>{{ filteredServices.length }} {{ text('条记录', 'records') }}</span>
+            <span>{{ text('第', 'Page ') }}{{ currentPage }} / {{ totalPages }}{{ isZh ? ' 页' : '' }}</span>
           </div>
-          <div v-if="currentDependencyMeta.providers.length" class="drawer-tags">
-            <el-tag v-for="provider in currentDependencyMeta.providers" :key="provider" effect="plain">{{ provider }}</el-tag>
-          </div>
-          <el-empty v-else :description="t.services.noDependencies" :image-size="70" />
-        </section>
 
-        <section class="drawer-section">
-          <div class="drawer-section-head">
-            <h4>{{ t.services.downstream }}</h4>
-            <el-tag size="small" type="success" effect="plain">{{ currentDependencyMeta.consumers.length }}</el-tag>
-          </div>
-          <div v-if="currentDependencyMeta.consumers.length" class="drawer-tags">
-            <el-tag v-for="consumer in currentDependencyMeta.consumers" :key="consumer" type="success" effect="plain">{{ consumer }}</el-tag>
-          </div>
-          <el-empty v-else :description="t.services.noDependencies" :image-size="70" />
-        </section>
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[12, 20, 50]"
+            :total="filteredServices.length"
+            layout="total, sizes, prev, pager, next"
+            background
+          />
+        </footer>
+      </template>
+    </section>
+
+    <section v-else class="topology-stage" v-loading="loading">
+      <div class="topology-canvas-shell">
+        <TopologyGraphCanvas
+          :graph="topology"
+          :loading="loading"
+          :selected-node="selectedTopologyNode"
+          @select="selectTopologyNode"
+        />
       </div>
-    </el-drawer>
+
+      <aside class="topology-side">
+        <div class="side-head">
+          <span>{{ text('当前服务', 'Selected Service') }}</span>
+          <strong>{{ selectedNodeDetail?.name || text('未选择', 'None') }}</strong>
+        </div>
+
+        <div v-if="selectedNodeDetail" class="side-scroll">
+          <div class="side-summary">
+            <div>
+              <span>{{ text('命名空间', 'Namespace') }}</span>
+              <strong>{{ selectedNodeDetail.namespace }}</strong>
+            </div>
+            <div>
+              <span>{{ text('实例数', 'Instances') }}</span>
+              <strong>{{ selectedNodeDetail.instance_count }}</strong>
+            </div>
+            <div>
+              <span>{{ text('健康实例', 'Healthy') }}</span>
+              <strong>{{ selectedNodeDetail.healthy_count }}</strong>
+            </div>
+          </div>
+
+          <section class="side-section">
+            <header>
+              <strong>{{ text('实例', 'Instances') }}</strong>
+              <span>{{ selectedNodeDetail.instances.length }}</span>
+            </header>
+
+            <div v-if="selectedNodeDetail.instances.length" class="instance-list">
+              <article v-for="instance in selectedNodeDetail.instances" :key="instance.id" class="instance-item">
+                <div class="instance-text">
+                  <strong>{{ instance.host }}:{{ instance.port }}</strong>
+                  <span>{{ instance.id }}</span>
+                </div>
+                <em :style="{ color: instance.status === 'passing' ? '#16a34a' : '#dc2626' }">
+                  {{ instance.status === 'passing' ? text('健康', 'Healthy') : text('异常', 'Critical') }}
+                </em>
+              </article>
+            </div>
+
+            <p v-else class="empty-line">{{ text('当前没有实例', 'No live instances') }}</p>
+          </section>
+
+          <section class="side-section">
+            <header>
+              <strong>{{ text('上游依赖', 'Upstream') }}</strong>
+              <span>{{ selectedUpstream.length }}</span>
+            </header>
+            <div v-if="selectedUpstream.length" class="tag-list">
+              <span v-for="serviceName in selectedUpstream" :key="serviceName">{{ serviceName }}</span>
+            </div>
+            <p v-else class="empty-line">{{ text('暂无上游依赖', 'No upstream services') }}</p>
+          </section>
+
+          <section class="side-section">
+            <header>
+              <strong>{{ text('下游服务', 'Downstream') }}</strong>
+              <span>{{ selectedDownstream.length }}</span>
+            </header>
+            <div v-if="selectedDownstream.length" class="tag-list">
+              <span v-for="serviceName in selectedDownstream" :key="serviceName">{{ serviceName }}</span>
+            </div>
+            <p v-else class="empty-line">{{ text('暂无下游服务', 'No downstream services') }}</p>
+          </section>
+
+          <el-button class="detail-button" @click="openService(selectedNodeDetail.name)">
+            {{ text('查看详情', 'Open detail') }}
+          </el-button>
+        </div>
+
+        <div v-else class="empty-stage side-empty">
+          <strong>{{ text('未选择服务', 'No service selected') }}</strong>
+          <p>{{ text('点击拓扑图节点查看详情。', 'Select a node in topology graph.') }}</p>
+        </div>
+      </aside>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.services-page {
+.services-page-shell {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  height: calc(100vh - var(--header-height) - 48px);
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
 }
 
-.services-summary-row {
+.toolbar-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 0;
+  flex-shrink: 0;
 }
 
-.summary-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 34px;
-  padding: 0 12px;
-  border-left: 2px solid rgba(15, 23, 42, 0.12);
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.summary-chip strong {
-  color: var(--text-primary);
-  font-size: 18px;
-  line-height: 1;
-}
-
-.summary-chip-namespace {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.services-controls-row {
+.toolbar-left,
+.toolbar-right {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.toolbar-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbar-right {
+  flex-shrink: 0;
 }
 
 .toolbar-namespace {
@@ -485,272 +516,477 @@ onMounted(async () => {
 :deep(.toolbar-namespace .el-select__wrapper),
 :deep(.toolbar-health .el-select__wrapper),
 :deep(.toolbar-search .el-input__wrapper) {
+  min-height: 42px;
+  border-radius: 0;
+  background: #fff !important;
   border: 0 !important;
-  border-radius: 6px !important;
-  background: rgba(15, 23, 42, 0.04) !important;
-  box-shadow: none !important;
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.12) !important;
 }
 
-.view-switch-minimal {
+.view-switch,
+.mode-switch {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
+  background: #fff;
 }
 
-.switch-minimal-btn {
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.view-switch button,
+.mode-switch button,
+.inline-actions button {
   border: 0;
-  border-radius: 6px;
   background: transparent;
-  color: var(--text-secondary);
+  color: #64748b;
   cursor: pointer;
 }
 
-.switch-minimal-btn:hover {
-  background: rgba(15, 23, 42, 0.05);
-  color: var(--text-primary);
-}
-
-.switch-minimal-btn.active {
-  background: var(--accent-blue);
-  color: white;
-}
-
-.services-empty-panel {
-  min-height: 180px;
-}
-
-.services-table-wrap {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
-  overflow: hidden;
-}
-
-.service-name-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  cursor: pointer;
-}
-
-.service-name-cell strong,
-.svc-name {
-  font-size: 16px;
-  color: var(--text-primary);
-}
-
-.service-name-cell span {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.service-name-cell:hover strong,
-.svc-name:hover,
-.dense-link:hover {
-  color: var(--accent-blue);
-}
-
-.dependency-inline-text {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.health-inline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.health-inline-bar {
-  flex: 1;
-  height: 4px;
-  background: rgba(15, 23, 42, 0.08);
-  overflow: hidden;
-}
-
-.health-inline-bar .fill {
-  height: 100%;
-}
-
-.services-card-grid-dense {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.dense-card {
-  min-height: 164px;
-  padding: 12px;
-  border-radius: 8px;
-  cursor: default;
-}
-
-.dense-card-head,
-.dense-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.dense-title-block {
-  min-width: 0;
-}
-
-.svc-name {
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-.dense-namespace {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.dense-stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.dense-stats-row span,
-.dense-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 8px;
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.dense-link {
-  border: 0;
-  cursor: pointer;
-}
-
-.dense-dependency-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.dense-dependency-row > div {
-  min-width: 0;
-  padding: 8px;
-  background: rgba(15, 23, 42, 0.03);
-}
-
-.dense-dependency-row label {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.dense-dependency-row strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dense-card-foot {
-  margin-top: auto;
-}
-
-.dense-health {
-  min-width: 44px;
-  color: var(--accent-green);
+.view-switch button {
+  min-width: 96px;
+  height: 40px;
+  padding: 0 14px;
   font-weight: 700;
 }
 
-.dense-health-bar {
+.mode-switch button {
+  width: 36px;
+  height: 36px;
+}
+
+.view-switch button.active,
+.mode-switch button.active {
+  color: #2563eb;
+}
+
+.refresh-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 0;
+}
+
+.content-stage {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
 }
 
-.dialog-body {
-  min-height: 120px;
+.content-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.dialog-empty {
-  margin-top: 42px;
-  text-align: center;
-  color: var(--text-muted);
+.table-wrap,
+.card-grid {
+  height: 100%;
+  min-height: 0;
 }
 
-.subscribers-list {
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+  overflow: auto;
+}
+
+.service-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
-.subscriber-item {
+.card-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px;
-  background: var(--bg-glass);
-  border: 1px solid var(--border-color);
 }
 
-.dependency-drawer {
+.service-title {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 4px;
 }
 
-.drawer-section {
-  padding: 18px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
+.service-title strong {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
-.drawer-section-head {
+.service-title span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.service-address,
+.table-address {
+  color: #2563eb;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.card-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.card-meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-meta span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.card-meta strong {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.card-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  gap: 12px;
 }
 
-.drawer-section-head h4 {
-  font-size: 16px;
+.health-text {
+  font-weight: 700;
 }
 
-.drawer-tags {
+.inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inline-actions.compact {
+  gap: 10px;
+}
+
+.inline-actions button {
+  padding: 0;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.table-wrap {
+  overflow: hidden;
+}
+
+:deep(.table-wrap .el-table) {
+  height: 100%;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(37, 99, 235, 0.04);
+  --el-table-border-color: rgba(15, 23, 42, 0.08);
+}
+
+:deep(.table-wrap .el-table__inner-wrapper::before) {
+  display: none;
+}
+
+:deep(.table-wrap .el-table th.el-table__cell) {
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+:deep(.table-wrap .el-table td.el-table__cell) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.service-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.service-cell strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.service-cell span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.stage-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 0;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.empty-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 0;
+  color: #64748b;
+}
+
+.empty-stage strong {
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.topology-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.topology-canvas-shell,
+.topology-side {
+  background: #fff;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.topology-canvas-shell :deep(.topology-board) {
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+  border: 0;
+  border-radius: 0;
+}
+
+.topology-canvas-shell :deep(.graph-canvas) {
+  height: 100% !important;
+  min-height: 0;
+}
+
+.topology-canvas-shell :deep(.board-empty) {
+  height: 100% !important;
+  min-height: 0;
+}
+
+.topology-canvas-shell :deep(.board-toolbar) {
+  top: 12px;
+  left: 12px;
+  box-shadow: none;
+}
+
+.topology-canvas-shell :deep(.board-toolbar button) {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.topology-side {
+  display: flex;
+  flex-direction: column;
+}
+
+.side-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.side-head span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.side-head strong {
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.side-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 12px;
+}
+
+.side-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.side-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-summary span,
+.side-section header span,
+.empty-line {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.side-summary strong {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.side-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side-section header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.side-section header strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.instance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.instance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.instance-text {
+  min-width: 0;
+}
+
+.instance-text strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.instance-text span {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.instance-item em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tag-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-@media (max-width: 980px) {
-  .services-controls-row {
-    flex-wrap: wrap;
+.tag-list span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.detail-button {
+  align-self: flex-start;
+  min-height: 40px;
+  border-radius: 0;
+}
+
+@media (max-width: 1180px) {
+  .toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+  }
+
+  .toolbar-right {
+    justify-content: space-between;
+  }
+
+  .topology-stage {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .toolbar-left,
+  .stage-footer {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .toolbar-namespace,
   .toolbar-health,
-  .toolbar-search {
+  .toolbar-search,
+  .view-switch,
+  .mode-switch {
     width: 100%;
   }
 
-  .services-card-grid-dense,
-  .dense-stats-row,
-  .dense-dependency-row {
+  .view-switch button,
+  .mode-switch button {
+    flex: 1;
+  }
+
+  .card-grid,
+  .side-summary {
     grid-template-columns: 1fr;
   }
 }

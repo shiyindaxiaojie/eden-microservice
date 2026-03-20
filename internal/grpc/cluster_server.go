@@ -25,6 +25,7 @@ type ClusterServer struct {
 type syncDiscoveryPayload struct {
 	ServicesByNamespace map[string]map[string]map[string]*model.Instance `json:"services_by_namespace"`
 	Namespaces          []*model.Namespace                               `json:"namespaces"`
+	TopologyReports     map[string]map[string]*model.TopologyReport      `json:"topology_reports"`
 }
 
 // NewClusterServer creates a new gRPC cluster server.
@@ -154,6 +155,7 @@ func (s *ClusterServer) SyncDiscovery(ctx context.Context, req *pb.SyncDiscovery
 	payload := syncDiscoveryPayload{
 		ServicesByNamespace: s.registry.Services.GetAllNS(),
 		Namespaces:          s.registry.Namespaces.List(),
+		TopologyReports:     s.registry.Topology.Snapshot(),
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {

@@ -1,0 +1,12 @@
+{
+  "default": {
+    "order-center": {
+      "consumer_service": "order-center",
+      "providers": [
+        "user-center"
+      ],
+      "checksum": "33845311b6f4a251c4779409dfb2bc9cd1c02540460e4faa03b272799e5b5a20",
+      "updated_at": "2026-03-20T10:36:00+08:00"
+    }
+  }
+}
