@@ -1,37 +1,69 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Edit, Lock, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Edit, Grid, List as ListIcon, Lock, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import api from '../api/index'
 import { useI18n } from '../utils/i18n'
 import { sha256 } from '../utils/crypto'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import en from 'element-plus/es/locale/lang/en'
 
 const { t, locale } = useI18n()
 const users = ref<any[]>([])
 const loading = ref(false)
 const showDialog = ref(false)
 const isEdit = ref(false)
-const search = ref('')
-const roleFilter = ref('')
+const searchUser = ref('')
+const searchRole = ref('')
+const statusFilter = ref('all')
+const currentPage = ref(1)
+const pageSize = ref(12)
+const viewMode = ref<'list' | 'grid'>('list')
+
+const userStats = computed(() => ({
+  total: users.value.length,
+  admin: users.value.filter(u => u.role === 'admin').length,
+  normal: users.value.filter(u => u.role !== 'admin').length
+}))
+
 const form = ref({ username: '', password: '', role: 'viewer', nickname: '', remark: '' })
 
 const filteredUsers = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return users.value.filter((user) => {
-    const matchesSearch =
-      !query ||
-      user.username?.toLowerCase().includes(query) ||
-      user.nickname?.toLowerCase().includes(query) ||
-      user.remark?.toLowerCase().includes(query)
-    const matchesRole = !roleFilter.value || user.role === roleFilter.value
-    return matchesSearch && matchesRole
-  })
+  const qUser = searchUser.value.trim().toLowerCase()
+  const qRole = searchRole.value.trim().toLowerCase()
+  let list = users.value
+
+  if (qUser) {
+    list = list.filter(u => 
+      u.username?.toLowerCase().includes(qUser) || 
+      u.nickname?.toLowerCase().includes(qUser)
+    )
+  }
+  if (qRole) {
+    list = list.filter(u => u.role === qRole)
+  }
+  if (statusFilter.value !== 'all') {
+    list = list.filter(u => u.status === statusFilter.value)
+  }
+
+  return list
 })
+
+const pagedUsers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredUsers.value.slice(start, start + pageSize.value)
+})
+
+function resetFilters() {
+  searchUser.value = ''
+  searchRole.value = ''
+  statusFilter.value = 'all'
+  fetchUsers()
+}
 
 
 const builtInLabel = computed(() => (locale.value === 'zh' ? '内置' : 'Built-in'))
 const userHint = computed(() => (locale.value === 'zh' ? '统一管理控制台账号、角色和备注信息。' : 'Manage console users, roles, and remarks in one place.'))
-const searchPlaceholder = computed(() => (locale.value === 'zh' ? '搜索用户名、昵称或备注' : 'Search username, nickname, or remark'))
 const usernameRequired = computed(() => (locale.value === 'zh' ? '用户名不能为空' : 'Username is required'))
 const passwordRequired = computed(() => (locale.value === 'zh' ? '新建用户时必须填写密码' : 'Password is required for new users'))
 const saveFailed = computed(() => (locale.value === 'zh' ? '保存失败' : 'Failed to save user'))
@@ -121,24 +153,77 @@ onMounted(fetchUsers)
     <div class="svc-toolbar">
       <div class="toolbar-row">
         <div class="toolbar-group">
-          <el-input
-            v-model="search"
-            :prefix-icon="Search"
-            :placeholder="searchPlaceholder"
-            clearable
-            class="search-input"
-            style="width: 280px;"
-          />
-          <el-select v-model="roleFilter" clearable class="pill-select" :placeholder="t.rbac.role" style="width: 140px;">
-            <el-option value="admin" :label="t.rbac.admin" />
-            <el-option value="developer" :label="t.rbac.developer" />
-            <el-option value="viewer" :label="t.rbac.viewer" />
-          </el-select>
+          <div class="field-item">
+            <span class="field-label">{{ locale === 'zh' ? '用户名称' : 'Username' }}</span>
+            <el-input
+              v-model="searchUser"
+              :prefix-icon="Search"
+              :placeholder="locale === 'zh' ? '输入用户名' : 'Username'"
+              clearable
+              class="search-input"
+              style="width: 160px;"
+            />
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <div class="field-item">
+            <span class="field-label">{{ locale === 'zh' ? '角色' : 'Role' }}</span>
+            <el-select v-model="searchRole" clearable class="pill-select" :placeholder="t.rbac.role" style="width: 120px;">
+              <el-option value="admin" :label="t.rbac.admin" />
+              <el-option value="developer" :label="t.rbac.developer" />
+              <el-option value="viewer" :label="t.rbac.viewer" />
+            </el-select>
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <div class="field-item">
+            <span class="field-label">{{ locale === 'zh' ? '状态' : 'Status' }}</span>
+            <el-select v-model="statusFilter" class="pill-select" style="width: 100px;">
+              <el-option value="all" :label="t.common.all || '全部'" />
+              <el-option value="active" :label="locale === 'zh' ? '正常' : 'Active'" />
+              <el-option value="frozen" :label="locale === 'zh' ? '冻结' : 'Frozen'" />
+            </el-select>
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <button
+            type="button"
+            class="refresh-btn"
+            :title="t.common.refresh"
+            @click="resetFilters()"
+          >
+            <el-icon><Refresh /></el-icon>
+          </button>
         </div>
         
         <div class="toolbar-group right-align">
-          <el-button :icon="Refresh" class="pill-btn" @click="fetchUsers">{{ t.common.refresh }}</el-button>
+          <div class="pill-group">
+            <button type="button" :class="{ active: searchRole === '' }" @click="searchRole = ''">
+              {{ t.common.all || '全部' }}
+              <span class="pill-count">{{ userStats.total }}</span>
+            </button>
+            <button type="button" :class="{ active: searchRole === 'admin' }" @click="searchRole = 'admin'">
+              {{ t.rbac.admin }}
+              <span class="pill-count">{{ userStats.admin }}</span>
+            </button>
+          </div>
+
           <div class="toolbar-sep"></div>
+
+          <div class="pill-group icon-pills">
+            <button type="button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
+              <el-icon><ListIcon /></el-icon>
+            </button>
+            <button type="button" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
+              <el-icon><Grid /></el-icon>
+            </button>
+          </div>
+
+          <div class="toolbar-sep"></div>
+
           <el-button type="primary" class="add-btn" :icon="Plus" @click="handleShowAdd">
             {{ t.rbac.addUser }}
           </el-button>
@@ -156,8 +241,9 @@ onMounted(fetchUsers)
       </div>
 
       <template v-else>
-        <div class="table-wrap">
-          <el-table :data="filteredUsers" height="100%" style="width: 100%; font-size: 14px;">
+        <div v-if="viewMode === 'list'" class="table-wrap">
+          <el-table :data="pagedUsers" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table-column type="index" label="#" width="60" align="center" />
             <el-table-column :label="t.rbac.username" min-width="200">
               <template #default="{ row }">
                 <div class="user-cell">
@@ -195,6 +281,44 @@ onMounted(fetchUsers)
             </el-table-column>
           </el-table>
         </div>
+
+        <div v-else class="user-grid">
+          <article v-for="user in pagedUsers" :key="user.username" class="user-card">
+            <div class="card-glow" :style="{ background: user.role === 'admin' ? 'var(--accent-red)' : 'var(--accent-blue)' }" />
+            <div class="user-card-head">
+              <div class="user-avatar text">{{ user.username?.slice(0, 1)?.toUpperCase() }}</div>
+              <div class="user-card-info">
+                <h3 class="user-card-name">{{ user.username }}</h3>
+                <span class="user-card-sub">{{ user.nickname || t.common.none }}</span>
+              </div>
+              <el-tag :type="roleTagType(user.role)" size="small" effect="dark">{{ roleLabel(user.role) }}</el-tag>
+            </div>
+            <div class="user-card-body">
+               <p class="remark-line">{{ user.remark || '-' }}</p>
+            </div>
+            <div class="user-card-foot">
+               <div class="footer-spacer"></div>
+               <div class="card-actions">
+                  <el-button type="primary" link :icon="Edit" @click="handleShowEdit(user)" />
+                  <el-button v-if="!user.is_builtin" type="danger" link :icon="Delete" @click="deleteUser(user.username)" />
+               </div>
+            </div>
+          </article>
+        </div>
+
+        <footer class="svc-footer">
+          <span class="footer-info">{{ filteredUsers.length }} {{ locale === 'zh' ? '条' : 'records' }}</span>
+          <el-config-provider :locale="locale === 'zh' ? zhCn : en">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[12, 20, 50]"
+              :total="filteredUsers.length"
+              layout="sizes, prev, pager, next"
+              background
+            />
+          </el-config-provider>
+        </footer>
       </template>
     </section>
 
@@ -273,19 +397,106 @@ onMounted(fetchUsers)
   margin-left: auto;
 }
 
+.field-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .toolbar-sep {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--border-color);
   flex-shrink: 0;
   margin: 0 4px;
+  opacity: 0.5;
+}
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refresh-btn:hover {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* -- Pill groups -- */
+.pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pill-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.pill-group button:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pill-count {
+  font-weight: 600;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+.pill-group button.active {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.pill-group button.active .pill-count {
+  opacity: 0.8;
+}
+
+.icon-pills button {
+  padding: 6px 10px;
 }
 
 /* ── Content ── */
 .svc-content {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px 24px 12px;
 }
 
@@ -434,6 +645,124 @@ onMounted(fetchUsers)
   justify-content: center;
   gap: 12px;
 }
+
+/* ===== Footer ===== */
+.svc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 0;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+:deep(.svc-footer .el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+:deep(.svc-footer .el-pagination *) {
+  font-size: 14px !important;
+}
+
+/* ===== Grid ===== */
+.user-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 2px 2px 24px;
+}
+
+/* Hide scrollbar for Chrome/Safari */
+.user-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.user-grid::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
+
+.user-card {
+  padding: 24px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-blue);
+}
+
+.card-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  opacity: 0.6;
+}
+
+.user-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.user-avatar.text {
+  font-size: 18px;
+  background: rgba(255,255,255,0.05);
+}
+
+.user-card-info {
+  flex: 1;
+}
+
+.user-card-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.user-card-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.user-card-body {
+  margin-bottom: 16px;
+}
+
+.remark-line {
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.user-card-foot {
+  display: flex;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.03);
+}
+
+.footer-spacer { flex: 1; }
 
 
 </style>

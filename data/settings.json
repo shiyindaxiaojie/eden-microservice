@@ -1,5 +1,5 @@
 {
   "mode": "ap",
-  "environment": "cluster",
+  "environment": "standalone",
   "log_level": ""
 }

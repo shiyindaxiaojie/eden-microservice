@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Grid, List as ListIcon, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
   addClusterMember,
   getClusterMembers,
@@ -11,32 +11,59 @@ import {
   type ClusterStats,
 } from '../api/registry'
 import { useI18n } from '../utils/i18n'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import en from 'element-plus/es/locale/lang/en'
 
 const { t, locale } = useI18n()
 const members = ref<ClusterMember[]>([])
 const stats = ref<ClusterStats | null>(null)
 const loading = ref(true)
 const showAddDialog = ref(false)
-const search = ref('')
+const searchID = ref('')
+const searchIP = ref('')
 const addForms = ref([{ protocol: 'http://', host: '', port: '' }])
+const viewMode = ref<'grid' | 'list'>('list')
+const filterMode = ref<'all' | 'online' | 'offline'>('all')
+const currentPage = ref(1)
+const pageSize = ref(12)
+
+const nodeStats = computed(() => ({
+  total: members.value.length,
+  online: members.value.filter((n) => n.status === 'Online').length,
+  offline: members.value.filter((n) => n.status !== 'Online').length,
+}))
 
 const filteredMembers = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return members.value.filter((member) => {
-    if (!query) return true
-    return [member.id, member.address, member.http_addr, member.grpc_addr, member.raft_addr, member.quic_addr]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(query))
-  })
+  const qID = searchID.value.trim().toLowerCase()
+  const qIP = searchIP.value.trim().toLowerCase()
+  let list = members.value
+
+  if (filterMode.value === 'online') list = list.filter((n) => n.status === 'Online')
+  if (filterMode.value === 'offline') list = list.filter((n) => n.status !== 'Online')
+
+  if (qID) {
+    list = list.filter((m) => m.id.toLowerCase().includes(qID))
+  }
+
+  if (qIP) {
+    list = list.filter((m) => {
+      const addrs = [m.address, m.http_addr, m.grpc_addr, m.raft_addr, m.quic_addr].filter((a): a is string => !!a)
+      return addrs.some((a) => a.toLowerCase().includes(qIP))
+    })
+  }
+
+  return list
+})
+
+const pagedMembers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredMembers.value.slice(start, start + pageSize.value)
 })
 
 const clusterHint = computed(() =>
   locale.value === 'zh'
     ? '统一查看节点状态、协议地址和当前集群角色。'
     : 'Inspect node status, protocol endpoints, and the current cluster role in one place.',
-)
-const nodeSearchPlaceholder = computed(() =>
-  locale.value === 'zh' ? '搜索节点 ID 或协议地址' : 'Search node id or endpoint address',
 )
 const invalidAddressMessage = computed(() =>
   locale.value === 'zh' ? '请填写有效的节点地址信息' : 'Please enter valid address information',
@@ -58,6 +85,13 @@ function removeNodeRow(index: number) {
   if (addForms.value.length === 0) {
     addNodeRow()
   }
+}
+
+function resetFilters() {
+  searchID.value = ''
+  searchIP.value = ''
+  filterMode.value = 'all'
+  fetchCluster()
 }
 
 async function fetchCluster() {
@@ -144,19 +178,73 @@ onMounted(fetchCluster)
     <div class="svc-toolbar">
       <div class="toolbar-row">
         <div class="toolbar-group">
-          <el-input
-            v-model="search"
-            :prefix-icon="Search"
-            :placeholder="nodeSearchPlaceholder"
-            clearable
-            class="search-input"
-            style="width: 320px;"
-          />
+          <div class="field-item">
+            <span class="field-label">{{ locale === 'zh' ? '节点 ID' : 'Node ID' }}</span>
+            <el-input
+              v-model="searchID"
+              :prefix-icon="Search"
+              :placeholder="locale === 'zh' ? '输入节点 ID' : 'Node ID'"
+              clearable
+              class="search-input"
+              style="width: 180px;"
+            />
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <div class="field-item">
+            <span class="field-label">{{ locale === 'zh' ? 'IP 地址' : 'IP Address' }}</span>
+            <el-input
+              v-model="searchIP"
+              :prefix-icon="Search"
+              :placeholder="locale === 'zh' ? '输入 IP 地址' : 'IP Address'"
+              clearable
+              class="search-input"
+              style="width: 180px;"
+            />
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <button
+            type="button"
+            class="refresh-btn"
+            :title="t.common.refresh"
+            @click="resetFilters()"
+          >
+            <el-icon><Refresh /></el-icon>
+          </button>
         </div>
 
         <div class="toolbar-group right-align">
-          <el-button :icon="Refresh" class="pill-btn" @click="fetchCluster">{{ t.common.refresh }}</el-button>
+          <div class="pill-group">
+            <button type="button" :class="{ active: filterMode === 'all' }" @click="filterMode = 'all'">
+              {{ t.common.all || '全部' }}
+              <span class="pill-count">{{ nodeStats.total }}</span>
+            </button>
+            <button type="button" :class="{ active: filterMode === 'online' }" @click="filterMode = 'online'">
+              {{ locale === 'zh' ? '在线' : 'Online' }}
+              <span class="pill-count">{{ nodeStats.online }}</span>
+            </button>
+            <button type="button" :class="{ active: filterMode === 'offline' }" @click="filterMode = 'offline'">
+              {{ locale === 'zh' ? '离线' : 'Offline' }}
+              <span class="pill-count">{{ nodeStats.offline }}</span>
+            </button>
+          </div>
+
           <div class="toolbar-sep"></div>
+
+          <div class="pill-group icon-pills">
+            <button type="button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
+              <el-icon><ListIcon /></el-icon>
+            </button>
+            <button type="button" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
+              <el-icon><Grid /></el-icon>
+            </button>
+          </div>
+
+          <div class="toolbar-sep"></div>
+
           <el-button
             v-if="stats?.environment === 'cluster' || stats?.mode === 'cp'"
             type="primary"
@@ -180,24 +268,23 @@ onMounted(fetchCluster)
       </div>
 
       <template v-else>
-        <div class="table-wrap">
-          <el-table :data="filteredMembers" height="100%" style="width: 100%; font-size: 14px;">
-            <el-table-column :label="t.cluster.nodeId" min-width="220">
+        <div v-if="viewMode === 'list'" class="table-wrap">
+          <el-table :data="pagedMembers" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table-column type="index" label="#" width="60" align="center" />
+            <el-table-column :label="t.cluster.nodeId" min-width="100">
               <template #default="{ row }">
                 <div class="node-id-cell">
-                  <div class="node-badge">{{ row.id?.slice(0, 2)?.toUpperCase() || 'N' }}</div>
                   <div class="node-main">
                     <div class="node-main-row">
                       <strong class="node-name">{{ row.id }}</strong>
                       <el-tag v-if="row.is_local" size="small" effect="plain" type="success">{{ t.cluster.currentNode }}</el-tag>
                     </div>
-                    <span class="node-sub">{{ getRoleName(row.role) }}</span>
                   </div>
                 </div>
               </template>
             </el-table-column>
 
-            <el-table-column :label="t.cluster.address" min-width="360">
+            <el-table-column :label="t.cluster.address" min-width="400">
               <template #default="{ row }">
                 <div class="address-tags">
                   <span v-if="row.http_addr" class="addr-chip"><i class="p-tag">HTTP</i>{{ row.http_addr }}</span>
@@ -209,7 +296,7 @@ onMounted(fetchCluster)
               </template>
             </el-table-column>
 
-            <el-table-column :label="t.cluster.status" width="120">
+            <el-table-column :label="t.cluster.status" width="100">
               <template #default="{ row }">
                 <div class="status-cell">
                   <span class="status-dot" :class="row.status === 'Online' ? 'active' : 'inactive'"></span>
@@ -218,7 +305,7 @@ onMounted(fetchCluster)
               </template>
             </el-table-column>
 
-            <el-table-column :label="t.cluster.role" width="130">
+            <el-table-column :label="t.cluster.role" width="100">
               <template #default="{ row }">
                 <el-tag :type="roleTagType(row.role)" size="small" effect="dark" class="role-tag">{{ getRoleName(row.role) }}</el-tag>
               </template>
@@ -229,14 +316,86 @@ onMounted(fetchCluster)
                 <el-button
                   v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
                   type="danger"
+                  size="small"
                   link
                   :icon="Delete"
                   @click="handleRemove(row)"
-                />
+                >
+                  {{ t.common.delete }}
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
         </div>
+
+        <div v-else class="card-grid">
+          <div
+            v-for="member in pagedMembers"
+            :key="member.id"
+            class="node-card"
+            :class="{ 'is-local': member.is_local }"
+          >
+            <div class="card-glow" :style="{ background: member.status === 'Online' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }" />
+            
+            <div class="card-head">
+              <div class="card-id-row">
+                <h3 class="node-id-text">{{ member.id }}</h3>
+                <el-tag v-if="member.is_local" size="small" type="success" effect="plain">{{ t.cluster.currentNode }}</el-tag>
+              </div>
+              <el-tag :type="roleTagType(member.role)" size="small" effect="dark">{{ getRoleName(member.role) }}</el-tag>
+            </div>
+
+            <div class="card-body">
+              <div class="status-line">
+                <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
+                <span class="status-label">{{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
+              </div>
+
+              <div class="addr-group">
+                <div v-if="member.http_addr" class="addr-box">
+                  <span class="p-tag sm">HTTP</span>
+                  <code>{{ member.http_addr }}</code>
+                </div>
+                <div v-if="member.grpc_addr" class="addr-box">
+                  <span class="p-tag sm">GRPC</span>
+                  <code>{{ member.grpc_addr }}</code>
+                </div>
+                <div v-if="member.raft_addr" class="addr-box">
+                  <span class="p-tag sm">RAFT</span>
+                  <code>{{ member.raft_addr }}</code>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <div class="footer-spacer"></div>
+              <el-button
+                v-if="!member.is_local && member.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
+                type="danger"
+                size="small"
+                link
+                :icon="Delete"
+                @click="handleRemove(member)"
+              >
+                {{ t.common.delete }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+
+        <footer class="svc-footer">
+          <span class="footer-info">{{ filteredMembers.length }} {{ locale === 'zh' ? '条' : 'records' }}</span>
+          <el-config-provider :locale="locale === 'zh' ? zhCn : en">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[12, 20, 50]"
+              :total="filteredMembers.length"
+              layout="sizes, prev, pager, next"
+              background
+            />
+          </el-config-provider>
+        </footer>
       </template>
     </section>
 
@@ -316,19 +475,106 @@ onMounted(fetchCluster)
   margin-left: auto;
 }
 
+.field-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .toolbar-sep {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--border-color);
   flex-shrink: 0;
   margin: 0 4px;
+  opacity: 0.5;
+}
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refresh-btn:hover {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* -- Pill groups -- */
+.pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pill-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.pill-group button:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pill-count {
+  font-weight: 600;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+.pill-group button.active {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.pill-group button.active .pill-count {
+  opacity: 0.8;
+}
+
+.icon-pills button {
+  padding: 6px 10px;
 }
 
 /* ── Content ── */
 .svc-content {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px 24px 12px;
 }
 
@@ -511,6 +757,138 @@ onMounted(fetchCluster)
   font-size: 13px;
 }
 
+/* -- Card Grid -- */
+.card-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 2px 2px 24px;
+}
+
+/* Hide scrollbar for Chrome/Safari */
+.card-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.card-grid::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
+
+.node-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 220px;
+}
+
+.node-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-blue);
+  background: var(--bg-glass);
+}
+
+.card-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  opacity: 0.6;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.card-id-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.node-id-text {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  letter-spacing: -0.02em;
+}
+
+.card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-label {
+  color: var(--text-secondary);
+}
+
+.addr-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.addr-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.addr-box .p-tag {
+  min-width: 44px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0.6;
+}
+
+.addr-box code {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.footer-spacer {
+  flex: 1;
+}
+
 .add-node-form {
   display: flex;
   flex-direction: column;
@@ -530,6 +908,31 @@ onMounted(fetchCluster)
 .protocol-select { width: 100px; }
 .host-input { flex: 1; }
 .port-input { width: 90px; }
+
+/* ===== Footer ===== */
+.svc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 0;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+:deep(.svc-footer .el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+:deep(.svc-footer .el-pagination *) {
+  font-size: 14px !important;
+}
 
 
 </style>

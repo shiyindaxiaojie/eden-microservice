@@ -126,7 +126,7 @@ export const messages = {
       cannotDeleteDefault: 'The default namespace cannot be deleted',
       defaultDescription: 'System default namespace',
       deleteConfirm: 'Are you sure you want to delete namespace "{name}"?',
-      lockedHint: 'The default namespace is reserved by the system.',
+      lockedHint: 'The default namespace is reserved by the system',
     },
     cluster: {
       nodeCount: 'Nodes',
@@ -359,7 +359,7 @@ export const messages = {
       cannotDeleteDefault: '默认命名空间不可删除',
       defaultDescription: '系统默认命名空间',
       deleteConfirm: '确定删除命名空间 “{name}” 吗？',
-      lockedHint: '默认命名空间由系统保留。',
+      lockedHint: '系统保留',
     },
     cluster: {
       nodeCount: '节点数',

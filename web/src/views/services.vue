@@ -341,6 +341,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <div class="toolbar-sep"></div>
+
         <div class="toolbar-group">
           <div class="field-item">
             <span class="field-label">{{ text('服务名称', 'Service Name') }}</span>
@@ -354,6 +356,8 @@ onBeforeUnmount(() => {
             />
           </div>
         </div>
+
+        <div class="toolbar-sep"></div>
 
         <div class="toolbar-group">
           <div class="field-item">
@@ -369,6 +373,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <div class="toolbar-sep"></div>
+
         <div class="toolbar-group">
           <button
             type="button"
@@ -380,7 +386,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <!-- Right: View switch + Filters -->
+        <!-- Right: Filters + View switch -->
         <div class="toolbar-group right-align">
           <div class="pill-group">
             <button
@@ -524,7 +530,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- List View -->
-        <div v-else class="table-wrap">
+        <div v-if="catalogMode === 'list'" class="table-wrap">
           <el-table :data="pagedServices" height="100%" style="width: 100%; font-size: 14px;">
             <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
             <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
@@ -1389,19 +1395,33 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-.side-scroll {
+.svc-content {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px 0;
+  overflow: hidden;
+  padding: 16px 24px 12px;
 }
 
-.side-scroll::-webkit-scrollbar { width: 3px; }
-.side-scroll::-webkit-scrollbar-track { background: transparent; }
-.side-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+.card-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 2px 2px 24px;
+}
+
+/* Hide scrollbar for Chrome/Safari */
+.card-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.card-grid::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
 
 .side-group {
   display: flex;

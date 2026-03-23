@@ -6,8 +6,10 @@ import { Calendar, Delete, Edit, Grid, List as ListIcon, Lock, Plus, Refresh, Se
 import { createNamespace, deleteNamespace, getNamespaces, updateNamespace } from '../api/registry'
 import type { Namespace } from '../api/registry'
 import { useI18n } from '../utils/i18n'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import en from 'element-plus/es/locale/lang/en'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const loading = ref(false)
 const namespaces = ref<Namespace[]>([])
 const dialogVisible = ref(false)
@@ -19,6 +21,8 @@ const form = ref<Partial<Namespace>>({
 })
 const viewMode = ref<'grid' | 'list'>('grid')
 const filterMode = ref<'all' | 'system' | 'custom'>('all')
+const currentPage = ref(1)
+const pageSize = ref(12)
 
 const stats = computed(() => ({
   total: namespaces.value.length,
@@ -47,6 +51,11 @@ const filteredNamespaces = computed(() => {
     if (right.name === 'default') return 1
     return left.name.localeCompare(right.name)
   })
+})
+
+const pagedNamespaces = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredNamespaces.value.slice(start, start + pageSize.value)
 })
 
 
@@ -133,6 +142,12 @@ function getDescription(namespace: Namespace) {
   return namespace.description || t.value.common.none
 }
 
+function resetFilters() {
+  search.value = ''
+  filterMode.value = 'all'
+  fetchNamespaces()
+}
+
 onMounted(fetchNamespaces)
 </script>
 
@@ -142,32 +157,33 @@ onMounted(fetchNamespaces)
     <div class="svc-toolbar">
       <div class="toolbar-row">
         <div class="toolbar-group">
-          <el-input
-            v-model="search"
-            :prefix-icon="Search"
-            :placeholder="t.namespace.searchPlaceholder"
-            clearable
-            class="search-input"
-            style="width: 280px"
-          />
+          <div class="field-item">
+            <span class="field-label">{{ locale === 'zh' ? '命名空间名称' : 'Namespace Name' }}</span>
+            <el-input
+              v-model="search"
+              :prefix-icon="Search"
+              :placeholder="t.namespace.searchPlaceholder"
+              clearable
+              class="search-input"
+              style="width: 240px"
+            />
+          </div>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <div class="toolbar-group">
+          <button
+            type="button"
+            class="refresh-btn"
+            :title="t.common.refresh"
+            @click="resetFilters()"
+          >
+            <el-icon><Refresh /></el-icon>
+          </button>
         </div>
         
         <div class="toolbar-group right-align">
-          <div class="pill-group icon-pills">
-            <button type="button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
-              <el-icon><ListIcon /></el-icon>
-            </button>
-            <button type="button" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
-              <el-icon><Grid /></el-icon>
-            </button>
-            <div class="pill-sep" />
-            <button type="button" @click="fetchNamespaces">
-              <el-icon><Refresh /></el-icon>
-            </button>
-          </div>
-
-          <div class="toolbar-sep"></div>
-
           <div class="pill-group">
             <button type="button" :class="{ active: filterMode === 'all' }" @click="filterMode = 'all'">
               {{ t.common.all || '全部' }}
@@ -180,6 +196,17 @@ onMounted(fetchNamespaces)
             <button type="button" :class="{ active: filterMode === 'custom' }" @click="filterMode = 'custom'">
               {{ t.namespace.custom }}
               <span class="pill-count">{{ stats.custom }}</span>
+            </button>
+          </div>
+
+          <div class="toolbar-sep"></div>
+
+          <div class="pill-group icon-pills">
+            <button type="button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
+              <el-icon><ListIcon /></el-icon>
+            </button>
+            <button type="button" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
+              <el-icon><Grid /></el-icon>
             </button>
           </div>
 
@@ -203,7 +230,7 @@ onMounted(fetchNamespaces)
 
       <template v-else>
         <div v-if="viewMode === 'grid'" class="namespace-grid">
-          <article v-for="ns in filteredNamespaces" :key="ns.name" class="ns-card" :class="{ is_default: ns.name === 'default' }">
+          <article v-for="ns in pagedNamespaces" :key="ns.name" class="ns-card" :class="{ is_default: ns.name === 'default' }">
             <div class="ns-card-head">
               <div class="ns-info">
                 <h3 class="ns-name">{{ ns.name }}</h3>
@@ -237,7 +264,8 @@ onMounted(fetchNamespaces)
         </div>
 
         <div v-else class="table-wrap">
-          <el-table :data="filteredNamespaces" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table :data="pagedNamespaces" height="100%" style="width: 100%; font-size: 14px;">
+              <el-table-column type="index" label="#" width="60" align="center" />
             <el-table-column :label="t.namespace.name" min-width="180">
               <template #default="{ row }">
                 <div class="ns-list-info">
@@ -273,6 +301,20 @@ onMounted(fetchNamespaces)
             </el-table-column>
           </el-table>
         </div>
+
+        <footer class="svc-footer">
+          <span class="footer-info">{{ filteredNamespaces.length }} {{ locale === 'zh' ? '条' : 'records' }}</span>
+          <el-config-provider :locale="locale === 'zh' ? zhCn : en">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[12, 20, 50]"
+              :total="filteredNamespaces.length"
+              layout="sizes, prev, pager, next"
+              background
+            />
+          </el-config-provider>
+        </footer>
       </template>
     </section>
 
@@ -344,12 +386,25 @@ onMounted(fetchNamespaces)
   margin-left: auto;
 }
 
+.field-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .toolbar-sep {
   width: 1px;
   height: 20px;
   background: var(--border-color);
   flex-shrink: 0;
   margin: 0 4px;
+  opacity: 0.5;
 }
 
 /* ── Content ── */
@@ -403,52 +458,51 @@ onMounted(fetchNamespaces)
 
 /* ===== Pill Groups ===== */
 .pill-group {
-  display: flex;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 3px;
-  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
   gap: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .pill-group button {
-  height: 26px;
-  padding: 0 12px;
-  border-radius: 7px;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.2s;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 14px;
 }
 
 .pill-group button:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.pill-group button.active {
-  background: var(--accent-blue);
-  color: #fff;
-  box-shadow: 0 2px 8px -2px rgba(59, 130, 246, 0.5);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .pill-count {
-  font-size: 11px;
-  padding: 0 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  opacity: 0.8;
+  font-weight: 600;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+.pill-group button.active {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-weight: 600;
 }
 
 .pill-group button.active .pill-count {
-  background: rgba(0, 0, 0, 0.2);
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .pill-sep {
@@ -460,7 +514,7 @@ onMounted(fetchNamespaces)
 }
 
 .icon-pills button {
-  padding: 0 8px;
+  padding: 6px 10px;
 }
 
 .icon-pills .el-icon {
@@ -468,6 +522,9 @@ onMounted(fetchNamespaces)
 }
 
 .refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
   display: grid;
@@ -683,6 +740,33 @@ onMounted(fetchNamespaces)
   gap: 8px;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.ns-lock .el-icon { font-size: 12px; }
+
+/* ===== Footer ===== */
+.svc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 0;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+:deep(.svc-footer .el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+:deep(.svc-footer .el-pagination *) {
+  font-size: 14px !important;
 }
 
 .ns-lock {

@@ -2,8 +2,8 @@
   "users": {
     "admin": {
       "username": "admin",
-      "password": "$2a$10$uVWzuzmtEzmpCTYCqoFfIefd0hxxNT3nq0.nkDtdGTq3KAP1L.QkS",
-      "nickname": "",
+      "password": "$2a$10$TGGWqZnOwQHYwj72sfsFMebs0PsmpavHH6XHpwUThqgHG8gP96VO.",
+      "nickname": "管理员",
       "remark": "",
       "role": "admin",
       "is_builtin": true
