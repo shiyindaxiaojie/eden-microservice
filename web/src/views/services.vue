@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Grid, List, RefreshRight, Search, Top, Bottom } from '@element-plus/icons-vue'
+import { Grid, List, RefreshRight, Search, Share, Top, Bottom } from '@element-plus/icons-vue'
 import {
   getNamespaces,
   getServices,
@@ -15,6 +15,8 @@ import {
 } from '../api/registry'
 import TopologyGraphCanvas from '../components/topology-graph.vue'
 import { useI18n } from '../utils/i18n'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import en from 'element-plus/es/locale/lang/en'
 
 type PanelMode = 'catalog' | 'topology'
 type CatalogMode = 'grid' | 'list'
@@ -39,6 +41,7 @@ interface ServiceEntry extends ServiceSummary {
 const autoRefreshSeconds = 15
 
 const { locale } = useI18n()
+const elLocale = computed(() => (locale.value === 'zh' ? zhCn : en))
 const route = useRoute()
 const router = useRouter()
 
@@ -127,7 +130,7 @@ function serviceHealthTextByState(state: ServiceHealthState) {
     case 'partial':
       return text('部分异常', 'Partial')
     case 'critical':
-      return text('严重异常', 'Critical')
+      return text('不可用', 'Critical')
     default:
       return text('暂无实例', 'No instance')
   }
@@ -190,6 +193,13 @@ const degradedServiceCount = computed(() => serviceEntries.value.filter((service
 // overallHealthRate removed
 
 const selectedNodeDetail = computed<TopologyNode | null>(() => topologyNodeMap.value[selectedTopologyNode.value] || null)
+const serviceEntryMap = computed(() => {
+  const map: Record<string, (typeof serviceEntries.value)[0]> = {}
+  serviceEntries.value.forEach((s) => {
+    map[s.name] = s
+  })
+  return map
+})
 const selectedUpstream = computed(() => topologyMeta.value.upstream[selectedTopologyNode.value] || [])
 const selectedDownstream = computed(() => topologyMeta.value.downstream[selectedTopologyNode.value] || [])
 
@@ -218,6 +228,14 @@ async function fetchNamespaces() {
   if (!namespaces.value.find((item) => item.name === currentNamespace.value) && namespaces.value.length > 0) {
     currentNamespace.value = namespaces.value[0]!.name
   }
+}
+
+function resetFilters() {
+  currentNamespace.value = 'default'
+  search.value = ''
+  searchIP.value = ''
+  healthFilter.value = ''
+  fetchWorkspace(true)
 }
 
 async function fetchWorkspace(showLoading = true) {
@@ -351,25 +369,19 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Right: Filters + View switch -->
-        <div class="toolbar-group right-align">
-          <template v-if="activePanel === 'catalog'">
-            <div class="pill-group icon-pills">
-              <button type="button" :class="{ active: catalogMode === 'list' }" :title="text('列表', 'List')" @click="catalogMode = 'list'">
-                <el-icon><List /></el-icon>
-              </button>
-              <button type="button" :class="{ active: catalogMode === 'grid' }" :title="text('卡片', 'Grid')" @click="catalogMode = 'grid'">
-                <el-icon><Grid /></el-icon>
-              </button>
-            </div>
-          </template>
-
-          <button type="button" class="refresh-btn" :title="text('刷新', 'Refresh')" @click="fetchWorkspace()">
+        <div class="toolbar-group">
+          <button
+            type="button"
+            class="refresh-btn"
+            :title="text('重置', 'Reset Filters')"
+            @click="resetFilters()"
+          >
             <el-icon><RefreshRight /></el-icon>
           </button>
-          
-          <div class="toolbar-sep" />
+        </div>
 
+        <!-- Right: View switch + Filters -->
+        <div class="toolbar-group right-align">
           <div class="pill-group">
             <button
               type="button"
@@ -399,15 +411,34 @@ onBeforeUnmount(() => {
 
           <div class="toolbar-sep" />
 
-          <div class="pill-group">
-            <button type="button" :class="{ active: activePanel === 'catalog' }" @click="activePanel = 'catalog'">
-              {{ text('列表', 'List') }}
+          <div class="pill-group icon-pills">
+            <button
+              type="button"
+              :class="{ active: activePanel === 'catalog' && catalogMode === 'list' }"
+              :title="text('列表', 'List View')"
+              @click="activePanel = 'catalog'; catalogMode = 'list'"
+            >
+              <el-icon><List /></el-icon>
             </button>
-            <button type="button" :class="{ active: activePanel === 'topology' }" @click="activePanel = 'topology'">
-              {{ text('拓扑', 'Topo') }}
+
+            <button
+              type="button"
+              :class="{ active: activePanel === 'catalog' && catalogMode === 'grid' }"
+              :title="text('卡片', 'Card View')"
+              @click="activePanel = 'catalog'; catalogMode = 'grid'"
+            >
+              <el-icon><Grid /></el-icon>
+            </button>
+
+            <button
+              type="button"
+              :class="{ active: activePanel === 'topology' }"
+              :title="text('拓扑', 'Topology View')"
+              @click="activePanel = 'topology'"
+            >
+              <el-icon><Share /></el-icon>
             </button>
           </div>
-          
         </div>
       </div>
     </div>
@@ -564,15 +595,16 @@ onBeforeUnmount(() => {
 
         <footer class="svc-footer">
           <span class="footer-info">{{ filteredServices.length }} {{ text('条', 'records') }}</span>
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :page-sizes="[12, 20, 50]"
-            :total="filteredServices.length"
-            layout="sizes, prev, pager, next"
-            background
-            small
-          />
+          <el-config-provider :locale="elLocale">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[12, 20, 50]"
+              :total="filteredServices.length"
+              layout="sizes, prev, pager, next"
+              background
+            />
+          </el-config-provider>
         </footer>
       </template>
     </section>
@@ -622,16 +654,48 @@ onBeforeUnmount(() => {
 
             <div class="side-group">
               <div class="group-title">{{ text('上游依赖', 'Upstream') }}</div>
-              <div v-if="selectedUpstream.length" class="dep-list">
-                <span v-for="sn in selectedUpstream" :key="sn" @click="selectTopologyNode(sn)" class="clickable-dep">{{ sn }}</span>
+              <div v-if="selectedUpstream.length" class="dep-list scrollable">
+                <div
+                  v-for="sn in selectedUpstream"
+                  :key="sn"
+                  @click="selectTopologyNode(sn)"
+                  class="dep-item"
+                >
+                  <span class="dep-name">{{ sn }}</span>
+                  <div v-if="serviceEntryMap[sn]" class="dep-info">
+                    <span
+                      class="dep-status"
+                      :style="{ color: serviceEntryMap[sn].healthTone, background: serviceEntryMap[sn].healthSurface }"
+                    >
+                      {{ serviceEntryMap[sn].healthy_count }}/{{ serviceEntryMap[sn].instance_count }}
+                    </span>
+                    <span class="dep-status-text" :style="{ color: serviceEntryMap[sn].healthTone }">{{ serviceEntryMap[sn].healthText }}</span>
+                  </div>
+                </div>
               </div>
               <div v-else class="empty-text">{{ text('无', 'None') }}</div>
             </div>
 
             <div class="side-group">
               <div class="group-title">{{ text('下游依赖', 'Downstream') }}</div>
-              <div v-if="selectedDownstream.length" class="dep-list">
-                <span v-for="sn in selectedDownstream" :key="sn" @click="selectTopologyNode(sn)" class="clickable-dep">{{ sn }}</span>
+              <div v-if="selectedDownstream.length" class="dep-list scrollable">
+                <div
+                  v-for="sn in selectedDownstream"
+                  :key="sn"
+                  @click="selectTopologyNode(sn)"
+                  class="dep-item"
+                >
+                  <span class="dep-name">{{ sn }}</span>
+                  <div v-if="serviceEntryMap[sn]" class="dep-info">
+                    <span
+                      class="dep-status"
+                      :style="{ color: serviceEntryMap[sn].healthTone, background: serviceEntryMap[sn].healthSurface }"
+                    >
+                      {{ serviceEntryMap[sn].healthy_count }}/{{ serviceEntryMap[sn].instance_count }}
+                    </span>
+                    <span class="dep-status-text" :style="{ color: serviceEntryMap[sn].healthTone }">{{ serviceEntryMap[sn].healthText }}</span>
+                  </div>
+                </div>
               </div>
               <div v-else class="empty-text">{{ text('无', 'None') }}</div>
             </div>
@@ -823,6 +887,14 @@ onBeforeUnmount(() => {
   opacity: 0.8;
 }
 
+.pill-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 4px;
+  align-self: center;
+}
+
 .icon-pills button {
   padding: 4px 7px;
 }
@@ -831,15 +903,15 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
-  margin-left: 4px;
+  margin-left: -20px;
 }
 
 .refresh-btn:hover {
@@ -876,7 +948,7 @@ onBeforeUnmount(() => {
 .svc-card {
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 24px;
   border-radius: 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -884,6 +956,7 @@ onBeforeUnmount(() => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  min-height: 240px;
 }
 
 .svc-card::before {
@@ -937,6 +1010,7 @@ onBeforeUnmount(() => {
 }
 
 .card-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1219,6 +1293,10 @@ onBeforeUnmount(() => {
   --el-pagination-font-size: 14px;
 }
 
+:deep(.svc-footer .el-pagination *) {
+  font-size: 14px !important;
+}
+
 /* ===== Empty ===== */
 .empty-panel {
   flex: 1;
@@ -1395,16 +1473,53 @@ onBeforeUnmount(() => {
 
 .dep-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.dep-list span {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  background: rgba(59, 130, 246, 0.08);
+.dep-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.dep-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(2px);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.dep-name {
   color: var(--accent-blue);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dep-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dep-status-text {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.dep-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  font-variant-numeric: tabular-nums;
 }
 
 .empty-text {

@@ -1,8 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Calendar, Delete, Edit, Grid, List as ListIcon, Lock, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { createNamespace, deleteNamespace, getNamespaces, updateNamespace } from '../api/registry'
 import type { Namespace } from '../api/registry'
 import { useI18n } from '../utils/i18n'
@@ -17,10 +17,27 @@ const form = ref<Partial<Namespace>>({
   name: '',
   description: '',
 })
+const viewMode = ref<'grid' | 'list'>('grid')
+const filterMode = ref<'all' | 'system' | 'custom'>('all')
+
+const stats = computed(() => ({
+  total: namespaces.value.length,
+  system: namespaces.value.filter(ns => ns.name === 'default').length,
+  custom: namespaces.value.filter(ns => ns.name !== 'default').length
+}))
 
 const filteredNamespaces = computed(() => {
+  let list = namespaces.value
+
+  // Filter by stat mode
+  if (filterMode.value === 'system') {
+    list = list.filter(ns => ns.name === 'default')
+  } else if (filterMode.value === 'custom') {
+    list = list.filter(ns => ns.name !== 'default')
+  }
+
   const query = search.value.trim().toLowerCase()
-  const list = namespaces.value.filter((namespace) => {
+  list = list.filter((namespace) => {
     if (!query) return true
     return namespace.name.toLowerCase().includes(query) || (namespace.description || '').toLowerCase().includes(query)
   })
@@ -32,11 +49,6 @@ const filteredNamespaces = computed(() => {
   })
 })
 
-const namespaceStats = computed(() => ({
-  total: namespaces.value.length,
-  custom: namespaces.value.filter((namespace) => namespace.name !== 'default').length,
-  system: namespaces.value.some((namespace) => namespace.name === 'default') ? 1 : 0,
-}))
 
 async function fetchNamespaces() {
   loading.value = true
@@ -125,96 +137,159 @@ onMounted(fetchNamespaces)
 </script>
 
 <template>
-  <div class="page-stack namespace-page">
-    <section class="compact-hero namespace-hero-compact">
-      <div class="hero-copy-compact">
-        <p class="hero-kicker">{{ t.nav.namespaces }}</p>
-        <h2 class="hero-heading">{{ t.namespace.title }}</h2>
-        <p class="hero-desc">{{ t.namespace.subtitle }}</p>
-      </div>
-
-      <div class="namespace-action-area">
-        <div class="mini-stat-grid namespace-mini-stats">
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.namespace.total }}</span>
-            <strong class="mini-stat-value">{{ namespaceStats.total }}</strong>
-          </div>
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.namespace.custom }}</span>
-            <strong class="mini-stat-value">{{ namespaceStats.custom }}</strong>
-          </div>
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.namespace.system }}</span>
-            <strong class="mini-stat-value">{{ namespaceStats.system }}</strong>
-          </div>
+  <div class="svc-shell">
+    <!-- Toolbar -->
+    <div class="svc-toolbar">
+      <div class="toolbar-row">
+        <div class="toolbar-group">
+          <el-input
+            v-model="search"
+            :prefix-icon="Search"
+            :placeholder="t.namespace.searchPlaceholder"
+            clearable
+            class="search-input"
+            style="width: 280px"
+          />
         </div>
-        <el-button type="primary" size="large" :icon="Plus" class="namespace-create-btn" @click="handleAdd">
-          {{ t.namespace.create }}
-        </el-button>
+        
+        <div class="toolbar-group right-align">
+          <div class="pill-group icon-pills">
+            <button type="button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
+              <el-icon><ListIcon /></el-icon>
+            </button>
+            <button type="button" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
+              <el-icon><Grid /></el-icon>
+            </button>
+            <div class="pill-sep" />
+            <button type="button" @click="fetchNamespaces">
+              <el-icon><Refresh /></el-icon>
+            </button>
+          </div>
+
+          <div class="toolbar-sep"></div>
+
+          <div class="pill-group">
+            <button type="button" :class="{ active: filterMode === 'all' }" @click="filterMode = 'all'">
+              {{ t.common.all || '全部' }}
+              <span class="pill-count">{{ stats.total }}</span>
+            </button>
+            <button type="button" :class="{ active: filterMode === 'system' }" @click="filterMode = 'system'">
+              {{ t.namespace.system }}
+              <span class="pill-count">{{ stats.system }}</span>
+            </button>
+            <button type="button" :class="{ active: filterMode === 'custom' }" @click="filterMode = 'custom'">
+              {{ t.namespace.custom }}
+              <span class="pill-count">{{ stats.custom }}</span>
+            </button>
+          </div>
+
+          <div class="toolbar-sep"></div>
+
+          <el-button type="primary" class="add-btn" :icon="Plus" @click="handleAdd">
+            {{ t.namespace.create }}
+          </el-button>
+        </div>
       </div>
-    </section>
+    </div>
 
-    <section class="panel-toolbar namespace-toolbar-compact">
-      <el-input
-        v-model="search"
-        :prefix-icon="Search"
-        :placeholder="t.namespace.searchPlaceholder"
-        clearable
-        size="large"
-        class="namespace-search"
-      />
-      <el-button size="large" :icon="Refresh" @click="fetchNamespaces">{{ t.common.refresh }}</el-button>
-    </section>
-
-    <section v-loading="loading">
+    <!-- Content -->
+    <section class="svc-content" v-loading="loading">
       <div v-if="!loading && filteredNamespaces.length === 0" class="empty-panel">
-        <div class="empty-state">
-          <el-icon><Search /></el-icon>
-          <p>{{ t.namespace.emptyDescription }}</p>
+        <div class="empty-inner">
+          <strong>{{ t.namespace.emptyDescription }}</strong>
+          <p>{{ t.namespace.subtitle }}</p>
         </div>
       </div>
 
-      <div v-else class="namespace-grid">
-        <article v-for="namespace in filteredNamespaces" :key="namespace.name" class="namespace-card" :class="{ default: namespace.name === 'default' }">
-          <div class="namespace-card-head">
-            <div>
-              <div class="namespace-title-row">
-                <h3>{{ namespace.name }}</h3>
-                <el-tag size="small" effect="plain" :type="namespace.name === 'default' ? 'warning' : 'success'">
-                  {{ namespace.name === 'default' ? t.namespace.defaultBadge : t.namespace.customBadge }}
-                </el-tag>
+      <template v-else>
+        <div v-if="viewMode === 'grid'" class="namespace-grid">
+          <article v-for="ns in filteredNamespaces" :key="ns.name" class="ns-card" :class="{ is_default: ns.name === 'default' }">
+            <div class="ns-card-head">
+              <div class="ns-info">
+                <h3 class="ns-name">{{ ns.name }}</h3>
+                <span v-if="ns.name === 'default'" class="ns-badge default">{{ t.namespace.defaultBadge }}</span>
+                <span v-else class="ns-badge">{{ t.namespace.customBadge }}</span>
               </div>
-              <p class="namespace-card-desc">{{ getDescription(namespace) }}</p>
+              <div class="ns-actions">
+                <button type="button" class="action-btn" @click="handleEdit(ns)" :disabled="ns.name === 'default'">
+                  <el-icon><Edit /></el-icon>
+                </button>
+                <button type="button" class="action-btn delete" @click="handleDelete(ns)" :disabled="ns.name === 'default'">
+                  <el-icon><Delete /></el-icon>
+                </button>
+              </div>
             </div>
-            <div class="namespace-card-actions">
-              <el-button circle plain :icon="Edit" @click="handleEdit(namespace)" :disabled="namespace.name === 'default'" />
-              <el-button circle plain type="danger" :icon="Delete" @click="handleDelete(namespace)" :disabled="namespace.name === 'default'" />
-            </div>
-          </div>
 
-          <div class="namespace-card-foot">
-            <div>
-              <div class="meta-label">{{ t.namespace.createdAt }}</div>
-              <strong class="meta-value">{{ formatDate(namespace.created_at) }}</strong>
+            <div class="ns-card-body">
+              <p class="ns-desc">{{ getDescription(ns) }}</p>
             </div>
-            <span v-if="namespace.name === 'default'" class="namespace-protection">{{ t.namespace.lockedHint }}</span>
-          </div>
-        </article>
-      </div>
+
+            <div class="ns-card-foot">
+              <div class="foot-item">
+                <el-icon><Calendar /></el-icon>
+                <span>{{ formatDate(ns.created_at) }}</span>
+              </div>
+              <div v-if="ns.name === 'default'" class="ns-lock">
+                <el-icon><Lock /></el-icon> {{ t.namespace.lockedHint }}
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div v-else class="table-wrap">
+          <el-table :data="filteredNamespaces" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table-column :label="t.namespace.name" min-width="180">
+              <template #default="{ row }">
+                <div class="ns-list-info">
+                  <span class="ns-list-name">{{ row.name }}</span>
+                  <el-tag v-if="row.name === 'default'" size="small" type="warning" effect="plain">{{ t.namespace.defaultBadge }}</el-tag>
+                  <el-tag v-else size="small" type="success" effect="plain">{{ t.namespace.customBadge }}</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            
+            <el-table-column :label="t.namespace.description" min-width="300">
+              <template #default="{ row }">
+                <span class="ns-list-desc">{{ getDescription(row) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="t.common.createdAt" width="180">
+              <template #default="{ row }">
+                <div class="foot-item">
+                  <el-icon><Calendar /></el-icon>
+                  <span>{{ formatDate(row.created_at) }}</span>
+                </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="t.common.actions" width="120" align="center" fixed="right">
+              <template #default="{ row }">
+                <div class="ns-list-actions">
+                  <el-button link :icon="Edit" @click="handleEdit(row)" :disabled="row.name === 'default'" />
+                  <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" :disabled="row.name === 'default'" />
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
     </section>
 
+    <!-- Dialogs -->
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? t.namespace.editDialog : t.namespace.createDialog"
-      width="560px"
+      width="460px"
       append-to-body
+      class="glass-dialog"
     >
       <el-form label-position="top">
         <el-form-item :label="t.namespace.name" required>
           <el-input v-model="form.name" :placeholder="t.namespace.namePlaceholder" :disabled="isEdit" />
         </el-form-item>
         <el-form-item :label="t.namespace.description">
-          <el-input v-model="form.description" type="textarea" :rows="4" :placeholder="t.namespace.descriptionPlaceholder" />
+          <el-input v-model="form.description" type="textarea" :rows="3" :placeholder="t.namespace.descriptionPlaceholder" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -226,145 +301,402 @@ onMounted(fetchNamespaces)
 </template>
 
 <style scoped>
-.namespace-hero-compact {
-  gap: 18px;
+/* ===== Shell ===== */
+.svc-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height) - 48px);
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
 }
 
-.namespace-action-area {
+/* ===== Toolbar ===== */
+.svc-toolbar {
+  flex-shrink: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.toolbar-group:first-child {
+  padding-left: 0;
+}
+
+.toolbar-group:last-child {
+  padding-right: 0;
+}
+
+.toolbar-group.right-align {
+  margin-left: auto;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+/* ── Content ── */
+.svc-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 24px 12px;
+}
+
+.empty-panel {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.empty-inner {
+  text-align: center;
+  color: var(--text-muted);
+}
+.empty-inner strong {
+  display: block;
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+:deep(.search-input .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  color: var(--text-primary);
+  height: 32px;
+}
+:deep(.search-input .el-input__wrapper:hover),
+:deep(.search-input .el-input__wrapper:focus-within) {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.pill-btn {
+  border-radius: 8px;
+  height: 32px;
+}
+.add-btn {
+  height: 32px;
+  border-radius: 8px;
+  padding: 0 16px;
+}
+
+/* ===== Pill Groups ===== */
+.pill-group {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px;
+  border-radius: 10px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pill-group button {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.pill-group button:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pill-group button.active {
+  background: var(--accent-blue);
+  color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(59, 130, 246, 0.5);
+}
+
+.pill-count {
+  font-size: 11px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  opacity: 0.8;
+}
+
+.pill-group button.active .pill-count {
+  background: rgba(0, 0, 0, 0.2);
+  opacity: 1;
+}
+
+.pill-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 4px;
+  align-self: center;
+}
+
+.icon-pills button {
+  padding: 0 8px;
+}
+
+.icon-pills .el-icon {
+  font-size: 16px;
+}
+
+.refresh-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+
+/* ===== Table Styling ===== */
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+:deep(.table-wrap .el-table) {
+  height: 100%;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.03);
+  --el-table-border-color: rgba(255, 255, 255, 0.04);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-text-color: var(--text-primary);
+}
+
+:deep(.table-wrap .el-table__inner-wrapper::before) {
+  display: none;
+}
+
+:deep(.table-wrap .el-table th.el-table__cell) {
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+:deep(.table-wrap .el-table td.el-table__cell) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+:deep(.table-wrap .el-table tr:hover > td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+.ns-list-info {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
-.namespace-mini-stats {
-  min-width: 0;
-  width: auto;
+.ns-list-name {
+  font-weight: 600;
+  font-size: 15px;
 }
 
-.namespace-create-btn {
-  min-width: 160px;
-  border-radius: 14px;
-  box-shadow: 0 12px 22px rgba(59, 130, 246, 0.2);
-}
-
-.namespace-toolbar-compact {
-  justify-content: space-between;
-}
-
-.namespace-search {
-  flex: 1;
+.ns-list-desc {
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .namespace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding-bottom: 24px;
 }
 
-.namespace-card {
+.ns-card {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  min-height: 190px;
-  padding: 20px;
-  border-radius: 22px;
-  border: 1px solid var(--border-color);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
-    var(--bg-card);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.namespace-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(59, 130, 246, 0.28);
-  box-shadow: 0 20px 36px rgba(15, 23, 42, 0.14);
+.ns-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--accent-blue);
+  opacity: 0.6;
 }
 
-.namespace-card.default {
-  background:
-    radial-gradient(circle at top right, rgba(245, 158, 11, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
-    var(--bg-card);
+.ns-card.is_default::before {
+  background: var(--accent-orange);
 }
 
-.namespace-card-head {
+.ns-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--accent-blue);
+  background: var(--bg-glass);
+}
+
+.ns-card-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
 }
 
-.namespace-title-row {
+.ns-info {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
 }
 
-.namespace-title-row h3 {
-  font-size: 24px;
-  line-height: 1.1;
+.ns-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
 }
 
-.namespace-card-desc {
+.ns-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ns-badge.default {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.ns-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ns-card:hover .ns-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--border-color);
   color: var(--text-secondary);
-  line-height: 1.7;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.namespace-card-actions {
-  display: flex;
-  gap: 8px;
+.action-btn:hover:not(:disabled) {
+  background: var(--accent-blue);
+  color: #fff;
 }
 
-.namespace-card-foot {
-  margin-top: auto;
+.action-btn.delete:hover:not(:disabled) {
+  background: var(--accent-red);
+}
+
+.ns-card-body {
+  flex: 1;
+  margin-bottom: 20px;
+}
+
+.ns-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ns-card-foot {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
   border-top: 1px solid var(--border-color);
 }
 
-.meta-label {
-  margin-bottom: 6px;
+.foot-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-muted);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-size: 13px;
 }
 
-.meta-value {
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.namespace-protection {
-  display: inline-flex;
-  width: fit-content;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.12);
-  color: #d97706;
+.ns-lock {
   font-size: 12px;
+  color: var(--accent-orange);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
 }
 
-@media (max-width: 980px) {
-  .namespace-action-area,
-  .namespace-create-btn,
-  .namespace-mini-stats,
-  .namespace-search {
-    width: 100%;
-    min-width: 0;
-  }
 
-  .namespace-action-area {
-    align-items: stretch;
-  }
-}
 </style>
+
 
 
 

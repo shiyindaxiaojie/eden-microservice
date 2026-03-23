@@ -1,7 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Edit, Lock, Plus, Search, User } from '@element-plus/icons-vue'
+import { Edit, Lock, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import api from '../api/index'
 import { useI18n } from '../utils/i18n'
 import { sha256 } from '../utils/crypto'
@@ -28,12 +28,6 @@ const filteredUsers = computed(() => {
   })
 })
 
-const stats = computed(() => ({
-  total: users.value.length,
-  admin: users.value.filter((user) => user.role === 'admin').length,
-  developer: users.value.filter((user) => user.role === 'developer').length,
-  viewer: users.value.filter((user) => user.role === 'viewer').length,
-}))
 
 const builtInLabel = computed(() => (locale.value === 'zh' ? '内置' : 'Built-in'))
 const userHint = computed(() => (locale.value === 'zh' ? '统一管理控制台账号、角色和备注信息。' : 'Manage console users, roles, and remarks in one place.'))
@@ -122,93 +116,90 @@ onMounted(fetchUsers)
 </script>
 
 <template>
-  <div class="page-stack rbac-page">
-    <section class="compact-hero">
-      <div class="hero-copy-compact">
-        <p class="hero-kicker">{{ t.nav.accessControl }}</p>
-        <h2 class="hero-heading">{{ t.rbac.title }}</h2>
-        <p class="hero-desc">{{ userHint }}</p>
+  <div class="svc-shell">
+    <!-- Toolbar -->
+    <div class="svc-toolbar">
+      <div class="toolbar-row">
+        <div class="toolbar-group">
+          <el-input
+            v-model="search"
+            :prefix-icon="Search"
+            :placeholder="searchPlaceholder"
+            clearable
+            class="search-input"
+            style="width: 280px;"
+          />
+          <el-select v-model="roleFilter" clearable class="pill-select" :placeholder="t.rbac.role" style="width: 140px;">
+            <el-option value="admin" :label="t.rbac.admin" />
+            <el-option value="developer" :label="t.rbac.developer" />
+            <el-option value="viewer" :label="t.rbac.viewer" />
+          </el-select>
+        </div>
+        
+        <div class="toolbar-group right-align">
+          <el-button :icon="Refresh" class="pill-btn" @click="fetchUsers">{{ t.common.refresh }}</el-button>
+          <div class="toolbar-sep"></div>
+          <el-button type="primary" class="add-btn" :icon="Plus" @click="handleShowAdd">
+            {{ t.rbac.addUser }}
+          </el-button>
+        </div>
       </div>
-      <div class="mini-stat-grid rbac-mini-stats">
-        <div class="mini-stat">
-          <span class="mini-stat-label">{{ locale === 'zh' ? '账号总数' : 'Total Users' }}</span>
-          <strong class="mini-stat-value">{{ stats.total }}</strong>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat-label">{{ t.rbac.admin }}</span>
-          <strong class="mini-stat-value">{{ stats.admin }}</strong>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat-label">{{ t.rbac.developer }}</span>
-          <strong class="mini-stat-value">{{ stats.developer }}</strong>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat-label">{{ t.rbac.viewer }}</span>
-          <strong class="mini-stat-value">{{ stats.viewer }}</strong>
-        </div>
-      </div>
-    </section>
+    </div>
 
-    <section class="panel-toolbar rbac-toolbar">
-      <el-input v-model="search" :prefix-icon="Search" :placeholder="searchPlaceholder" clearable size="large" class="rbac-search" />
-      <el-select v-model="roleFilter" clearable size="large" class="rbac-role-filter" :placeholder="t.rbac.role">
-        <el-option value="admin" :label="t.rbac.admin" />
-        <el-option value="developer" :label="t.rbac.developer" />
-        <el-option value="viewer" :label="t.rbac.viewer" />
-      </el-select>
-      <el-button type="primary" size="large" :icon="Plus" @click="handleShowAdd">{{ t.rbac.addUser }}</el-button>
-    </section>
-
-    <section v-loading="loading">
+    <!-- Content -->
+    <section class="svc-content" v-loading="loading">
       <div v-if="!loading && filteredUsers.length === 0" class="empty-panel">
-        <div class="empty-state">
-          <el-icon><User /></el-icon>
-          <p>{{ noUsersLabel }}</p>
+        <div class="empty-inner">
+          <strong>{{ noUsersLabel }}</strong>
+          <p>{{ userHint }}</p>
         </div>
       </div>
 
-      <div v-else class="glass-table-wrapper rbac-table-wrap">
-        <el-table :data="filteredUsers" style="width: 100%">
-          <el-table-column :label="t.rbac.username" min-width="220">
-            <template #default="{ row }">
-              <div class="user-cell">
-                <div class="user-avatar">{{ row.username?.slice(0, 1)?.toUpperCase() || 'U' }}</div>
-                <div class="user-meta">
-                  <div class="user-name-row">
-                    <strong>{{ row.username }}</strong>
-                    <el-tag v-if="row.is_builtin" size="small" effect="plain" type="warning">{{ builtInLabel }}</el-tag>
+      <template v-else>
+        <div class="table-wrap">
+          <el-table :data="filteredUsers" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table-column :label="t.rbac.username" min-width="200">
+              <template #default="{ row }">
+                <div class="user-cell">
+                  <div class="user-avatar">{{ row.username?.slice(0, 1)?.toUpperCase() || 'U' }}</div>
+                  <div class="user-main">
+                    <div class="user-main-row">
+                      <strong class="user-name">{{ row.username }}</strong>
+                      <el-tag v-if="row.is_builtin" size="small" effect="plain" type="warning" class="mini-tag">{{ builtInLabel }}</el-tag>
+                    </div>
+                    <span class="user-sub">{{ row.nickname || t.common.none }}</span>
                   </div>
-                  <span>{{ row.nickname || t.common.none }}</span>
                 </div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.rbac.role" min-width="120">
-            <template #default="{ row }">
-              <el-tag :type="roleTagType(row.role)" size="small" effect="dark">{{ roleLabel(row.role) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.rbac.nickname" prop="nickname" min-width="140">
-            <template #default="{ row }">{{ row.nickname || t.common.none }}</template>
-          </el-table-column>
-          <el-table-column :label="t.rbac.remark" min-width="220">
-            <template #default="{ row }">
-              <span class="remark-text">{{ row.remark || t.common.none }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t.common.actions" width="140" fixed="right">
-            <template #default="{ row }">
-              <div class="rbac-actions">
-                <el-button type="primary" link :icon="Edit" @click="handleShowEdit(row)">{{ t.common.edit }}</el-button>
-                <el-button v-if="!row.is_builtin" type="danger" link :icon="Lock" @click="deleteUser(row.username)">{{ t.common.delete }}</el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="t.rbac.role" width="130">
+              <template #default="{ row }">
+                <el-tag :type="roleTagType(row.role)" size="small" effect="dark" class="role-tag">{{ roleLabel(row.role) }}</el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="t.rbac.remark" min-width="200">
+              <template #default="{ row }">
+                <span class="remark-text">{{ row.remark || '-' }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="t.common.actions" width="140" fixed="right" align="center">
+              <template #default="{ row }">
+                <div class="row-actions">
+                  <el-button type="primary" link :icon="Edit" @click="handleShowEdit(row)">{{ t.common.edit }}</el-button>
+                  <el-button v-if="!row.is_builtin" type="danger" link :icon="Lock" @click="deleteUser(row.username)">{{ t.common.delete }}</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
     </section>
 
-    <el-dialog v-model="showDialog" :title="isEdit ? t.common.edit : t.rbac.addUser" width="460px" append-to-body>
+    <!-- Dialog -->
+    <el-dialog v-model="showDialog" :title="isEdit ? t.common.edit : t.rbac.addUser" width="460px" append-to-body class="glass-dialog">
       <el-form label-position="top">
         <el-form-item :label="t.rbac.username">
           <el-input v-model="form.username" :disabled="isEdit" />
@@ -239,25 +230,152 @@ onMounted(fetchUsers)
 </template>
 
 <style scoped>
-.rbac-mini-stats {
-  min-width: 0;
-  width: auto;
+/* ===== Shell ===== */
+.svc-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height) - 48px);
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
 }
 
-.rbac-toolbar {
-  justify-content: space-between;
+/* ===== Toolbar ===== */
+.svc-toolbar {
+  flex-shrink: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.rbac-search {
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.toolbar-group:first-child {
+  padding-left: 0;
+}
+
+.toolbar-group:last-child {
+  padding-right: 0;
+}
+
+.toolbar-group.right-align {
+  margin-left: auto;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+/* ── Content ── */
+.svc-content {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 24px 12px;
 }
 
-.rbac-role-filter {
-  width: 180px;
+.empty-panel {
+  display: grid;
+  place-items: center;
+  height: 100%;
 }
 
-.rbac-table-wrap {
-  border-radius: 20px;
+.empty-inner {
+  text-align: center;
+  color: var(--text-muted);
+}
+.empty-inner strong {
+  display: block;
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+:deep(.search-input .el-input__wrapper),
+:deep(.pill-select .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  color: var(--text-primary);
+  height: 32px;
+}
+:deep(.search-input .el-input__wrapper:hover),
+:deep(.search-input .el-input__wrapper:focus-within),
+:deep(.pill-select .el-input__wrapper:hover),
+:deep(.pill-select .el-input__wrapper:focus-within) {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.pill-btn {
+  border-radius: 8px;
+  height: 32px;
+}
+.add-btn {
+  height: 32px;
+  border-radius: 8px;
+  padding: 0 16px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+:deep(.table-wrap .el-table) {
+  height: 100%;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.03);
+  --el-table-border-color: rgba(255, 255, 255, 0.04);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-text-color: var(--text-primary);
+}
+
+:deep(.table-wrap .el-table__inner-wrapper::before) {
+  display: none;
+}
+
+:deep(.table-wrap .el-table th.el-table__cell) {
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+:deep(.table-wrap .el-table td.el-table__cell) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+:deep(.table-wrap .el-table tr:hover > td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+:deep(.table-wrap .el-table__fixed-right) {
+  box-shadow: none;
 }
 
 .user-cell {
@@ -267,47 +385,57 @@ onMounted(fetchUsers)
 }
 
 .user-avatar {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(6, 182, 212, 0.12));
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1));
   color: var(--accent-blue);
   font-weight: 700;
+  font-size: 14px;
 }
 
-.user-meta {
+.user-main {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
-.user-name-row {
+.user-main-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.user-meta span,
+.user-name {
+  font-size: 14px;
+}
+
+.mini-tag {
+  height: 18px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+.user-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .remark-text {
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-.rbac-actions {
+.row-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 12px;
 }
 
-@media (max-width: 980px) {
-  .rbac-mini-stats,
-  .rbac-search,
-  .rbac-role-filter {
-    width: 100%;
-    min-width: 0;
-  }
-}
+
 </style>
 
 

@@ -42,61 +42,60 @@ All cards and panels should follow the frosted glass aesthetic:
 
 ### 3.2 Sub-page UI Layout Specification
 
-When building sub-pages (like detail pages or secondary lists), strictly follow this layout structure:
+When building sub-pages or main management views (Namespace, RBAC, etc.), use the following standardized layout for consistency:
 
 ```html
-<div class="app-container infrastructure-page">
+<div class="app-container">
   <div class="app-panel">
-    <!-- 1. Page Header -->
+    <!-- 1. Page Header (Bold Titles + Stats) -->
     <div class="page-header">
       <div class="header-main">
         <div class="header-left">
           <h1 class="page-title">
-            <el-icon><YourIcon /></el-icon> Title
+            <el-icon><YourIcon /></el-icon> <span>标题</span>
           </h1>
         </div>
-        <!-- Right side actions (e.g. Back button) -->
-        <div class="header-right category-switcher">
-          <div class="category-btn" @click="goBack">
-            <el-icon><ArrowLeft /></el-icon><span>返回上级</span>
+        <div class="header-right">
+          <div class="stats-group">
+            <div class="stat-chip">
+              <span class="stat-value">99</span>
+              <span class="stat-label">标签</span>
+            </div>
           </div>
         </div>
       </div>
-      <p class="page-desc">Description of the page</p>
+      <p class="page-desc">页面描述文本 (14px/muted)</p>
     </div>
 
-    <!-- 2. Navigation & Toolbar -->
+    <!-- 2. Toolbar & Filtering -->
     <div class="main-nav-container">
-      <div class="category-tabs"></div>
-      <!-- For left-aligned tabs if any -->
       <div class="toolbar-actions">
-        <!-- Inline Search Form -->
-        <el-form :inline="true" class="header-filter-form">
-          <!-- Form items -->
-        </el-form>
-        <!-- Primary Action Button -->
-        <el-button type="primary" class="add-btn"
-          ><el-icon><Plus /></el-icon><span>新增</span></el-button
-        >
+        <el-input class="header-search" v-model="search" />
+        <el-button class="pill-btn" :icon="Refresh" @click="fetch">刷新</el-button>
+        <div class="toolbar-sep"></div>
+        <el-button type="primary" class="add-btn" :icon="Plus" @click="add">新增</el-button>
       </div>
     </div>
 
-    <!-- 3. Content & Table -->
+    <!-- 3. Content Body (Grid or Table) -->
     <div class="content-body">
-      <div class="table-container">
-        <!-- Table with class middleware-table and height="100%" -->
-        <el-table class="middleware-table" height="100%">...</el-table>
+      <!-- For Tables: wrap in .table-wrap and use height="100%" -->
+      <div class="table-wrap">
+        <el-table :data="data" height="100%">...</el-table>
       </div>
-      <!-- Pagination -->
-      <div class="middleware-pagination-container">
-        <el-pagination class="middleware-pagination" />
-      </div>
+      
+      <!-- For Grids: use .namespace-grid or similar with flex/grid containers -->
+      <div class="card-grid">...</div>
     </div>
   </div>
 </div>
 ```
 
-- Only use standard classes defined in `main.scss` and `infrastructure.scss`. Avoid writing custom CSS in the vue component for layout if possible.
+- **Layout Components**:
+  - `.app-panel`: Flex container (column) for the entire page.
+  - `.page-title`: **20px font-weight: 700**.
+  - `.content-body`: Set to `flex: 1` and `min-height: 0` to enable internal scrolling.
+  - `.table-wrap`: Rounded corners (12px), border, and overflow: hidden.
 
 ### 3.2 Dialog / Popup Specification
 

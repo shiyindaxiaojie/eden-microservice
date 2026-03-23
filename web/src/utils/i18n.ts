@@ -1,4 +1,4 @@
-﻿import { computed, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 export type Locale = 'en' | 'zh'
 
@@ -40,6 +40,8 @@ export const messages = {
       loginError: 'Invalid username or password',
       switchToChinese: 'Switch to Chinese',
       switchToEnglish: 'Switch to English',
+      all: 'All',
+      createdAt: 'Created At',
     },
     dashboard: {
       nodes: 'Nodes',
@@ -271,6 +273,8 @@ export const messages = {
       loginError: '用户名或密码错误',
       switchToChinese: '切换到中文',
       switchToEnglish: '切换到英文',
+      all: '全部',
+      createdAt: '创建时间',
     },
     dashboard: {
       nodes: '节点数',

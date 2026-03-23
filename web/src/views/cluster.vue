@@ -1,7 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
   addClusterMember,
   getClusterMembers,
@@ -46,13 +46,8 @@ const removeConfirm = (row: ClusterMember) =>
   locale.value === 'zh'
     ? `确定移除节点 ${row.id} (${row.address}) 吗？`
     : `Are you sure you want to remove node ${row.id} (${row.address})?`
+
 const emptyNodesLabel = computed(() => (locale.value === 'zh' ? '暂无节点数据' : 'No nodes found'))
-const leaderValue = computed(() => stats.value?.leader_addr || '-')
-const modeValue = computed(() => {
-  if (!stats.value) return '-'
-  if (stats.value.environment === 'standalone') return t.value.settings.singleTitle
-  return stats.value.mode === 'cp' ? t.value.settings.cpTitle : t.value.settings.apTitle
-})
 
 function addNodeRow() {
   addForms.value.push({ protocol: 'http://', host: '', port: '' })
@@ -144,113 +139,116 @@ onMounted(fetchCluster)
 </script>
 
 <template>
-  <div class="page-stack cluster-page">
-    <section class="compact-hero">
-      <div class="hero-copy-compact">
-        <p class="hero-kicker">{{ t.nav.cluster }}</p>
-        <h2 class="hero-heading">{{ t.cluster.nodeList }}</h2>
-        <p class="hero-desc">{{ clusterHint }}</p>
-      </div>
-      <div class="cluster-actions">
-        <div class="mini-stat-grid cluster-mini-stats">
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.cluster.nodeCount }}</span>
-            <strong class="mini-stat-value">{{ stats?.node_count ?? 0 }}</strong>
-          </div>
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.cluster.role }}</span>
-            <strong class="mini-stat-value cluster-stat-text">{{ getRoleName(stats?.role || '-') }}</strong>
-          </div>
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.settings.consistency }}</span>
-            <strong class="mini-stat-value cluster-stat-text">{{ modeValue }}</strong>
-          </div>
-          <div class="mini-stat">
-            <span class="mini-stat-label">{{ t.cluster.leaderAddr }}</span>
-            <strong class="mini-stat-value cluster-stat-text">{{ leaderValue }}</strong>
-          </div>
+  <div class="svc-shell">
+    <!-- Toolbar -->
+    <div class="svc-toolbar">
+      <div class="toolbar-row">
+        <div class="toolbar-group">
+          <el-input
+            v-model="search"
+            :prefix-icon="Search"
+            :placeholder="nodeSearchPlaceholder"
+            clearable
+            class="search-input"
+            style="width: 320px;"
+          />
         </div>
-        <div class="cluster-action-row">
-          <el-button size="large" :icon="Refresh" @click="fetchCluster">{{ t.common.refresh }}</el-button>
-          <el-button v-if="stats?.environment === 'cluster' || stats?.mode === 'cp'" type="primary" size="large" :icon="Plus" @click="showAddDialog = true">
+
+        <div class="toolbar-group right-align">
+          <el-button :icon="Refresh" class="pill-btn" @click="fetchCluster">{{ t.common.refresh }}</el-button>
+          <div class="toolbar-sep"></div>
+          <el-button
+            v-if="stats?.environment === 'cluster' || stats?.mode === 'cp'"
+            type="primary"
+            class="add-btn"
+            :icon="Plus"
+            @click="showAddDialog = true"
+          >
             {{ t.cluster.addNode }}
           </el-button>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="panel-toolbar cluster-toolbar">
-      <el-input v-model="search" :prefix-icon="Search" :placeholder="nodeSearchPlaceholder" clearable size="large" class="cluster-search" />
-    </section>
-
-    <section v-loading="loading">
+    <!-- Content -->
+    <section class="svc-content" v-loading="loading">
       <div v-if="!loading && filteredMembers.length === 0" class="empty-panel">
-        <div class="empty-state">
-          <el-icon><Connection /></el-icon>
-          <p>{{ emptyNodesLabel }}</p>
+        <div class="empty-inner">
+          <strong>{{ emptyNodesLabel }}</strong>
+          <p>{{ clusterHint }}</p>
         </div>
       </div>
 
-      <div v-else class="glass-table-wrapper cluster-table-wrap">
-        <el-table :data="filteredMembers" style="width: 100%">
-          <el-table-column :label="t.cluster.nodeId" min-width="220">
-            <template #default="{ row }">
-              <div class="node-id-cell">
-                <div class="node-badge">{{ row.id?.slice(0, 2)?.toUpperCase() || 'N' }}</div>
-                <div class="node-main">
-                  <div class="node-main-row">
-                    <strong>{{ row.id }}</strong>
-                    <el-tag v-if="row.is_local" size="small" effect="plain" type="success">{{ t.cluster.currentNode }}</el-tag>
+      <template v-else>
+        <div class="table-wrap">
+          <el-table :data="filteredMembers" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table-column :label="t.cluster.nodeId" min-width="220">
+              <template #default="{ row }">
+                <div class="node-id-cell">
+                  <div class="node-badge">{{ row.id?.slice(0, 2)?.toUpperCase() || 'N' }}</div>
+                  <div class="node-main">
+                    <div class="node-main-row">
+                      <strong class="node-name">{{ row.id }}</strong>
+                      <el-tag v-if="row.is_local" size="small" effect="plain" type="success">{{ t.cluster.currentNode }}</el-tag>
+                    </div>
+                    <span class="node-sub">{{ getRoleName(row.role) }}</span>
                   </div>
-                  <span>{{ getRoleName(row.role) }}</span>
                 </div>
-              </div>
-            </template>
-          </el-table-column>
+              </template>
+            </el-table-column>
 
-          <el-table-column :label="t.cluster.address" min-width="360">
-            <template #default="{ row }">
-              <div class="address-tags">
-                <el-tag v-if="row.http_addr" size="small" effect="plain" class="addr-tag"><span class="addr-proto">HTTP</span>{{ row.http_addr }}</el-tag>
-                <el-tag v-if="row.grpc_addr" size="small" type="success" effect="plain" class="addr-tag"><span class="addr-proto">GRPC</span>{{ row.grpc_addr }}</el-tag>
-                <el-tag v-if="row.raft_addr" size="small" type="warning" effect="plain" class="addr-tag"><span class="addr-proto">RAFT</span>{{ row.raft_addr }}</el-tag>
-                <el-tag v-if="row.quic_addr" size="small" type="info" effect="plain" class="addr-tag"><span class="addr-proto">QUIC</span>{{ row.quic_addr }}</el-tag>
-                <span v-if="!row.http_addr" class="mono-addr">{{ row.address }}</span>
-              </div>
-            </template>
-          </el-table-column>
+            <el-table-column :label="t.cluster.address" min-width="360">
+              <template #default="{ row }">
+                <div class="address-tags">
+                  <span v-if="row.http_addr" class="addr-chip"><i class="p-tag">HTTP</i>{{ row.http_addr }}</span>
+                  <span v-if="row.grpc_addr" class="addr-chip grpc"><i class="p-tag">GRPC</i>{{ row.grpc_addr }}</span>
+                  <span v-if="row.raft_addr" class="addr-chip raft"><i class="p-tag">RAFT</i>{{ row.raft_addr }}</span>
+                  <span v-if="row.quic_addr" class="addr-chip quic"><i class="p-tag">QUIC</i>{{ row.quic_addr }}</span>
+                  <span v-if="!row.http_addr" class="mono-addr">{{ row.address }}</span>
+                </div>
+              </template>
+            </el-table-column>
 
-          <el-table-column :label="t.cluster.status" min-width="120">
-            <template #default="{ row }">
-              <div class="status-cell">
-                <span class="status-dot" :class="row.status === 'Online' ? 'active' : 'inactive'"></span>
-                <span>{{ row.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
-              </div>
-            </template>
-          </el-table-column>
+            <el-table-column :label="t.cluster.status" width="120">
+              <template #default="{ row }">
+                <div class="status-cell">
+                  <span class="status-dot" :class="row.status === 'Online' ? 'active' : 'inactive'"></span>
+                  <span class="status-text">{{ row.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
+                </div>
+              </template>
+            </el-table-column>
 
-          <el-table-column :label="t.cluster.role" min-width="130">
-            <template #default="{ row }">
-              <el-tag :type="roleTagType(row.role)" size="small" effect="dark">{{ getRoleName(row.role) }}</el-tag>
-            </template>
-          </el-table-column>
+            <el-table-column :label="t.cluster.role" width="130">
+              <template #default="{ row }">
+                <el-tag :type="roleTagType(row.role)" size="small" effect="dark" class="role-tag">{{ getRoleName(row.role) }}</el-tag>
+              </template>
+            </el-table-column>
 
-          <el-table-column :label="t.common.actions" width="110" fixed="right">
-            <template #default="{ row }">
-              <el-button
-                v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
-                link
-                type="danger"
-                :icon="Delete"
-                @click="handleRemove(row)"
-              />
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+            <el-table-column :label="t.common.actions" width="100" fixed="right" align="center">
+              <template #default="{ row }">
+                <el-button
+                  v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
+                  type="danger"
+                  link
+                  :icon="Delete"
+                  @click="handleRemove(row)"
+                />
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
     </section>
 
-    <el-dialog v-model="showAddDialog" :title="t.cluster.addNode" width="560px" append-to-body @close="addForms = [{ protocol: 'http://', host: '', port: '' }]">
+    <!-- Add Node Dialog -->
+    <el-dialog
+      v-model="showAddDialog"
+      :title="t.cluster.addNode"
+      width="560px"
+      append-to-body
+      @close="addForms = [{ protocol: 'http://', host: '', port: '' }]"
+      class="glass-dialog"
+    >
       <div class="add-node-form">
         <div v-for="(form, index) in addForms" :key="index" class="node-input-row">
           <el-select v-model="form.protocol" class="protocol-select">
@@ -275,35 +273,149 @@ onMounted(fetchCluster)
 </template>
 
 <style scoped>
-.cluster-actions {
+/* ===== Shell ===== */
+.svc-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height) - 48px);
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
+}
+
+/* ===== Toolbar ===== */
+.svc-toolbar {
+  flex-shrink: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.toolbar-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 0;
 }
 
-.cluster-mini-stats {
-  min-width: 0;
-  width: auto;
-}
-
-.cluster-stat-text {
-  font-size: 18px;
-  line-height: 1.25;
-}
-
-.cluster-action-row {
+.toolbar-group {
   display: flex;
+  align-items: center;
   gap: 8px;
+  padding: 0 16px;
 }
 
-.cluster-search {
+.toolbar-group:first-child {
+  padding-left: 0;
+}
+
+.toolbar-group:last-child {
+  padding-right: 0;
+}
+
+.toolbar-group.right-align {
+  margin-left: auto;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+/* ── Content ── */
+.svc-content {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 24px 12px;
 }
 
-.cluster-table-wrap {
-  border-radius: 20px;
+.empty-panel {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.empty-inner {
+  text-align: center;
+  color: var(--text-muted);
+}
+.empty-inner strong {
+  display: block;
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+:deep(.search-input .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  color: var(--text-primary);
+  height: 32px;
+}
+:deep(.search-input .el-input__wrapper:hover),
+:deep(.search-input .el-input__wrapper:focus-within) {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.pill-btn {
+  border-radius: 8px;
+  height: 32px;
+}
+.add-btn {
+  height: 32px;
+  border-radius: 8px;
+  padding: 0 16px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+:deep(.table-wrap .el-table) {
+  height: 100%;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.03);
+  --el-table-border-color: rgba(255, 255, 255, 0.04);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-text-color: var(--text-primary);
+}
+
+:deep(.table-wrap .el-table__inner-wrapper::before) {
+  display: none;
+}
+
+:deep(.table-wrap .el-table th.el-table__cell) {
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+:deep(.table-wrap .el-table td.el-table__cell) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+:deep(.table-wrap .el-table tr:hover > td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+:deep(.table-wrap .el-table__fixed-right) {
+  box-shadow: none;
 }
 
 .node-id-cell {
@@ -313,20 +425,21 @@ onMounted(fetchCluster)
 }
 
 .node-badge {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(6, 182, 212, 0.12));
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1));
   color: var(--accent-blue);
   font-weight: 700;
+  font-size: 14px;
 }
 
 .node-main {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .node-main-row {
@@ -335,28 +448,42 @@ onMounted(fetchCluster)
   gap: 8px;
 }
 
-.node-main span,
-.mono-addr {
-  color: var(--text-secondary);
+.node-name {
+  font-size: 14px;
+}
+
+.node-sub {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .address-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
-.addr-tag {
+.addr-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
 }
 
-.addr-proto {
-  font-weight: 700;
+.addr-chip.grpc { color: var(--accent-green); }
+.addr-chip.raft { color: var(--accent-orange); }
+.addr-chip.quic { color: var(--accent-blue); }
+
+.p-tag {
+  font-style: normal;
+  font-weight: 800;
   font-size: 10px;
-  letter-spacing: 0.08em;
+  opacity: 0.6;
 }
 
 .status-cell {
@@ -372,64 +499,39 @@ onMounted(fetchCluster)
 }
 
 .status-dot.active {
-  background-color: var(--accent-green);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  background: var(--accent-green);
+  box-shadow: 0 0 10px var(--accent-green);
 }
 
 .status-dot.inactive {
-  background-color: var(--text-muted);
+  background: var(--text-muted);
+}
+
+.status-text {
+  font-size: 13px;
 }
 
 .add-node-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 8px 0;
 }
 
 .node-input-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px;
-  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
   border: 1px solid var(--border-color);
-  background: var(--bg-card);
 }
 
-.protocol-select {
-  width: 100px;
-}
+.protocol-select { width: 100px; }
+.host-input { flex: 1; }
+.port-input { width: 90px; }
 
-.host-input {
-  flex: 1;
-}
 
-.port-input {
-  width: 90px;
-}
-
-.colon-separator {
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.row-actions {
-  display: flex;
-  gap: 4px;
-}
-
-@media (max-width: 980px) {
-  .cluster-mini-stats,
-  .cluster-search {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .cluster-actions {
-    align-items: stretch;
-  }
-}
 </style>
 
 
