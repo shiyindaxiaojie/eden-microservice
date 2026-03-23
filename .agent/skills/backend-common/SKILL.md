@@ -88,4 +88,9 @@ Handler 层必须按 **业务领域** 拆分为独立文件：
 - 使用 `go fmt` 格式化代码。
 - 使用 `go vet` 做静态分析。
 - 注释使用英文，简洁明了。
-- 导出函数必须有 godoc 注释。
+## 7. Service Status Resilience
+
+- Manual status changes (e.g., administrator offlining an instance) MUST take precedence over heartbeat-based health recovery.
+- **Implementation**: The `Instance` model should include a `ManualOffline` boolean.
+- **Heartbeat Policy**: `HeartbeatNS` only updates `Status` to `passing` if `ManualOffline` is false.
+- **Consistency**: Both AP and CP mode replication should propagate the `ManualOffline` flag.

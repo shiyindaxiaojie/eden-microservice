@@ -29,8 +29,18 @@ This skill covers the foundational rules for frontend development in `eden-go-re
   - **DO NOT** define reusable common styles in components.
   - Use `web/src/styles/main.scss` for shared classes like `.app-container`, `.search-section`, `.table-section`.
 - **BEM Naming**: Use BEM or semantic naming for classes.
+- **Unified Typography**: Baseline font size is **14px** for maximum readability. Major titles use **18-20px**, while sub-headings and labels use **12-13px**. Metadata uses **11px**.
+- **State Persistence**: Manual status changes (e.g., offlining an instance) MUST persist via a `manual_offline` flag to prevent automatic heartbeat-based recovery.
 
-### 3.1 Sub-page UI Layout Specification
+### 3.1 Premium Component Design (Glassmorphism)
+
+All cards and panels should follow the frosted glass aesthetic:
+- **Background**: `var(--bg-glass)` or `rgba(255, 255, 255, 0.03)`.
+- **Border**: `1px solid var(--border-color)` with rounded corners (12px for major cards, 4px/8px for smaller items).
+- **Hover Effects**: Suble lift (`transform: translateY(-4px)`), enhanced shadow, and glow effects (`box-shadow` matching the component's accent color).
+- **Smooth Transitions**: Use `transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1)`.
+
+### 3.2 Sub-page UI Layout Specification
 
 When building sub-pages (like detail pages or secondary lists), strictly follow this layout structure:
 

@@ -231,7 +231,12 @@ func (c *Client) syncNodes() {
 		}
 		url += "/v1/cluster/members"
 
-		resp, err := c.client.Get(url)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return err
+		}
+		c.setHeaders(req)
+		resp, err := c.client.Do(req)
 		if err != nil {
 			return err
 		}

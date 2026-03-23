@@ -41,7 +41,7 @@ func main() {
 	}
 
 	instance := &registry.ServiceInstance{
-		ID:          "user-center-1",
+		ID:          envOr("SERVICE_ID", "user-center-1"),
 		ServiceName: "user-center",
 		Host:        "127.0.0.1",
 		Port:        atoi(servicePort),

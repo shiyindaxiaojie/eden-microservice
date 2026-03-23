@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/shiyindaxiaojie/eden-go-logger"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
 )
 
 type contextKey string
@@ -20,7 +20,7 @@ const (
 )
 
 // AuthMiddleware handles JWT authentication for the console.
-func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
+func (h *Handler) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.config.Auth.JWT.Enabled {
 			next.ServeHTTP(w, r)
@@ -80,7 +80,7 @@ func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 }
 
 // RBACMiddleware checks if the user has the required roles.
-func (h *Handler) RBACMiddleware(roles ...string) func(http.Handler) http.Handler {
+func (h *Handler) RBAC(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !h.config.Auth.JWT.Enabled {
@@ -113,7 +113,7 @@ func (h *Handler) RBACMiddleware(roles ...string) func(http.Handler) http.Handle
 }
 
 // APIKeyMiddleware handles API Key authentication for service registration.
-func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
+func (h *Handler) APIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.config.Auth.APIKey.Enabled {
 			next.ServeHTTP(w, r)
@@ -154,7 +154,7 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 }
 
 // ConsolidatedAuthMiddleware allows EITHER a valid API Key OR a valid JWT with required roles.
-func (h *Handler) ConsolidatedAuthMiddleware(roles ...string) func(http.Handler) http.Handler {
+func (h *Handler) ConsolidatedAuth(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get("X-API-Key")

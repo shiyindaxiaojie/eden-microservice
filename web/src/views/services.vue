@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Grid, List, RefreshRight, Search } from '@element-plus/icons-vue'
+import { Grid, List, RefreshRight, Search, Top, Bottom } from '@element-plus/icons-vue'
 import {
   getNamespaces,
   getServices,
@@ -10,6 +10,7 @@ import {
   type Namespace,
   type ServiceSummary,
   type TopologyGraph,
+  type TopologyInstance,
   type TopologyNode,
 } from '../api/registry'
 import TopologyGraphCanvas from '../components/topology-graph.vue'
@@ -18,6 +19,24 @@ import { useI18n } from '../utils/i18n'
 type PanelMode = 'catalog' | 'topology'
 type CatalogMode = 'grid' | 'list'
 type HealthFilter = '' | 'healthy' | 'degraded'
+type ServiceHealthState = 'empty' | 'healthy' | 'partial' | 'critical'
+
+interface ServiceEntry extends ServiceSummary {
+  instances: TopologyInstance[]
+  primaryAddress: string
+  subscribers: number
+  upstreamCount: number
+  downstreamCount: number
+  healthState: ServiceHealthState
+  healthText: string
+  healthTone: string
+  healthSurface: string
+  healthBorder: string
+  healthRatio: number
+  namespace: string
+}
+
+const autoRefreshSeconds = 15
 
 const { locale } = useI18n()
 const route = useRoute()
@@ -32,6 +51,7 @@ const activePanel = ref<PanelMode>((route.query.view as PanelMode) || 'catalog')
 const catalogMode = ref<CatalogMode>('list')
 const healthFilter = ref<HealthFilter>('')
 const search = ref('')
+const searchIP = ref('')
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(12)
@@ -50,32 +70,108 @@ const topologyNodeMap = computed<Record<string, TopologyNode>>(() =>
 const topologyMeta = computed(() => {
   const upstream: Record<string, string[]> = {}
   const downstream: Record<string, string[]> = {}
+
   for (const edge of topology.value.edges) {
     if (!upstream[edge.source]) upstream[edge.source] = []
     if (!downstream[edge.target]) downstream[edge.target] = []
     upstream[edge.source]!.push(edge.target)
     downstream[edge.target]!.push(edge.source)
   }
+
   Object.values(upstream).forEach((items) => items.sort())
   Object.values(downstream).forEach((items) => items.sort())
+
   return { upstream, downstream }
 })
 
-const filteredServices = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return services.value.filter((service) => {
+function serviceHealthState(service: Pick<ServiceSummary, 'instance_count' | 'healthy_count'>): ServiceHealthState {
+  if (service.instance_count === 0) return 'empty'
+  if (service.healthy_count === service.instance_count) return 'healthy'
+  if (service.healthy_count > 0) return 'partial'
+  return 'critical'
+}
+
+function serviceHealthTheme(state: ServiceHealthState) {
+  switch (state) {
+    case 'healthy':
+      return {
+        tone: '#10b981',
+        surface: 'rgba(16, 185, 129, 0.08)',
+        border: 'rgba(16, 185, 129, 0.18)',
+      }
+    case 'partial':
+      return {
+        tone: '#f59e0b',
+        surface: 'rgba(245, 158, 11, 0.08)',
+        border: 'rgba(245, 158, 11, 0.18)',
+      }
+    case 'critical':
+      return {
+        tone: '#ef4444',
+        surface: 'rgba(239, 68, 68, 0.08)',
+        border: 'rgba(239, 68, 68, 0.18)',
+      }
+    default:
+      return {
+        tone: '#64748b',
+        surface: 'rgba(100, 116, 139, 0.08)',
+        border: 'rgba(100, 116, 139, 0.18)',
+      }
+  }
+}
+
+function serviceHealthTextByState(state: ServiceHealthState) {
+  switch (state) {
+    case 'healthy':
+      return text('健康', 'Healthy')
+    case 'partial':
+      return text('部分异常', 'Partial')
+    case 'critical':
+      return text('严重异常', 'Critical')
+    default:
+      return text('暂无实例', 'No instance')
+  }
+}
+
+const serviceEntries = computed<ServiceEntry[]>(() =>
+  services.value.map((service) => {
     const topologyNode = topologyNodeMap.value[service.name]
     const instances = topologyNode?.instances || []
-    const matchesSearch =
-      !query ||
-      service.name.toLowerCase().includes(query) ||
-      instances.some((instance) => `${instance.host}:${instance.port}`.toLowerCase().includes(query))
+    const state = serviceHealthState(service)
+    const theme = serviceHealthTheme(state)
+    const primary = instances[0]
+
+    return {
+      ...service,
+      instances,
+      primaryAddress: primary ? `${primary.host}:${primary.port}${instances.length > 1 ? ` (+${instances.length - 1})` : ''}` : text('暂无实例', 'No instance'),
+      subscribers: subscribersMap.value[service.name]?.length || 0,
+      upstreamCount: topologyMeta.value.upstream[service.name]?.length || 0,
+      downstreamCount: topologyMeta.value.downstream[service.name]?.length || 0,
+      healthState: state,
+      healthText: serviceHealthTextByState(state),
+      healthTone: theme.tone,
+      healthSurface: theme.surface,
+      healthBorder: theme.border,
+      healthRatio: service.instance_count ? Math.round((service.healthy_count / service.instance_count) * 100) : 0,
+      namespace: topologyNode?.namespace || currentNamespace.value,
+    }
+  }),
+)
+
+const filteredServices = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  const ipQuery = searchIP.value.trim().toLowerCase()
+
+  return serviceEntries.value.filter((service) => {
+    const matchesSearch = !query || service.name.toLowerCase().includes(query)
+    const matchesIP = !ipQuery || service.instances.some((instance) => `${instance.host}:${instance.port}`.toLowerCase().includes(ipQuery))
+
     const matchesHealth =
       !healthFilter.value ||
-      (healthFilter.value === 'healthy'
-        ? service.instance_count > 0 && service.healthy_count === service.instance_count
-        : service.healthy_count < service.instance_count)
-    return matchesSearch && matchesHealth
+      (healthFilter.value === 'healthy' ? service.healthState === 'healthy' : service.healthState !== 'healthy')
+
+    return matchesSearch && matchesIP && matchesHealth
   })
 })
 
@@ -86,35 +182,18 @@ const pagedServices = computed(() => {
   return filteredServices.value.slice(start, start + pageSize.value)
 })
 
+const totalServices = computed(() => serviceEntries.value.length)
+// Unused total instances lines removed
+const healthyServiceCount = computed(() => serviceEntries.value.filter((service) => service.healthState === 'healthy').length)
+const degradedServiceCount = computed(() => serviceEntries.value.filter((service) => service.healthState !== 'healthy').length)
+
+// overallHealthRate removed
+
 const selectedNodeDetail = computed<TopologyNode | null>(() => topologyNodeMap.value[selectedTopologyNode.value] || null)
 const selectedUpstream = computed(() => topologyMeta.value.upstream[selectedTopologyNode.value] || [])
 const selectedDownstream = computed(() => topologyMeta.value.downstream[selectedTopologyNode.value] || [])
 
-function serviceHealthTone(service: ServiceSummary) {
-  if (service.instance_count === 0) return '#94a3b8'
-  if (service.healthy_count === service.instance_count) return '#16a34a'
-  if (service.healthy_count > 0) return '#d97706'
-  return '#dc2626'
-}
-
-function serviceHealthText(service: ServiceSummary) {
-  if (service.instance_count === 0) return text('无实例', 'No instance')
-  if (service.healthy_count === service.instance_count) return text('健康', 'Healthy')
-  if (service.healthy_count > 0) return text('部分异常', 'Partial')
-  return text('严重异常', 'Critical')
-}
-
-function previewSubscriberCount(serviceName: string) {
-  return subscribersMap.value[serviceName]?.length || 0
-}
-
-function previewAddress(serviceName: string) {
-  const instances = topologyNodeMap.value[serviceName]?.instances || []
-  if (instances.length === 0) return '-'
-  const [first] = instances
-  if (!first) return '-'
-  return `${first.host}:${first.port}`
-}
+// selectedNodeHealth removed
 
 function openService(serviceName: string) {
   router.push({
@@ -135,18 +214,23 @@ function selectTopologyNode(nodeId: string) {
 async function fetchNamespaces() {
   const response = await getNamespaces()
   namespaces.value = response.data || []
+
   if (!namespaces.value.find((item) => item.name === currentNamespace.value) && namespaces.value.length > 0) {
     currentNamespace.value = namespaces.value[0]!.name
   }
 }
 
-async function fetchWorkspace() {
-  loading.value = true
+async function fetchWorkspace(showLoading = true) {
+  if (showLoading) {
+    loading.value = true
+  }
+
   try {
     const [servicesRes, topologyRes] = await Promise.all([
       getServices(currentNamespace.value),
       getTopology(currentNamespace.value),
     ])
+
     services.value = servicesRes.data || []
     topology.value = topologyRes.data || { namespace: currentNamespace.value, nodes: [], edges: [] }
 
@@ -160,25 +244,30 @@ async function fetchWorkspace() {
         }
       }),
     )
+
     subscribersMap.value = Object.fromEntries(subscribersEntries)
 
     if (!selectedTopologyNode.value || !topologyNodeMap.value[selectedTopologyNode.value]) {
       selectedTopologyNode.value = topology.value.nodes[0]?.id || ''
     }
   } finally {
-    loading.value = false
+    if (showLoading) {
+      loading.value = false
+    }
   }
 }
 
 function restartRefreshLoop() {
   if (refreshTimer) clearInterval(refreshTimer)
+
   refreshTimer = setInterval(() => {
-    fetchWorkspace().catch((error) => console.error('refresh workspace failed', error))
-  }, 5000)
+    fetchWorkspace(false).catch((error) => console.error('refresh workspace failed', error))
+  }, autoRefreshSeconds * 1000)
 }
 
 watch([currentNamespace, activePanel], async () => {
   currentPage.value = 1
+
   await router.replace({
     query: {
       ...route.query,
@@ -186,10 +275,11 @@ watch([currentNamespace, activePanel], async () => {
       view: activePanel.value,
     },
   })
+
   await fetchWorkspace()
 })
 
-watch([search, healthFilter], () => {
+watch([search, searchIP, healthFilter], () => {
   currentPage.value = 1
 })
 
@@ -213,171 +303,283 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="services-page-shell">
-    <section class="toolbar-row">
-      <div class="toolbar-left">
-        <el-select v-model="currentNamespace" size="large" class="toolbar-namespace">
-          <el-option
-            v-for="namespace in namespaces"
-            :key="namespace.name"
-            :label="namespace.name"
-            :value="namespace.name"
-          />
-        </el-select>
-
-        <el-input
-          v-model="search"
-          size="large"
-          clearable
-          :prefix-icon="Search"
-          :placeholder="text('搜索服务或实例 IP:Port', 'Search by service or instance IP:Port')"
-          class="toolbar-search"
-        />
-
-        <el-select v-model="healthFilter" size="large" clearable class="toolbar-health" :placeholder="text('健康状态', 'Health')">
-          <el-option :label="text('全部', 'All')" value="" />
-          <el-option :label="text('健康', 'Healthy')" value="healthy" />
-          <el-option :label="text('异常', 'Degraded')" value="degraded" />
-        </el-select>
-      </div>
-
-      <div class="toolbar-right">
-        <div class="view-switch">
-          <button type="button" :class="{ active: activePanel === 'catalog' }" @click="activePanel = 'catalog'">
-            {{ text('服务列表', 'Service List') }}
-          </button>
-          <button type="button" :class="{ active: activePanel === 'topology' }" @click="activePanel = 'topology'">
-            {{ text('拓扑图', 'Topology') }}
-          </button>
+  <div class="svc-shell">
+    <!-- ─── Toolbar ─── -->
+    <div class="svc-toolbar">
+      <!-- Row 1: Filters & Controls -->
+      <div class="toolbar-row">
+        <!-- Left: Namespace + Search -->
+        <div class="toolbar-group">
+          <div class="field-item">
+            <span class="field-label">{{ text('命名空间', 'Namespace') }}</span>
+            <el-select v-model="currentNamespace" size="default" class="ns-select">
+              <el-option
+                v-for="namespace in namespaces"
+                :key="namespace.name"
+                :label="namespace.name"
+                :value="namespace.name"
+              />
+            </el-select>
+          </div>
         </div>
 
-        <div v-if="activePanel === 'catalog'" class="mode-switch">
-          <button type="button" :class="{ active: catalogMode === 'list' }" :title="text('列表视图', 'List View')" @click="catalogMode = 'list'">
-            <el-icon><List /></el-icon>
-          </button>
-          <button type="button" :class="{ active: catalogMode === 'grid' }" :title="text('卡片视图', 'Card View')" @click="catalogMode = 'grid'">
-            <el-icon><Grid /></el-icon>
-          </button>
+        <div class="toolbar-group">
+          <div class="field-item">
+            <span class="field-label">{{ text('服务名称', 'Service Name') }}</span>
+            <el-input
+              v-model="search"
+              size="default"
+              clearable
+              :prefix-icon="Search"
+              :placeholder="text('输入服务名', 'Service')"
+              class="search-input"
+            />
+          </div>
         </div>
 
-        <el-button type="primary" :icon="RefreshRight" class="refresh-button" @click="fetchWorkspace">
-          {{ text('刷新', 'Refresh') }}
-        </el-button>
-      </div>
-    </section>
+        <div class="toolbar-group">
+          <div class="field-item">
+            <span class="field-label">{{ text('IP地址', 'IP Address') }}</span>
+            <el-input
+              v-model="searchIP"
+              size="default"
+              clearable
+              :prefix-icon="Search"
+              :placeholder="text('输入 IP', 'IP')"
+              class="search-input"
+            />
+          </div>
+        </div>
 
-    <section v-if="activePanel === 'catalog'" class="content-stage" v-loading="loading">
-      <div v-if="filteredServices.length === 0 && !loading" class="empty-stage">
-        <strong>{{ text('当前命名空间暂无服务', 'No services in current namespace') }}</strong>
-        <p>{{ text('切换命名空间或等待实例注册后，这里会自动更新。', 'Switch namespace or wait for services to register.') }}</p>
+        <!-- Right: Filters + View switch -->
+        <div class="toolbar-group right-align">
+          <template v-if="activePanel === 'catalog'">
+            <div class="pill-group icon-pills">
+              <button type="button" :class="{ active: catalogMode === 'list' }" :title="text('列表', 'List')" @click="catalogMode = 'list'">
+                <el-icon><List /></el-icon>
+              </button>
+              <button type="button" :class="{ active: catalogMode === 'grid' }" :title="text('卡片', 'Grid')" @click="catalogMode = 'grid'">
+                <el-icon><Grid /></el-icon>
+              </button>
+            </div>
+          </template>
+
+          <button type="button" class="refresh-btn" :title="text('刷新', 'Refresh')" @click="fetchWorkspace()">
+            <el-icon><RefreshRight /></el-icon>
+          </button>
+          
+          <div class="toolbar-sep" />
+
+          <div class="pill-group">
+            <button
+              type="button"
+              :class="{ active: healthFilter === '' }"
+              @click="healthFilter = ''"
+            >
+              {{ text('全部', 'All') }}
+              <span class="pill-count">{{ totalServices }}</span>
+            </button>
+            <button
+              type="button"
+              :class="{ active: healthFilter === 'healthy' }"
+              @click="healthFilter = 'healthy'"
+            >
+              {{ text('健康', 'OK') }}
+              <span class="pill-count">{{ healthyServiceCount }}</span>
+            </button>
+            <button
+              type="button"
+              :class="{ active: healthFilter === 'degraded' }"
+              @click="healthFilter = 'degraded'"
+            >
+              {{ text('异常', 'Err') }}
+              <span class="pill-count" :class="{ 'err-count': degradedServiceCount > 0 }">{{ degradedServiceCount }}</span>
+            </button>
+          </div>
+
+          <div class="toolbar-sep" />
+
+          <div class="pill-group">
+            <button type="button" :class="{ active: activePanel === 'catalog' }" @click="activePanel = 'catalog'">
+              {{ text('列表', 'List') }}
+            </button>
+            <button type="button" :class="{ active: activePanel === 'topology' }" @click="activePanel = 'topology'">
+              {{ text('拓扑', 'Topo') }}
+            </button>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Catalog Panel ─── -->
+    <section v-if="activePanel === 'catalog'" class="svc-content" v-loading="loading">
+      <div v-if="filteredServices.length === 0 && !loading" class="empty-panel">
+        <div class="empty-inner">
+          <strong>{{ text('当前筛选下没有匹配的服务', 'No services matched') }}</strong>
+          <p>{{ text('试试切换命名空间或清空搜索条件。', 'Try another namespace or clear filters.') }}</p>
+        </div>
       </div>
 
       <template v-else>
-        <div class="content-scroll">
-          <div v-if="catalogMode === 'grid'" class="card-grid">
-            <article v-for="service in pagedServices" :key="service.name" class="service-card">
-              <div class="card-head">
-                <div class="service-title">
-                  <strong @click="openService(service.name)">{{ service.name }}</strong>
-                  <span>{{ currentNamespace }}</span>
-                </div>
-                <span class="status-dot" :style="{ backgroundColor: serviceHealthTone(service) }"></span>
+        <!-- Card View -->
+        <div v-if="catalogMode === 'grid'" class="card-grid">
+          <article
+            v-for="service in pagedServices"
+            :key="service.name"
+            class="svc-card"
+            :style="{ '--svc-tone': service.healthTone, '--svc-surface': service.healthSurface, '--svc-border': service.healthBorder }"
+            @click="openService(service.name)"
+          >
+            <div class="card-head">
+              <strong class="card-name">{{ service.name }}</strong>
+              <div class="status-wrap">
+                <span class="status-label" :style="{ color: service.healthTone }">{{ service.healthText }}</span>
+                <span class="health-dot" :style="{ background: service.healthTone, boxShadow: `0 0 6px ${service.healthTone}` }"></span>
               </div>
+            </div>
 
-              <div class="service-address">{{ previewAddress(service.name) }}</div>
-
-              <div class="card-meta">
-                <div>
-                  <span>{{ text('实例', 'Instances') }}</span>
-                  <strong>{{ service.instance_count }}</strong>
-                </div>
-                <div>
-                  <span>{{ text('健康', 'Healthy') }}</span>
-                  <strong :style="{ color: serviceHealthTone(service) }">{{ service.healthy_count }}</strong>
-                </div>
-                <div>
-                  <span>{{ text('订阅方', 'Subscribers') }}</span>
-                  <strong>{{ previewSubscriberCount(service.name) }}</strong>
-                </div>
-              </div>
-
-              <div class="card-actions">
-                <span class="health-text" :style="{ color: serviceHealthTone(service) }">{{ serviceHealthText(service) }}</span>
-                <div class="inline-actions">
-                  <button type="button" @click="openTopology(service.name)">{{ text('拓扑', 'Topology') }}</button>
-                  <button type="button" @click="openService(service.name)">{{ text('详情', 'Detail') }}</button>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div v-else class="table-wrap">
-            <el-table :data="pagedServices" height="100%" style="width: 100%">
-              <el-table-column :label="text('服务', 'Service')" min-width="260">
-                <template #default="{ row }">
-                  <div class="service-cell" @click="openService(row.name)">
-                    <strong>{{ row.name }}</strong>
-                    <span>{{ currentNamespace }}</span>
+            <div class="card-body">
+              <div class="addr-box">
+                <el-icon><Connection /></el-icon>
+                <div class="addr-list">
+                  <code v-for="inst in service.instances.slice(0, 2)" :key="inst.id">
+                    {{ inst.host }}:{{ inst.port }}
+                  </code>
+                  <div v-if="service.instances.length > 2" class="more-tag">
+                    +{{ service.instances.length - 2 }}
                   </div>
-                </template>
-              </el-table-column>
+                </div>
+              </div>
 
-              <el-table-column :label="text('主实例地址', 'Primary Instance')" min-width="180">
-                <template #default="{ row }">
-                  <span class="table-address">{{ previewAddress(row.name) }}</span>
-                </template>
-              </el-table-column>
+              <div class="health-info">
+                <div class="health-bar-container">
+                  <div class="health-bar-fill" :style="{ width: `${service.healthRatio}%`, background: service.healthTone }"></div>
+                </div>
+                <span class="health-val">{{ service.healthy_count }}/{{ service.instance_count }}</span>
+              </div>
+            </div>
 
-              <el-table-column prop="instance_count" :label="text('实例数', 'Instances')" width="90" />
-
-              <el-table-column :label="text('健康数', 'Healthy')" width="90">
-                <template #default="{ row }">
-                  <span :style="{ color: serviceHealthTone(row), fontWeight: 700 }">{{ row.healthy_count }}</span>
-                </template>
-              </el-table-column>
-
-              <el-table-column :label="text('订阅方', 'Subscribers')" width="100">
-                <template #default="{ row }">{{ previewSubscriberCount(row.name) }}</template>
-              </el-table-column>
-
-              <el-table-column :label="text('状态', 'Status')" width="110">
-                <template #default="{ row }">
-                  <span :style="{ color: serviceHealthTone(row), fontWeight: 600 }">{{ serviceHealthText(row) }}</span>
-                </template>
-              </el-table-column>
-
-              <el-table-column :label="text('操作', 'Actions')" width="150" fixed="right">
-                <template #default="{ row }">
-                  <div class="inline-actions compact">
-                    <button type="button" @click="openTopology(row.name)">{{ text('拓扑', 'Topology') }}</button>
-                    <button type="button" @click="openService(row.name)">{{ text('详情', 'Detail') }}</button>
+            <div class="card-footer">
+              <div class="metrics">
+                <el-tooltip :content="text('实例数量', 'Instances')">
+                  <div class="metric-item">
+                    <el-icon><Monitor /></el-icon>
+                    <span>{{ service.instance_count }}</span>
                   </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
+                </el-tooltip>
+                <div class="metric-sep"></div>
+                <el-tooltip :content="text('上游依赖', 'Upstream')">
+                  <div class="metric-item">
+                    <el-icon><Top /></el-icon>
+                    <span>{{ service.upstreamCount }}</span>
+                  </div>
+                </el-tooltip>
+                <el-tooltip :content="text('下游依赖', 'Downstream')">
+                  <div class="metric-item">
+                    <el-icon><Bottom /></el-icon>
+                    <span>{{ service.downstreamCount }}</span>
+                  </div>
+                </el-tooltip>
+              </div>
+              <button type="button" class="topo-btn" @click.stop="openTopology(service.name)">
+                <el-icon><Share /></el-icon>
+              </button>
+            </div>
+
+
+
+          </article>
         </div>
 
-        <footer class="stage-footer">
-          <div class="footer-info">
-            <span>{{ filteredServices.length }} {{ text('条记录', 'records') }}</span>
-            <span>{{ text('第', 'Page ') }}{{ currentPage }} / {{ totalPages }}{{ isZh ? ' 页' : '' }}</span>
-          </div>
+        <!-- List View -->
+        <div v-else class="table-wrap">
+          <el-table :data="pagedServices" height="100%" style="width: 100%; font-size: 14px;">
+            <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
+            <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
+            <el-table-column :label="text('命名空间', 'Namespace')" width="120" prop="namespace" />
 
+            <el-table-column :label="text('地址', 'Address')" min-width="180">
+              <template #default="{ row }">
+                <code class="cell-addr" style="font-family: inherit; font-size: 14px;">{{ row.instances[0] ? `${row.instances[0].host}:${row.instances[0].port}` : '-' }}</code>
+                <span v-if="row.instances.length > 1" style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">+{{ row.instances.length - 1 }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="text('状态', 'Status')" width="180">
+              <template #default="{ row }">
+                <div class="cell-health">
+                  <span class="health-badge" :style="{ color: row.healthTone, background: row.healthSurface, borderColor: row.healthBorder, fontSize: '13px' }">
+                    {{ row.healthText }}
+                  </span>
+                  <b style="font-size: 14px;">{{ row.healthy_count }}/{{ row.instance_count }}</b>
+                </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="text('实例', 'Inst')" width="80" align="center">
+              <template #default="{ row }">{{ row.instance_count }}</template>
+            </el-table-column>
+
+            <el-table-column :label="text('上游依赖', 'Upstream')" width="100" align="center">
+              <template #default="{ row }">
+                <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.upstreamCount">
+                  <template #reference>
+                    <span :style="{ fontWeight: 600, cursor: row.upstreamCount ? 'pointer' : 'default', color: row.upstreamCount ? 'var(--accent-blue)' : 'var(--text-muted)', fontSize: '14px' }">
+                      {{ row.upstreamCount }}
+                    </span>
+                  </template>
+                  <div style="font-size: 13px;">
+                    <div v-for="sn in topologyMeta?.upstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
+                  </div>
+                </el-popover>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="text('下游依赖', 'Downstream')" width="100" align="center">
+              <template #default="{ row }">
+                <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.downstreamCount">
+                  <template #reference>
+                    <span :style="{ fontWeight: 600, cursor: row.downstreamCount ? 'pointer' : 'default', color: row.downstreamCount ? 'var(--accent-blue)' : 'var(--text-muted)', fontSize: '14px' }">
+                      {{ row.downstreamCount }}
+                    </span>
+                  </template>
+                  <div style="font-size: 13px;">
+                    <div v-for="sn in topologyMeta?.downstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
+                  </div>
+                </el-popover>
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="text('操作', 'Actions')" width="140" fixed="right">
+              <template #default="{ row }">
+                <div class="cell-actions">
+                  <button type="button" @click="openTopology(row.name)">{{ text('拓扑', 'Topo') }}</button>
+                  <button type="button" @click="openService(row.name)">{{ text('详情', 'Detail') }}</button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
+        <footer class="svc-footer">
+          <span class="footer-info">{{ filteredServices.length }} {{ text('条', 'records') }}</span>
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[12, 20, 50]"
             :total="filteredServices.length"
-            layout="total, sizes, prev, pager, next"
+            layout="sizes, prev, pager, next"
             background
+            small
           />
         </footer>
       </template>
     </section>
 
-    <section v-else class="topology-stage" v-loading="loading">
-      <div class="topology-canvas-shell">
+    <!-- ─── Topology Panel ─── -->
+    <section v-else class="topo-stage">
+      <div class="topo-canvas" v-loading="loading">
         <TopologyGraphCanvas
           :graph="topology"
           :loading="loading"
@@ -386,79 +588,58 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <aside class="topology-side">
-        <div class="side-head">
-          <span>{{ text('当前服务', 'Selected Service') }}</span>
-          <strong>{{ selectedNodeDetail?.name || text('未选择', 'None') }}</strong>
-        </div>
-
-        <div v-if="selectedNodeDetail" class="side-scroll">
-          <div class="side-summary">
-            <div>
-              <span>{{ text('命名空间', 'Namespace') }}</span>
-              <strong>{{ selectedNodeDetail.namespace }}</strong>
-            </div>
-            <div>
-              <span>{{ text('实例数', 'Instances') }}</span>
-              <strong>{{ selectedNodeDetail.instance_count }}</strong>
-            </div>
-            <div>
-              <span>{{ text('健康实例', 'Healthy') }}</span>
-              <strong>{{ selectedNodeDetail.healthy_count }}</strong>
+      <aside class="topo-side">
+        <div v-if="selectedNodeDetail" class="side-inner">
+          <div class="side-header">
+            <span class="side-meta">{{ text('当前服务', 'Current Service') }}</span>
+            <div class="side-header-row">
+              <h3 class="side-title">
+                {{ selectedNodeDetail.name }}
+                <el-tag size="small" type="info" class="ns-tag">{{ selectedNodeDetail.namespace }}</el-tag>
+              </h3>
+              <a class="detail-link" @click="openService(selectedNodeDetail.name)">
+                <el-icon><Monitor /></el-icon> {{ text('查看详情', 'View detail') }}
+              </a>
             </div>
           </div>
 
-          <section class="side-section">
-            <header>
-              <strong>{{ text('实例', 'Instances') }}</strong>
-              <span>{{ selectedNodeDetail.instances.length }}</span>
-            </header>
-
-            <div v-if="selectedNodeDetail.instances.length" class="instance-list">
-              <article v-for="instance in selectedNodeDetail.instances" :key="instance.id" class="instance-item">
-                <div class="instance-text">
-                  <strong>{{ instance.host }}:{{ instance.port }}</strong>
-                  <span>{{ instance.id }}</span>
+          <div class="side-scroll">
+            <div class="side-group">
+              <div class="group-title">
+                {{ text('实例列表', 'Instances') }}
+                <span class="count">{{ selectedNodeDetail.instances.length }}</span>
+              </div>
+              <div v-if="selectedNodeDetail.instances.length" class="inst-list">
+                <div v-for="instance in selectedNodeDetail.instances" :key="instance.id" class="simple-inst">
+                  <span class="inst-addr">{{ instance.host }}:{{ instance.port }}</span>
+                  <em :class="{ ok: instance.status === 'passing', err: instance.status !== 'passing' }">
+                    {{ instance.status === 'passing' ? text('健康', 'OK') : text('异常', 'Err') }}
+                  </em>
                 </div>
-                <em :style="{ color: instance.status === 'passing' ? '#16a34a' : '#dc2626' }">
-                  {{ instance.status === 'passing' ? text('健康', 'Healthy') : text('异常', 'Critical') }}
-                </em>
-              </article>
+              </div>
+              <div v-else class="empty-text">{{ text('无可用实例', 'No instances') }}</div>
             </div>
 
-            <p v-else class="empty-line">{{ text('当前没有实例', 'No live instances') }}</p>
-          </section>
-
-          <section class="side-section">
-            <header>
-              <strong>{{ text('上游依赖', 'Upstream') }}</strong>
-              <span>{{ selectedUpstream.length }}</span>
-            </header>
-            <div v-if="selectedUpstream.length" class="tag-list">
-              <span v-for="serviceName in selectedUpstream" :key="serviceName">{{ serviceName }}</span>
+            <div class="side-group">
+              <div class="group-title">{{ text('上游依赖', 'Upstream') }}</div>
+              <div v-if="selectedUpstream.length" class="dep-list">
+                <span v-for="sn in selectedUpstream" :key="sn" @click="selectTopologyNode(sn)" class="clickable-dep">{{ sn }}</span>
+              </div>
+              <div v-else class="empty-text">{{ text('无', 'None') }}</div>
             </div>
-            <p v-else class="empty-line">{{ text('暂无上游依赖', 'No upstream services') }}</p>
-          </section>
 
-          <section class="side-section">
-            <header>
-              <strong>{{ text('下游服务', 'Downstream') }}</strong>
-              <span>{{ selectedDownstream.length }}</span>
-            </header>
-            <div v-if="selectedDownstream.length" class="tag-list">
-              <span v-for="serviceName in selectedDownstream" :key="serviceName">{{ serviceName }}</span>
+            <div class="side-group">
+              <div class="group-title">{{ text('下游依赖', 'Downstream') }}</div>
+              <div v-if="selectedDownstream.length" class="dep-list">
+                <span v-for="sn in selectedDownstream" :key="sn" @click="selectTopologyNode(sn)" class="clickable-dep">{{ sn }}</span>
+              </div>
+              <div v-else class="empty-text">{{ text('无', 'None') }}</div>
             </div>
-            <p v-else class="empty-line">{{ text('暂无下游服务', 'No downstream services') }}</p>
-          </section>
-
-          <el-button class="detail-button" @click="openService(selectedNodeDetail.name)">
-            {{ text('查看详情', 'Open detail') }}
-          </el-button>
+          </div>
         </div>
 
-        <div v-else class="empty-stage side-empty">
-          <strong>{{ text('未选择服务', 'No service selected') }}</strong>
-          <p>{{ text('点击拓扑图节点查看详情。', 'Select a node in topology graph.') }}</p>
+        <div v-else class="side-empty">
+          {{ text('请在左侧拓扑图中选择一个节点查看详细信息。', 'Select a node from the topology graph.') }}
         </div>
       </aside>
     </section>
@@ -466,240 +647,435 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.services-page-shell {
+/* ===== Shell ===== */
+.svc-shell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: calc(100vh - var(--header-height) - 48px);
   min-height: 0;
   overflow: hidden;
-  background: #fff;
+  gap: 0;
+  padding: 0;
+}
+
+/* ===== Toolbar ===== */
+.svc-toolbar {
+  flex-shrink: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .toolbar-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0 0;
-  flex-shrink: 0;
+  gap: 0;
 }
 
-.toolbar-left,
-.toolbar-right {
+.toolbar-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  padding: 0 16px;
 }
 
-.toolbar-left {
-  flex: 1;
-  min-width: 0;
+.toolbar-group:first-child {
+  padding-left: 0;
 }
 
-.toolbar-right {
+.toolbar-group:last-child {
+  padding-right: 0;
+}
+
+.toolbar-group.right-align {
+  margin-left: auto;
+}
+
+/* Vertical divider between groups */
+.toolbar-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-color);
   flex-shrink: 0;
 }
 
-.toolbar-namespace {
-  width: 180px;
+/* Smaller separator within a group */
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  flex-shrink: 0;
+  margin: 0 2px;
 }
 
-.toolbar-search {
-  flex: 1;
+/* -- Namespace & Search -- */
+.ns-select {
+  width: 140px;
+  flex-shrink: 0;
 }
 
-.toolbar-health {
+.search-input {
   width: 160px;
+  flex-shrink: 0;
 }
 
-:deep(.toolbar-namespace .el-select__wrapper),
-:deep(.toolbar-health .el-select__wrapper),
-:deep(.toolbar-search .el-input__wrapper) {
-  min-height: 42px;
-  border-radius: 0;
-  background: #fff !important;
-  border: 0 !important;
-  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.12) !important;
+:deep(.ns-select .el-select__wrapper),
+:deep(.search-input .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  color: var(--text-primary);
+  height: 32px;
 }
 
-.view-switch,
-.mode-switch {
+:deep(.ns-select .el-select__wrapper:hover),
+:deep(.search-input .el-input__wrapper:hover),
+:deep(.ns-select .el-select__wrapper:focus-within),
+:deep(.search-input .el-input__wrapper:focus-within) {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+:deep(.ns-select .el-select__wrapper input),
+:deep(.search-input .el-input__inner) {
+  color: var(--text-primary) !important;
+  font-size: 14px;
+}
+
+:deep(.search-input .el-input__prefix .el-icon) {
+  color: var(--text-muted);
+}
+
+/* -- Stat chips -- */
+.stats-group {
+  gap: 12px;
+}
+
+.stat-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stat-chip.warn .stat-value {
+  color: var(--accent-orange);
+}
+
+/* -- Pill groups -- */
+.pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 0;
-  background: #fff;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.view-switch button,
-.mode-switch button,
-.inline-actions button {
+.pill-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
   border: 0;
+  border-radius: 4px;
   background: transparent;
-  color: #64748b;
+  color: var(--text-muted);
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 14px;
 }
 
-.view-switch button {
-  min-width: 96px;
-  height: 40px;
-  padding: 0 14px;
-  font-weight: 700;
+.pill-group button:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.mode-switch button {
-  width: 36px;
-  height: 36px;
+.pill-count {
+  font-weight: 600;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
 }
 
-.view-switch button.active,
-.mode-switch button.active {
-  color: #2563eb;
+.pill-group button.active {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-weight: 600;
 }
 
-.refresh-button {
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 0;
+.pill-group button.active .pill-count {
+  opacity: 0.8;
 }
 
-.content-stage {
-  display: flex;
+.icon-pills button {
+  padding: 4px 7px;
+}
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.refresh-btn:hover {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* ===== Content area ===== */
+.svc-content {
   flex: 1;
+  display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: #fff;
+  padding: 16px 24px 12px;
 }
 
-.content-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.table-wrap,
-.card-grid {
-  height: 100%;
-  min-height: 0;
-}
-
+/* ===== Card grid ===== */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  padding: 8px 0;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  align-content: start;
+  padding: 2px;
 }
 
-.service-card {
+.card-grid::-webkit-scrollbar { width: 4px; }
+.card-grid::-webkit-scrollbar-track { background: transparent; }
+.card-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+.svc-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.svc-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--svc-tone);
+  opacity: 0.6;
+}
+
+.svc-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--svc-tone);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--svc-tone);
+  background: var(--bg-glass);
 }
 
 .card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  margin-bottom: 20px;
 }
 
-.service-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.service-title strong {
-  color: #0f172a;
+.card-name {
   font-size: 16px;
-  font-weight: 800;
-  cursor: pointer;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
-.service-title span {
-  color: #94a3b8;
+.status-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-label {
   font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
 }
 
-.status-dot {
-  width: 10px;
-  height: 10px;
+.health-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
 }
 
-.service-address,
-.table-address {
-  color: #2563eb;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
-  font-size: 12px;
-}
-
-.card-meta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.card-meta div {
+.card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-.card-meta span {
-  color: #94a3b8;
-  font-size: 12px;
+.addr-box {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: var(--text-muted);
 }
 
-.card-meta strong {
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 700;
+.addr-box .el-icon {
+  margin-top: 3px;
+  font-size: 16px;
 }
 
-.card-actions {
+.addr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.addr-list code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.more-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: var(--border-color);
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.health-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.health-bar-container {
+  flex: 1;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.health-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.health-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
 }
 
-.health-text {
-  font-weight: 700;
-}
-
-.inline-actions {
-  display: inline-flex;
+.metrics {
+  display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.inline-actions.compact {
-  gap: 10px;
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  transition: color 0.2s;
 }
 
-.inline-actions button {
-  padding: 0;
-  color: #2563eb;
+.metric-item .el-icon {
+  font-size: 14px;
+}
+
+.metric-item span {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
+.metric-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border-color);
+}
+
+.topo-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.topo-btn:hover {
+  background: var(--accent-blue);
+  color: #fff;
+  transform: rotate(15deg);
+}
+
+/* ===== Table view ===== */
 .table-wrap {
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
+  background: transparent;
 }
 
 :deep(.table-wrap .el-table) {
   height: 100%;
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
-  --el-table-row-hover-bg-color: rgba(37, 99, 235, 0.04);
-  --el-table-border-color: rgba(15, 23, 42, 0.08);
+  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.03);
+  --el-table-border-color: rgba(255, 255, 255, 0.04);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-text-color: var(--text-primary);
 }
 
 :deep(.table-wrap .el-table__inner-wrapper::before) {
@@ -707,38 +1083,123 @@ onBeforeUnmount(() => {
 }
 
 :deep(.table-wrap .el-table th.el-table__cell) {
-  background: #fff;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 :deep(.table-wrap .el-table td.el-table__cell) {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.service-cell {
+:deep(.table-wrap .el-table tr:hover > td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+:deep(.table-wrap .el-table__fixed-right) {
+  box-shadow: none;
+}
+
+.cell-svc {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   cursor: pointer;
 }
 
-.service-cell strong {
-  color: #0f172a;
-  font-size: 15px;
-  font-weight: 700;
+.cell-svc strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  transition: color 0.15s ease;
 }
 
-.service-cell span {
-  color: #94a3b8;
-  font-size: 12px;
+.cell-svc:hover strong {
+  color: var(--accent-blue);
 }
 
-.stage-footer {
+.cell-svc span {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.cell-addr {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--text-secondary);
+  background: none;
+  padding: 0;
+  border: none;
+}
+
+.cell-health {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: none;
+  font-weight: 600;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.health-bar-sm {
+  flex: 1;
+  height: 3px;
+  min-width: 36px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.health-bar-sm span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.cell-health b {
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.dep-cell {
+  color: var(--text-muted);
+}
+
+.cell-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cell-actions button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--accent-blue);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.cell-actions button:hover {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+/* ===== Footer ===== */
+.svc-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -748,245 +1209,326 @@ onBeforeUnmount(() => {
 }
 
 .footer-info {
+  color: var(--text-muted);
+  opacity: 0.8; /* slightly increased opacity for 14px readable contrast */
+}
+
+:deep(.svc-footer .el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  --el-pagination-font-size: 14px;
+}
+
+/* ===== Empty ===== */
+.empty-panel {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 200px;
+}
+
+.empty-inner {
+  text-align: center;
+}
+
+.empty-inner strong {
+  display: block;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.empty-inner p {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* ===== Topology Panel ===== */
+.topo-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 16px;
+}
+
+.topo-canvas {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #64748b;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-right: 16px;
+}
+
+.topo-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-color);
+}
+
+.side-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.side-header {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.side-meta {
+  color: var(--text-muted);
   font-size: 13px;
 }
 
-.empty-stage {
+.side-header-row {
   display: flex;
-  flex: 1;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.side-title {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 0;
-  color: #64748b;
+  gap: 8px;
 }
 
-.empty-stage strong {
-  color: #0f172a;
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.topology-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-}
-
-.topology-canvas-shell,
-.topology-side {
-  background: #fff;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.topology-canvas-shell :deep(.topology-board) {
-  height: 100%;
-  min-height: 0;
-  background: #fff;
-  border: 0;
-  border-radius: 0;
-}
-
-.topology-canvas-shell :deep(.graph-canvas) {
-  height: 100% !important;
-  min-height: 0;
-}
-
-.topology-canvas-shell :deep(.board-empty) {
-  height: 100% !important;
-  min-height: 0;
-}
-
-.topology-canvas-shell :deep(.board-toolbar) {
-  top: 12px;
-  left: 12px;
-  box-shadow: none;
-}
-
-.topology-canvas-shell :deep(.board-toolbar button) {
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.topology-side {
-  display: flex;
-  flex-direction: column;
-}
-
-.side-head {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 0 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.side-head span {
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.side-head strong {
-  color: #0f172a;
-  font-size: 28px;
-  font-weight: 800;
+.ns-tag {
+  font-weight: 500;
+  font-size: 11px;
 }
 
 .side-scroll {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-height: 0;
-  overflow: auto;
-  padding-top: 12px;
+  overflow-y: auto;
+  padding: 16px 0;
 }
 
-.side-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+.side-scroll::-webkit-scrollbar { width: 3px; }
+.side-scroll::-webkit-scrollbar-track { background: transparent; }
+.side-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.side-summary div {
+.group-title {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.count {
+  background: var(--bg-glass);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.inst-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.side-summary span,
-.side-section header span,
-.empty-line {
-  color: #94a3b8;
+.simple-inst {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+
+.inst-addr {
+  font-family: inherit;
   font-size: 12px;
+  color: var(--text-primary);
+  opacity: 0.9;
 }
 
-.side-summary strong {
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.side-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.side-section header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.side-section header strong {
-  color: #0f172a;
-  font-size: 14px;
-}
-
-.instance-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.instance-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.instance-text {
-  min-width: 0;
-}
-
-.instance-text strong {
-  display: block;
-  color: #0f172a;
-  font-size: 13px;
-}
-
-.instance-text span {
-  display: block;
-  margin-top: 4px;
-  color: #94a3b8;
-  font-size: 11px;
-  word-break: break-all;
-}
-
-.instance-item em {
+.simple-inst em {
   font-style: normal;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 500;
 }
 
-.tag-list {
+.simple-inst em.ok {
+  color: #10b981;
+}
+
+.simple-inst em.err {
+  color: #ef4444;
+}
+
+.clickable-dep {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.clickable-dep:hover {
+  opacity: 0.7;
+}
+
+.dep-list {
   display: flex;
   flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dep-list span {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--accent-blue);
+}
+
+.empty-text {
+  color: var(--text-muted);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.detail-link {
+  flex-shrink: 0;
+  display: block;
+  text-align: right;
+  color: var(--accent-blue);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.2s;
+  padding-top: 2px;
+}
+
+.detail-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.side-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Field items for toolbar */
+.field-item {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.tag-list span {
-  color: #64748b;
-  font-size: 12px;
+.field-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.detail-button {
-  align-self: flex-start;
-  min-height: 40px;
-  border-radius: 0;
+.err-count {
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
+/* ===== Responsive ===== */
 @media (max-width: 1180px) {
   .toolbar-row {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .toolbar-left,
-  .toolbar-right {
+  .toolbar-divider {
+    display: none;
+  }
+
+  .toolbar-group {
+    padding: 0;
+  }
+
+  .toolbar-group:first-child {
     width: 100%;
   }
 
-  .toolbar-right {
-    justify-content: space-between;
+  .stats-group {
+    width: auto;
   }
 
-  .topology-stage {
+  .topo-stage {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 900px) {
-  .toolbar-left,
-  .stage-footer {
+@media (max-width: 768px) {
+  .svc-toolbar {
+    padding: 10px 16px;
+  }
+
+  .svc-content {
+    padding: 12px 16px 8px;
+  }
+
+  .topo-stage {
+    padding: 12px 16px;
+  }
+
+  .toolbar-group {
+    flex-wrap: wrap;
+  }
+
+  .ns-select,
+  .search-input {
+    width: 100% !important;
+  }
+
+  .pill-group {
+    width: 100%;
+  }
+
+  .pill-group button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .svc-footer {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .toolbar-namespace,
-  .toolbar-health,
-  .toolbar-search,
-  .view-switch,
-  .mode-switch {
-    width: 100%;
-  }
-
-  .view-switch button,
-  .mode-switch button {
-    flex: 1;
-  }
-
-  .card-grid,
-  .side-summary {
+  .side-stats {
     grid-template-columns: 1fr;
   }
 }

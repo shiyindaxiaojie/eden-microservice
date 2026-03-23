@@ -20,8 +20,9 @@ type Instance struct {
 	Weight      int               `json:"weight"`
 	Datacenter  string            `json:"dc"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
-	Status      HealthStatus      `json:"status"`
-	LastHeartbeat time.Time       `json:"last_heartbeat"`
+	Status        HealthStatus      `json:"status"`
+	ManualOffline bool              `json:"manual_offline,omitempty"`
+	LastHeartbeat time.Time         `json:"last_heartbeat"`
 	RegisteredAt  time.Time       `json:"registered_at"`
 }
 

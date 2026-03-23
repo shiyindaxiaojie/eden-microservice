@@ -57,6 +57,7 @@ func (s *ServiceStore) Register(inst *model.Instance) {
 	}
 
 	inst.Status = model.HealthPassing
+	inst.ManualOffline = false
 	inst.LastHeartbeat = time.Now()
 	if inst.RegisteredAt.IsZero() {
 		inst.RegisteredAt = time.Now()
@@ -128,8 +129,10 @@ func (s *ServiceStore) SetInstanceStatus(namespace, serviceName, instanceID stri
 	}
 
 	inst.Status = status
-	if status == model.HealthPassing {
-		inst.LastHeartbeat = time.Now()
+	if status == model.HealthCritical {
+		inst.ManualOffline = true // Mark as manually offline
+	} else if status == model.HealthPassing {
+		inst.ManualOffline = false // Manual restore
 	}
 
 	action := "update"
@@ -168,7 +171,7 @@ func (s *ServiceStore) HeartbeatNS(namespace, serviceName, instanceID string) (*
 	}
 	inst.LastHeartbeat = time.Now()
 	recovered := false
-	if inst.Status == model.HealthCritical {
+	if inst.Status == model.HealthCritical && !inst.ManualOffline {
 		inst.Status = model.HealthPassing
 		recovered = true
 	}

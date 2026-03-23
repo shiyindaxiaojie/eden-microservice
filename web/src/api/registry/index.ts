@@ -53,6 +53,7 @@ export interface Instance {
   datacenter: string
   metadata: Record<string, string>
   status: 'passing' | 'critical'
+  manual_offline?: boolean
   last_heartbeat: string
   registered_at: string
 }
