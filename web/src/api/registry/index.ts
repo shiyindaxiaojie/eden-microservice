@@ -143,7 +143,8 @@ export const removeClusterMember = (address: string, node_id?: string) =>
   api.delete(`/v1/cluster/member?address=${address}${node_id ? '&node_id=' + node_id : ''}`)
 export const getEvents = () => api.get<RegistryEvent[]>('/v1/events')
 export const getLogFiles = () => api.get<{name: string, file: string}[]>('/v1/cluster/log-files')
-export const getLogs = (file = '', count = 100) => api.get<string[]>(`/v1/cluster/logs?count=${count}${file ? `&file=${file}` : ''}`)
+export const getLogs = (file = '', count = 100) =>
+  api.get<string[]>(`/v1/cluster/logs?count=${count}${file ? `&file=${encodeURIComponent(file)}` : ''}`)
 export const getStorage = () => api.get<any>('/v1/settings/storage')
 export const updateStorage = (data: any) => api.post('/v1/settings/storage', data)
 export const getSystemSettings = () => api.get<SystemSettings>('/v1/settings/system')

@@ -1,20 +1,6 @@
 {
   "auth-center": [
     {
-      "id": "auth-center-3",
-      "service_name": "auth-center",
-      "host": "127.0.0.1",
-      "port": 9022,
-      "weight": 100,
-      "dc": "",
-      "metadata": {
-        "version": "1.0.0"
-      },
-      "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:15.148371+08:00",
-      "registered_at": "2026-03-24T23:20:45.0566135+08:00"
-    },
-    {
       "id": "auth-center-1",
       "service_name": "auth-center",
       "host": "127.0.0.1",
@@ -25,7 +11,7 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:13.0993466+08:00",
+      "last_heartbeat": "2026-03-25T00:32:13.0564642+08:00",
       "registered_at": "2026-03-24T23:20:42.9715335+08:00"
     },
     {
@@ -39,8 +25,22 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:15.052685+08:00",
+      "last_heartbeat": "2026-03-25T00:32:15.0639489+08:00",
       "registered_at": "2026-03-24T23:20:44.9663342+08:00"
+    },
+    {
+      "id": "auth-center-3",
+      "service_name": "auth-center",
+      "host": "127.0.0.1",
+      "port": 9022,
+      "weight": 100,
+      "dc": "",
+      "metadata": {
+        "version": "1.0.0"
+      },
+      "status": "passing",
+      "last_heartbeat": "2026-03-25T00:32:15.1218599+08:00",
+      "registered_at": "2026-03-24T23:20:45.0566135+08:00"
     }
   ],
   "order-center": [
@@ -55,7 +55,7 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:16.8180546+08:00",
+      "last_heartbeat": "2026-03-25T00:32:16.824234+08:00",
       "registered_at": "2026-03-24T23:20:46.7198321+08:00"
     },
     {
@@ -69,7 +69,7 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:18.10351+08:00",
+      "last_heartbeat": "2026-03-25T00:32:18.1002586+08:00",
       "registered_at": "2026-03-24T23:20:47.9982875+08:00"
     }
   ],
@@ -85,7 +85,7 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:16.0890602+08:00",
+      "last_heartbeat": "2026-03-25T00:32:16.0690592+08:00",
       "registered_at": "2026-03-24T23:20:46.0002537+08:00"
     },
     {
@@ -99,7 +99,7 @@
         "version": "1.0.0"
       },
       "status": "passing",
-      "last_heartbeat": "2026-03-24T23:47:15.878712+08:00",
+      "last_heartbeat": "2026-03-25T00:32:15.8797499+08:00",
       "registered_at": "2026-03-24T23:20:45.8008895+08:00"
     }
   ]

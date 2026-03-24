@@ -2,11 +2,11 @@
   "users": {
     "admin": {
       "username": "admin",
-      "password": "$2a$10$6B5uIJpPk2QGrTP7hxerJORckzVXBQdJiowwwUjtSq1bskQTtBEgu",
-      "nickname": "",
-      "phone": "",
-      "email": "",
-      "remark": "",
+      "password": "$2a$10$11UYYU5vdwSEASrxmczc7e5eACHLO1Ra9Uo32lQFI64bH2mOIddzC",
+      "nickname": "郭远陆",
+      "phone": "18820132137",
+      "email": "1813986321@qq.com",
+      "remark": "哈哈哈",
       "role": "admin",
       "is_builtin": true
     }

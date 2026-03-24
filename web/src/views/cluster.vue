@@ -22,7 +22,7 @@ const showAddDialog = ref(false)
 const searchID = ref('')
 const searchIP = ref('')
 const addForms = ref([{ protocol: 'http://', host: '', port: '' }])
-const viewMode = ref<'grid' | 'list'>('list')
+const viewMode = ref<'grid' | 'list'>('grid')
 const filterMode = ref<'all' | 'online' | 'offline'>('all')
 const currentPage = ref(1)
 const pageSize = ref(12)
@@ -171,6 +171,81 @@ function getRoleName(role: string) {
   if (normalized.includes('standalone')) return t.value.cluster.roles.standalone
   if (normalized.includes('peer')) return t.value.cluster.roles.peer
   return role
+}
+
+interface MemberPortItem {
+  key: string
+  label: string
+  port: string
+  className: string
+}
+
+function stripProtocolPrefix(value = '') {
+  return value.replace(/^[a-z]+:\/\//i, '')
+}
+
+function splitEndpoint(value?: string) {
+  const raw = stripProtocolPrefix(value || '')
+  if (!raw) {
+    return { host: '', port: '' }
+  }
+
+  const lastColonIndex = raw.lastIndexOf(':')
+  if (lastColonIndex === -1) {
+    return { host: raw, port: '' }
+  }
+
+  return {
+    host: raw.slice(0, lastColonIndex),
+    port: raw.slice(lastColonIndex + 1),
+  }
+}
+
+function getMemberPrimaryHost(member: ClusterMember) {
+  const addresses = [member.address, member.http_addr, member.grpc_addr, member.raft_addr, member.quic_addr].filter(
+    (item): item is string => !!item,
+  )
+
+  for (const address of addresses) {
+    const { host } = splitEndpoint(address)
+    if (host) {
+      return host
+    }
+  }
+
+  return locale.value === 'zh' ? '未配置' : 'Not configured'
+}
+
+function getMemberPortItems(member: ClusterMember): MemberPortItem[] {
+  const items = [
+    member.http_addr ? { key: 'http', label: 'HTTP', ...splitEndpoint(member.http_addr), className: 'http' } : null,
+    member.grpc_addr ? { key: 'grpc', label: 'GRPC', ...splitEndpoint(member.grpc_addr), className: 'grpc' } : null,
+    member.raft_addr ? { key: 'raft', label: 'RAFT', ...splitEndpoint(member.raft_addr), className: 'raft' } : null,
+    member.quic_addr ? { key: 'quic', label: 'QUIC', ...splitEndpoint(member.quic_addr), className: 'quic' } : null,
+  ]
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .map(({ key, label, port, className }) => ({
+      key,
+      label,
+      port: port || '--',
+      className,
+    }))
+
+  if (items.length > 0) {
+    return items
+  }
+
+  const fallback = splitEndpoint(member.address)
+  return [{ key: 'address', label: 'ADDR', port: fallback.port || '--', className: 'mono' }]
+}
+
+function roleChipClass(role: string) {
+  const normalized = role.toLowerCase()
+  if (normalized.includes('leader')) return 'leader'
+  if (normalized.includes('follower')) return 'follower'
+  if (normalized.includes('candidate')) return 'candidate'
+  if (normalized.includes('local') || normalized.includes('standalone')) return 'local'
+  return 'neutral'
 }
 
 onMounted(fetchCluster)
@@ -332,64 +407,74 @@ onMounted(fetchCluster)
         </div>
 
         <div v-else class="card-grid">
-          <div
+          <article
             v-for="member in pagedMembers"
             :key="member.id"
             class="node-card"
             :class="{
               'is-local': member.is_local,
-              'is-online': member.status === 'Online',
-              'is-offline': member.status !== 'Online',
             }"
           >
-            <div class="card-glow" :style="{ background: member.status === 'Online' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }" />
-            
+            <div class="card-accent"></div>
+
             <div class="card-head">
-              <div class="card-id-row">
-                <h3 class="node-id-text">{{ member.id }}</h3>
-                <el-tag v-if="member.is_local" size="small" type="success" effect="plain">{{ t.cluster.currentNode }}</el-tag>
+              <div class="card-copy">
+                <div class="card-title-row">
+                  <strong class="card-title">{{ member.id }}</strong>
+                  <span v-if="member.is_local" class="meta-chip local">{{ t.cluster.currentNode }}</span>
+                </div>
+                <p class="card-subtitle">{{ member.address || (locale === 'zh' ? '未配置地址' : 'No address') }}</p>
               </div>
-              <el-tag :type="roleTagType(member.role)" size="small" effect="dark">{{ getRoleName(member.role) }}</el-tag>
+
+              <div class="card-aside">
+                <span class="meta-chip" :class="member.status === 'Online' ? 'online' : 'offline'">
+                  {{ getMemberPrimaryHost(member) }}
+                </span>
+                <span class="meta-chip role" :class="roleChipClass(member.role)">{{ getRoleName(member.role) }}</span>
+              </div>
             </div>
 
             <div class="card-body">
-              <div class="status-line">
-                <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
-                <span class="status-label">{{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}</span>
+              <div class="node-ip-row">
+                <span class="node-ip-label">{{ locale === 'zh' ? '节点 IP' : 'Node IP' }}</span>
+                <span class="compact-label">{{ locale === 'zh' ? '状态' : 'Status' }}</span>
+                <span class="node-ip-value" :title="getMemberPrimaryHost(member)">
+                  <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
+                  {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
+                </span>
               </div>
 
-              <div class="addr-group">
-                <div v-if="member.http_addr" class="addr-box http">
-                  <span class="p-tag sm">HTTP</span>
-                  <code>{{ member.http_addr }}</code>
-                </div>
-                <div v-if="member.grpc_addr" class="addr-box grpc">
-                  <span class="p-tag sm">GRPC</span>
-                  <code>{{ member.grpc_addr }}</code>
-                </div>
-                <div v-if="member.raft_addr" class="addr-box raft">
-                  <span class="p-tag sm">RAFT</span>
-                  <code>{{ member.raft_addr }}</code>
-                </div>
-                <div v-if="member.quic_addr" class="addr-box quic">
-                  <span class="p-tag sm">QUIC</span>
-                  <code>{{ member.quic_addr }}</code>
+              <div class="protocol-grid">
+                <div
+                  v-for="endpoint in getMemberPortItems(member)"
+                  :key="`${member.id}-${endpoint.key}`"
+                  class="protocol-card"
+                  :class="endpoint.className"
+                >
+                  <span class="protocol-name">{{ endpoint.label }}</span>
+                  <span class="protocol-port" :title="endpoint.port">{{ endpoint.port }}</span>
                 </div>
               </div>
             </div>
 
-            <div v-if="canRemoveMember(member)" class="card-footer">
-              <el-button
-                type="danger"
-                size="small"
-                link
-                :icon="Delete"
-                @click="handleRemove(member)"
-              >
-                {{ t.common.delete }}
-              </el-button>
+            <div class="card-footer">
+              <span class="card-footnote">
+                {{ member.is_local ? t.cluster.currentNode : (locale === 'zh' ? '集群节点' : 'Cluster node') }}
+              </span>
+              <div class="card-actions">
+                <el-button
+                  v-if="canRemoveMember(member)"
+                  type="danger"
+                  size="small"
+                  link
+                  :icon="Delete"
+                  @click="handleRemove(member)"
+                >
+                  {{ t.common.delete }}
+                </el-button>
+              </div>
             </div>
-          </div>
+          </article>
         </div>
 
         <footer class="svc-footer">
@@ -979,29 +1064,24 @@ onMounted(fetchCluster)
 .node-card {
   border-radius: 16px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
 }
 
 .node-card::after {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  border-radius: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  pointer-events: none;
+  display: none;
 }
 
 .node-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.3);
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.18);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);
   background: var(--bg-secondary);
 }
 
 .node-card.is-local {
-  border-color: rgba(16, 185, 129, 0.32);
-  box-shadow: 0 16px 34px rgba(16, 185, 129, 0.12), 0 10px 24px rgba(15, 23, 42, 0.08);
+  border-color: rgba(16, 185, 129, 0.18);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
 .card-glow {
@@ -1031,15 +1111,15 @@ onMounted(fetchCluster)
   justify-content: space-between;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .addr-box .p-tag {
   min-width: 48px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: transparent;
   opacity: 1;
 }
 
@@ -1065,7 +1145,7 @@ onMounted(fetchCluster)
 }
 
 .card-footer {
-  border-top: 1px solid var(--border-color);
+  border-top: none;
 }
 </style>
 
@@ -1136,56 +1216,175 @@ onMounted(fetchCluster)
 }
 
 .card-grid {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 292px));
   justify-content: start;
-  gap: 16px;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   align-content: start;
   padding: 2px 2px 8px;
 }
 
 .node-card {
-  max-width: 340px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 292px;
   min-height: 0;
-  padding: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+    var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.node-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.28);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+}
+
+.card-accent {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 84px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.18));
+  border-radius: 0 0 999px 0;
+}
+
+.node-card.is-local .card-accent {
+  background: linear-gradient(90deg, var(--accent-green), rgba(16, 185, 129, 0.18));
 }
 
 .card-head {
-  margin-bottom: 14px;
-}
-
-.card-body {
-  gap: 12px;
-  margin-bottom: 0;
-}
-
-.status-line {
-  padding: 8px 12px;
-}
-
-.addr-group {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.addr-box {
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 6px;
+.card-copy {
   min-width: 0;
-  padding: 10px 12px;
+  flex: 1;
 }
 
-.addr-box code {
-  width: 100%;
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.card-title {
+  display: block;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.card-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.role-pill {
+  flex-shrink: 0;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compact-meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.compact-label {
+  flex: 0 0 40px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compact-value {
+  min-width: 0;
+  color: var(--text-primary);
   font-size: 12px;
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.status-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.endpoint-name.http {
+  color: var(--text-secondary);
+}
+
+.endpoint-name.grpc {
+  color: var(--accent-green);
+}
+
+.endpoint-name.raft {
+  color: var(--accent-orange);
+}
+
+.endpoint-name.quic {
+  color: var(--accent-blue);
 }
 
 .card-footer {
-  justify-content: flex-end;
-  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.card-footnote {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .mono-addr {
@@ -1271,8 +1470,13 @@ onMounted(fetchCluster)
     max-width: none;
   }
 
-  .addr-group {
-    grid-template-columns: 1fr;
+  .compact-meta-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .compact-label {
+    flex-basis: auto;
   }
 
   .svc-footer {

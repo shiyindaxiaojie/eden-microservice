@@ -25,7 +25,7 @@ const sections = [
         <div class="docs-pane-content">
           <div v-if="s.id === 'intro'">
             <h2>{{ t.docs.intro }}</h2>
-            <p>Eden Registry 是一个轻量级、高性能的服务注册与发现中心。它支持 CP 和 AP 两种一致性模式，旨在提供极致的运行效率和最低的资源占用。</p>
+            <p>一个轻量级、高性能的服务注册与发现中心，支持 CP 和 AP 两种一致性模式，旨在提供极致的运行效率和最低的资源占用。</p>
             <div class="feature-grid">
               <div class="feature-item">
                 <div class="feature-title">双引擎支持</div>
@@ -33,7 +33,7 @@ const sections = [
               </div>
               <div class="feature-item">
                 <div class="feature-title">资源极致</div>
-                <div class="feature-desc">纯 Go 编写，内存占用低于 100MB，启动秒级。</div>
+                <div class="feature-desc">纯 Go 编写，内存占用低于 10MB，启动秒级。</div>
               </div>
               <div class="feature-item">
                 <div class="feature-title">安全加固</div>

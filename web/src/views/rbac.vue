@@ -162,8 +162,6 @@ const mapUser = (user: RbacUser): UserRow => ({
 })
 
 const displayNickname = (row: UserRow) => row.nickname || '-'
-const displayContact = (row: UserRow) => row.email || row.phone || '-'
-const displayRemark = (row: UserRow) => row.remark || '-'
 
 const userInitial = (row: UserRow) => (row.nickname || row.username || '?').trim().charAt(0).toUpperCase()
 
@@ -399,7 +397,7 @@ onMounted(() => {
                 <template #default="{ row }">
                   <div class="user-cell">
                     <strong>{{ row.username }}</strong>
-                    <el-tag v-if="row.isBuiltIn" size="small" effect="plain" type="warning">
+                    <el-tag v-if="row.isBuiltIn" size="small" effect="plain" type="warning" class="account-tag">
                       {{ text('内置', 'Built-in') }}
                     </el-tag>
                   </div>
@@ -415,14 +413,14 @@ onMounted(() => {
                   <el-tag :type="getRoleTag(row.role)" size="small" effect="plain">{{ roleLabel(row.role) }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column :label="text('联系信息', 'Contact')" min-width="220" show-overflow-tooltip>
+              <el-table-column :label="text('邮箱', 'Email')" min-width="220" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{ displayContact(row) }}
+                  {{ row.email || '-' }}
                 </template>
               </el-table-column>
-              <el-table-column :label="text('备注', 'Remark')" min-width="220" show-overflow-tooltip>
+              <el-table-column :label="text('电话', 'Phone')" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{ displayRemark(row) }}
+                  {{ row.phone || '-' }}
                 </template>
               </el-table-column>
               <el-table-column :label="text('操作', 'Actions')" width="180" fixed="right">
@@ -454,41 +452,47 @@ onMounted(() => {
                 <div class="identity-block">
                   <div class="identity-avatar">{{ userInitial(row) }}</div>
                   <div class="identity-copy">
-                  <div class="title-row">
-                    <strong class="card-title">{{ row.username }}</strong>
-                    <el-tag v-if="row.isBuiltIn" size="small" effect="plain" type="warning">
-                      {{ text('内置', 'Built-in') }}
-                    </el-tag>
-                  </div>
-                  <p class="card-subtitle">{{ displayNickname(row) }}</p>
+                    <div class="title-row">
+                      <strong class="card-title">{{ row.username }}</strong>
+                      <el-tag v-if="row.isBuiltIn" size="small" effect="plain" type="warning" class="account-tag">
+                        {{ text('内置', 'Built-in') }}
+                      </el-tag>
+                    </div>
+                    <p class="card-subtitle">{{ displayNickname(row) }}</p>
                   </div>
                 </div>
                 <div class="role-pill">
-                  <el-tag :type="getRoleTag(row.role)" size="small" effect="light">{{ roleLabel(row.role) }}</el-tag>
+                  <el-tag :type="getRoleTag(row.role)" size="small" effect="light">
+                    {{ roleLabel(row.role) }}
+                  </el-tag>
                 </div>
               </div>
 
               <div class="card-body">
-                <div class="meta-panel compact">
-                  <span class="meta-label">{{ text('联系信息', 'Contact') }}</span>
-                  <span class="meta-value">{{ displayContact(row) }}</span>
+                <div class="compact-meta-row">
+                  <span class="compact-label">{{ text('邮箱', 'Email') }}</span>
+                  <span class="compact-value" :title="row.email || '-'">{{ row.email || '-' }}</span>
                 </div>
-                <div class="meta-panel compact">
-                  <span class="meta-label">{{ text('备注', 'Remark') }}</span>
-                  <span class="meta-value clamp-two">{{ displayRemark(row) }}</span>
+                <div class="compact-meta-row">
+                  <span class="compact-label">{{ text('电话', 'Phone') }}</span>
+                  <span class="compact-value" :title="row.phone || '-'">{{ row.phone || '-' }}</span>
                 </div>
               </div>
 
               <div class="card-footer">
-                <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
-                <el-button
-                  v-if="!row.isBuiltIn"
-                  link
-                  type="danger"
-                  @click="handleDelete(row)"
-                >
-                  {{ text('删除', 'Delete') }}
-                </el-button>
+                <div class="card-actions">
+                  <el-button link type="primary" @click="handleEdit(row)">
+                    {{ text('编辑', 'Edit') }}
+                  </el-button>
+                  <el-button
+                    v-if="!row.isBuiltIn"
+                    link
+                    type="danger"
+                    @click="handleDelete(row)"
+                  >
+                    {{ text('删除', 'Delete') }}
+                  </el-button>
+                </div>
               </div>
             </article>
           </div>
@@ -513,7 +517,8 @@ onMounted(() => {
     <el-dialog
       v-model="dialogVisible"
       :title="dialogType === 'add' ? text('添加用户', 'Add User') : text('编辑用户', 'Edit User')"
-      width="460px"
+      width="560px"
+      top="4vh"
       class="glass-dialog user-dialog"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="user-dialog-form">
@@ -552,11 +557,11 @@ onMounted(() => {
         <el-form-item :label="text('电话', 'Phone')" prop="phone">
           <el-input v-model="form.phone" :placeholder="text('请输入电话', 'Please input phone')" />
         </el-form-item>
-        <el-form-item :label="text('备注', 'Remark')" prop="remark">
+        <el-form-item :label="text('备注', 'Remark')" prop="remark" class="form-span-2">
           <el-input
             v-model="form.remark"
             type="textarea"
-            :rows="3"
+            :rows="2"
             :placeholder="text('请输入备注', 'Please input remark')"
           />
         </el-form-item>
@@ -855,34 +860,34 @@ onMounted(() => {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 360px));
+  grid-template-columns: repeat(4, minmax(0, 272px));
   justify-content: start;
-  gap: 20px;
+  gap: 10px;
   align-content: start;
-  padding: 4px 2px 10px;
+  padding: 0 0 8px;
 }
 
 .info-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 18px;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
   background:
     radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
     var(--bg-secondary);
   border: 1px solid var(--border-color);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .info-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: rgba(59, 130, 246, 0.28);
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
 .card-accent {
@@ -902,7 +907,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 8px;
 }
 
 .title-row {
@@ -915,20 +920,20 @@ onMounted(() => {
 .identity-block {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
 .identity-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--accent-blue);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.14);
@@ -944,68 +949,166 @@ onMounted(() => {
   min-width: 0;
 }
 
+.account-tag {
+  flex-shrink: 0;
+}
+
 .role-pill {
   flex-shrink: 0;
 }
 
-.builtin-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--accent-orange);
-  font-size: 11px;
-  font-weight: 600;
+.user-dialog-form {
+  max-height: calc(92vh - 146px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 14px;
+  align-items: start;
+}
+
+.form-span-2 {
+  grid-column: 1 / -1;
+}
+
+.dialog-footer {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .card-title {
   display: block;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .card-subtitle {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .card-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.meta-panel {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
 }
 
-.meta-label {
-  color: var(--text-muted);
+.compact-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.meta-value {
+.compact-label {
+  flex: 0 0 32px;
+  color: rgba(100, 116, 139, 0.88);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+.compact-value {
+  flex: 1;
+  min-width: 0;
   color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-footer {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:deep(.account-tag.el-tag) {
+  color: #c27a0a;
+  border-color: rgba(245, 158, 11, 0.18);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+:deep(.user-dialog.el-dialog) {
+  width: min(560px, calc(100vw - 24px)) !important;
+  max-height: 92vh;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+:deep(.user-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding: 18px 20px 10px;
+  flex-shrink: 0;
+}
+
+:deep(.user-dialog .el-dialog__headerbtn) {
+  top: 18px;
+  right: 18px;
+}
+
+:deep(.user-dialog .el-dialog__body) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 20px 6px;
+}
+
+:deep(.user-dialog .el-dialog__footer) {
+  flex-shrink: 0;
+  padding: 12px 20px 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+:deep(.user-dialog .el-form-item) {
+  margin-bottom: 12px;
+}
+
+:deep(.user-dialog .el-form-item__label) {
+  padding-bottom: 6px;
+  line-height: 1.35;
+}
+
+:deep(.user-dialog .el-input__wrapper),
+:deep(.user-dialog .el-select__wrapper) {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+:deep(.user-dialog .el-textarea__inner) {
+  min-height: 72px !important;
+  border-radius: 10px;
 }
 
 .svc-footer {
@@ -1030,6 +1133,12 @@ onMounted(() => {
 
 :deep(.svc-footer .el-pagination *) {
   font-size: 14px !important;
+}
+
+@media (max-width: 1400px) {
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 272px));
+  }
 }
 
 @media (max-width: 1180px) {
@@ -1082,12 +1191,48 @@ onMounted(() => {
   }
 
   .card-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .svc-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .user-dialog-form {
+    max-height: calc(92vh - 132px);
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .form-span-2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  :deep(.user-dialog.el-dialog) {
+    width: calc(100vw - 16px) !important;
+    max-height: 94vh;
+  }
+
+  :deep(.user-dialog .el-dialog__header) {
+    padding: 16px 16px 8px;
+  }
+
+  :deep(.user-dialog .el-dialog__body) {
+    padding: 0 16px 4px;
+  }
+
+  :deep(.user-dialog .el-dialog__footer) {
+    padding: 10px 16px 16px;
   }
 }
 </style>

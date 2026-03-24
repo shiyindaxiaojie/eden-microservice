@@ -1233,25 +1233,25 @@ onMounted(() => {
 
 .save-toolbar {
   position: sticky;
-  bottom: 0;
+  bottom: 6px;
   z-index: 12;
   display: flex;
   justify-content: flex-end;
   margin-top: auto;
-  padding: 14px 0 6px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0), var(--bg-primary) 38%);
+  padding-top: 10px;
+  background: transparent;
 }
 
 .save-actions {
   display: flex;
   gap: 12px;
   flex-shrink: 0;
-  padding: 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .credentials-header {

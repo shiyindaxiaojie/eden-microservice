@@ -200,6 +200,9 @@ const serviceEntryMap = computed(() => {
   })
   return map
 })
+const selectedServiceEntry = computed(() =>
+  selectedNodeDetail.value ? serviceEntryMap.value[selectedNodeDetail.value.name] || null : null,
+)
 const selectedUpstream = computed(() => topologyMeta.value.upstream[selectedTopologyNode.value] || [])
 const selectedDownstream = computed(() => topologyMeta.value.downstream[selectedTopologyNode.value] || [])
 
@@ -628,8 +631,17 @@ onBeforeUnmount(() => {
 
         <aside class="topo-side">
           <div v-if="selectedNodeDetail" class="side-inner">
-            <div class="side-header">
-              <span class="side-meta">{{ text('当前服务', 'Current Service') }}</span>
+            <div class="side-header side-card">
+              <div class="side-kicker-row">
+                <span class="side-meta">{{ text('当前服务', 'Current Service') }}</span>
+                <span
+                  v-if="selectedServiceEntry"
+                  class="side-health-badge"
+                  :style="{ color: selectedServiceEntry.healthTone, background: selectedServiceEntry.healthSurface, borderColor: selectedServiceEntry.healthBorder }"
+                >
+                  {{ selectedServiceEntry.healthText }}
+                </span>
+              </div>
               <div class="side-header-row">
                 <h3 class="side-title">
                   {{ selectedNodeDetail.name }}
@@ -639,35 +651,71 @@ onBeforeUnmount(() => {
                   <el-icon><Monitor /></el-icon> {{ text('查看详情', 'View detail') }}
                 </a>
               </div>
+              <p class="side-subtitle">
+                {{ selectedServiceEntry?.primaryAddress || text('暂无实例', 'No instance') }}
+              </p>
+              <div class="side-summary-grid">
+                <div class="summary-pill">
+                  <span class="summary-label">{{ text('实例', 'Instances') }}</span>
+                  <strong>{{ selectedNodeDetail.instances.length }}</strong>
+                </div>
+                <div class="summary-pill">
+                  <span class="summary-label">{{ text('上游', 'Upstream') }}</span>
+                  <strong>{{ selectedUpstream.length }}</strong>
+                </div>
+                <div class="summary-pill">
+                  <span class="summary-label">{{ text('下游', 'Downstream') }}</span>
+                  <strong>{{ selectedDownstream.length }}</strong>
+                </div>
+                <div class="summary-pill">
+                  <span class="summary-label">{{ text('健康率', 'Health') }}</span>
+                  <strong>{{ selectedServiceEntry ? `${selectedServiceEntry.healthy_count}/${selectedServiceEntry.instance_count}` : '--' }}</strong>
+                </div>
+              </div>
             </div>
 
             <div class="side-scroll">
-              <div class="side-group">
-                <div class="group-title">
-                  {{ text('实例列表', 'Instances') }}
-                  <span class="count">{{ selectedNodeDetail.instances.length }}</span>
+              <div class="side-group side-card">
+                <div class="group-head">
+                  <div class="group-title">
+                    {{ text('实例列表', 'Instances') }}
+                    <span class="count">{{ selectedNodeDetail.instances.length }}</span>
+                  </div>
+                  <span class="group-hint">{{ text('实时状态', 'Live status') }}</span>
                 </div>
                 <div v-if="selectedNodeDetail.instances.length" class="inst-list">
                   <div v-for="instance in selectedNodeDetail.instances" :key="instance.id" class="simple-inst">
-                    <span class="inst-addr">{{ instance.host }}:{{ instance.port }}</span>
-                    <em :class="{ ok: instance.status === 'passing', err: instance.status !== 'passing' }">
+                    <div class="inst-copy">
+                      <span class="inst-addr">{{ instance.host }}:{{ instance.port }}</span>
+                      <span class="inst-id">{{ instance.id }}</span>
+                    </div>
+                    <span class="inst-state" :class="{ ok: instance.status === 'passing', err: instance.status !== 'passing' }">
                       {{ instance.status === 'passing' ? text('健康', 'OK') : text('异常', 'Err') }}
-                    </em>
+                    </span>
                   </div>
                 </div>
                 <div v-else class="empty-text">{{ text('无可用实例', 'No instances') }}</div>
               </div>
 
-              <div class="side-group">
-                <div class="group-title">{{ text('上游依赖', 'Upstream') }}</div>
-                <div v-if="selectedUpstream.length" class="dep-list scrollable">
+              <div class="side-group side-card">
+                <div class="group-head">
+                  <div class="group-title">
+                    {{ text('上游依赖', 'Upstream') }}
+                    <span class="count">{{ selectedUpstream.length }}</span>
+                  </div>
+                  <span class="group-hint">{{ text('点击切换', 'Click to inspect') }}</span>
+                </div>
+                <div v-if="selectedUpstream.length" class="dep-list">
                   <div
                     v-for="sn in selectedUpstream"
                     :key="sn"
                     @click="selectTopologyNode(sn)"
                     class="dep-item"
                   >
-                    <span class="dep-name">{{ sn }}</span>
+                    <div class="dep-copy">
+                      <span class="dep-name">{{ sn }}</span>
+                      <span class="dep-caption">{{ text('依赖服务', 'Dependency service') }}</span>
+                    </div>
                     <div v-if="serviceEntryMap[sn]" class="dep-info">
                       <span
                         class="dep-status"
@@ -682,16 +730,25 @@ onBeforeUnmount(() => {
                 <div v-else class="empty-text">{{ text('无', 'None') }}</div>
               </div>
 
-              <div class="side-group">
-                <div class="group-title">{{ text('下游依赖', 'Downstream') }}</div>
-                <div v-if="selectedDownstream.length" class="dep-list scrollable">
+              <div class="side-group side-card">
+                <div class="group-head">
+                  <div class="group-title">
+                    {{ text('下游依赖', 'Downstream') }}
+                    <span class="count">{{ selectedDownstream.length }}</span>
+                  </div>
+                  <span class="group-hint">{{ text('点击切换', 'Click to inspect') }}</span>
+                </div>
+                <div v-if="selectedDownstream.length" class="dep-list">
                   <div
                     v-for="sn in selectedDownstream"
                     :key="sn"
                     @click="selectTopologyNode(sn)"
                     class="dep-item"
                   >
-                    <span class="dep-name">{{ sn }}</span>
+                    <div class="dep-copy">
+                      <span class="dep-name">{{ sn }}</span>
+                      <span class="dep-caption">{{ text('下游服务', 'Dependent service') }}</span>
+                    </div>
                     <div v-if="serviceEntryMap[sn]" class="dep-info">
                       <span
                         class="dep-status"
@@ -1346,8 +1403,8 @@ onBeforeUnmount(() => {
 /* ===== Topology Panel ===== */
 .topo-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 0;
+  grid-template-columns: minmax(0, 1fr) 388px;
+  gap: 18px;
   flex: 1;
   min-height: 0;
   padding: 16px 24px 16px;
@@ -1358,7 +1415,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding-right: 16px;
 }
 
 .topo-side {
@@ -1366,49 +1422,141 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding-left: 20px;
-  border-left: 1px solid var(--border-color);
 }
 
 .side-inner {
   display: flex;
   flex-direction: column;
   height: 100%;
+  gap: 16px;
+}
+
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 4px;
+}
+
+.side-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.side-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.side-card {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+    rgba(15, 23, 42, 0.68);
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.18);
 }
 
 .side-header {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
+  gap: 14px;
+  padding: 20px;
+}
+
+.side-kicker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .side-meta {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.side-health-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .side-header-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
+}
+
+.side-title-wrap {
+  min-width: 0;
 }
 
 .side-title {
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .ns-tag {
   font-weight: 500;
   font-size: 11px;
+}
+
+.side-subtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.side-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.summary-pill strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .svc-content {
@@ -1442,60 +1590,100 @@ onBeforeUnmount(() => {
 .side-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  padding: 18px;
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .group-title {
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
+.group-hint {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .count {
-  background: var(--bg-glass);
-  padding: 2px 6px;
-  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.12);
+  padding: 2px 7px;
+  border-radius: 999px;
   font-size: 10px;
-  color: var(--text-secondary);
+  color: var(--accent-blue);
 }
 
 .inst-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
 }
 
 .simple-inst {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  gap: 12px;
+  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.inst-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .inst-addr {
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
-  opacity: 0.9;
+  font-weight: 600;
 }
 
-.simple-inst em {
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 500;
+.inst-id {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.simple-inst em.ok {
+.inst-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.inst-state.ok {
   color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.18);
 }
 
-.simple-inst em.err {
+.inst-state.err {
   color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.18);
 }
 
 .clickable-dep {
@@ -1510,37 +1698,52 @@ onBeforeUnmount(() => {
 .dep-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .dep-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .dep-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.045);
   transform: translateX(2px);
   border-color: rgba(59, 130, 246, 0.2);
+}
+
+.dep-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .dep-name {
   color: var(--accent-blue);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.dep-caption {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .dep-info {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .dep-status-text {
@@ -1560,26 +1763,38 @@ onBeforeUnmount(() => {
 
 .empty-text {
   color: var(--text-muted);
-  font-size: 11px;
-  opacity: 0.8;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.side-group .empty-text,
+.section-empty {
+  padding: 16px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
 }
 
 .detail-link {
   flex-shrink: 0;
-  display: block;
-  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--accent-blue);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.14);
   cursor: pointer;
   text-decoration: none;
   transition: opacity 0.2s;
-  padding-top: 2px;
 }
 
 .detail-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
+  opacity: 0.9;
+  text-decoration: none;
 }
 
 .side-empty {
@@ -1637,6 +1852,10 @@ onBeforeUnmount(() => {
   .topo-stage {
     grid-template-columns: 1fr;
   }
+
+  .side-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -1650,6 +1869,10 @@ onBeforeUnmount(() => {
 
   .topo-stage {
     padding: 12px 16px;
+  }
+
+  .side-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .toolbar-group {

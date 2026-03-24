@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { FolderOpened, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
 import {
@@ -48,13 +48,24 @@ const form = ref<NamespaceForm>({
   name: '',
   description: '',
 })
-const viewMode = ref<ViewMode>('list')
+const viewMode = ref<ViewMode>('grid')
 const filterMode = ref<FilterMode>('all')
 const currentPage = ref(1)
 const pageSize = ref(12)
 
 const namespaceType = (row: NamespaceRow): Exclude<FilterMode, 'all'> =>
   row.name === 'default' ? 'system' : 'custom'
+
+const namespaceTypeLabel = (row: NamespaceRow) =>
+  namespaceType(row) === 'system' ? text('系统', 'System') : text('自定义', 'Custom')
+
+const namespaceTypeHint = (row: NamespaceRow) =>
+  namespaceType(row) === 'system'
+    ? text('内置保留空间，适合平台默认服务。', 'Built-in reserved namespace for platform defaults.')
+    : text('业务隔离空间，适合按团队或场景拆分。', 'Business isolation namespace for team or scenario separation.')
+
+const namespaceFootnote = (row: NamespaceRow) =>
+  namespaceType(row) === 'system' ? text('系统命名空间', 'System namespace') : text('业务命名空间', 'Custom namespace')
 
 const totalCount = computed(() => rows.value.length)
 const systemCount = computed(() => rows.value.filter((row) => namespaceType(row) === 'system').length)
@@ -95,18 +106,11 @@ const emptyDesc = computed(() =>
   text('试试调整筛选条件或清空搜索关键词。', 'Try adjusting filters or clearing the search.'),
 )
 
-const mapNamespace = (item: Namespace): NamespaceRow => ({
-  name: item.name,
-  description: item.description || '',
-  createdAt: formatDateTime(item.created_at || '-'),
-  updatedAt: formatDateTime(item.updated_at || '-'),
-})
-
-const getErrorMessage = (error: any, fallbackZh: string, fallbackEn: string) =>
-  error?.response?.data?.error || text(fallbackZh, fallbackEn)
-
 const displayDescription = (row: NamespaceRow) =>
   row.description || text('未填写描述', 'No description')
+
+const displayUpdatedAt = (row: NamespaceRow) =>
+  row.updatedAt && row.updatedAt !== '-' ? row.updatedAt : text('未更新', 'Not updated')
 
 const formatDateTime = (value: string) => {
   if (!value || value === '-') return '-'
@@ -123,6 +127,16 @@ const formatDateTime = (value: string) => {
 
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
+
+const mapNamespace = (item: Namespace): NamespaceRow => ({
+  name: item.name,
+  description: item.description || '',
+  createdAt: formatDateTime(item.created_at || '-'),
+  updatedAt: formatDateTime(item.updated_at || '-'),
+})
+
+const getErrorMessage = (error: any, fallbackZh: string, fallbackEn: string) =>
+  error?.response?.data?.error || text(fallbackZh, fallbackEn)
 
 const fetchData = async () => {
   loading.value = true
@@ -203,6 +217,7 @@ const submitForm = async () => {
         dialogType.value === 'add' ? 'Created successfully' : 'Updated successfully',
       ),
     )
+
     dialogVisible.value = false
     await fetchData()
   } catch (error: any) {
@@ -323,7 +338,7 @@ onMounted(() => {
               <el-table-column :label="text('类型', 'Type')" width="120">
                 <template #default="{ row }">
                   <el-tag :type="namespaceType(row) === 'system' ? 'warning' : 'success'" size="small" effect="plain">
-                    {{ namespaceType(row) === 'system' ? text('系统', 'System') : text('自定义', 'Custom') }}
+                    {{ namespaceTypeLabel(row) }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -354,36 +369,50 @@ onMounted(() => {
               <div class="card-accent"></div>
 
               <div class="card-head">
-                <div>
-                  <strong class="card-title">{{ row.name }}</strong>
-                  <p class="card-subtitle">{{ displayDescription(row) }}</p>
+                <div class="card-identity">
+                  <div class="card-symbol">
+                    <el-icon><FolderOpened /></el-icon>
+                  </div>
+                  <div class="card-copy">
+                    <div class="card-title-row">
+                      <strong class="card-title">{{ row.name }}</strong>
+                      <el-tag :type="namespaceType(row) === 'system' ? 'warning' : 'success'" size="small" effect="plain">
+                        {{ namespaceTypeLabel(row) }}
+                      </el-tag>
+                    </div>
+                    <p class="card-subtitle">{{ displayDescription(row) }}</p>
+                  </div>
                 </div>
-                <el-tag :type="namespaceType(row) === 'system' ? 'warning' : 'success'" size="small" effect="plain">
-                  {{ namespaceType(row) === 'system' ? text('系统', 'System') : text('自定义', 'Custom') }}
-                </el-tag>
               </div>
 
               <div class="card-body">
-                <div class="meta-panel">
-                  <span class="meta-label">{{ text('创建时间', 'Created At') }}</span>
-                  <span class="meta-value">{{ row.createdAt }}</span>
+                <div class="compact-meta-row">
+                  <span class="compact-label">{{ text('创建', 'Created') }}</span>
+                  <span class="compact-value">{{ row.createdAt }}</span>
                 </div>
-                <div v-if="row.updatedAt && row.updatedAt !== '-'" class="meta-panel">
-                  <span class="meta-label">{{ text('更新时间', 'Updated At') }}</span>
-                  <span class="meta-value">{{ row.updatedAt }}</span>
+                <div class="compact-meta-row">
+                  <span class="compact-label">{{ text('更新', 'Updated') }}</span>
+                  <span class="compact-value">{{ displayUpdatedAt(row) }}</span>
+                </div>
+                <div class="compact-meta-row">
+                  <span class="compact-label">{{ text('说明', 'Note') }}</span>
+                  <span class="compact-value clamp-two">{{ namespaceTypeHint(row) }}</span>
                 </div>
               </div>
 
               <div class="card-footer">
-                <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
-                <el-button
-                  v-if="row.name !== 'default'"
-                  link
-                  type="danger"
-                  @click="handleDelete(row)"
-                >
-                  {{ text('删除', 'Delete') }}
-                </el-button>
+                <span class="card-footnote">{{ namespaceFootnote(row) }}</span>
+                <div class="card-actions">
+                  <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
+                  <el-button
+                    v-if="row.name !== 'default'"
+                    link
+                    type="danger"
+                    @click="handleDelete(row)"
+                  >
+                    {{ text('删除', 'Delete') }}
+                  </el-button>
+                </div>
               </div>
             </article>
           </div>
@@ -696,8 +725,9 @@ onMounted(() => {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 292px));
+  justify-content: start;
+  gap: 14px;
   align-content: start;
   padding: 2px 2px 8px;
 }
@@ -706,28 +736,36 @@ onMounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px;
-  border-radius: 16px;
-  background: var(--bg-secondary);
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+    var(--bg-secondary);
   border: 1px solid var(--border-color);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .info-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(59, 130, 246, 0.28);
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.32);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
 }
 
 .card-accent {
   position: absolute;
   inset: 0 auto auto 0;
-  width: 100%;
-  height: 4px;
+  width: 84px;
+  height: 3px;
   background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.18));
+  border-radius: 0 0 999px 0;
+}
+
+.system-card {
+  border-color: rgba(245, 158, 11, 0.22);
 }
 
 .system-card .card-accent {
@@ -735,58 +773,120 @@ onMounted(() => {
 }
 
 .card-head {
+  position: relative;
+  z-index: 1;
+}
+
+.card-identity {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card-symbol {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-size: 18px;
+}
+
+.system-card .card-symbol {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.14);
+  color: var(--accent-orange);
+}
+
+.card-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 
 .card-title {
   display: block;
   color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
 }
 
 .card-subtitle {
-  margin: 6px 0 0;
+  margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .card-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
-.meta-panel {
+.compact-meta-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
-}
-
-.meta-label {
-  color: var(--text-muted);
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.meta-value {
+.compact-label {
+  flex: 0 0 40px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compact-value {
+  min-width: 0;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .card-footer {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-top: 14px;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--border-color);
+}
+
+.card-footnote {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .svc-footer {
@@ -857,12 +957,18 @@ onMounted(() => {
     justify-content: center;
   }
 
-  .table-wrap {
-    min-height: 0;
+  .card-grid,
+  .single-card-grid {
+    grid-template-columns: 1fr;
   }
 
-  .card-grid {
-    grid-template-columns: 1fr;
+  .compact-meta-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .compact-label {
+    flex-basis: auto;
   }
 
   .svc-footer {
