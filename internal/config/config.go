@@ -20,8 +20,22 @@ type Config struct {
 	Bootstrap  bool     `mapstructure:"bootstrap" json:"bootstrap"`
 	Join       string   `mapstructure:"join" json:"join"`
 	Seeds      []string `mapstructure:"seeds" json:"seeds"`
-	Auth       Auth      `mapstructure:"auth" json:"auth"`
-	Log        LogConfig `mapstructure:"log" json:"log"`
+	Auth       Auth        `mapstructure:"auth" json:"auth"`
+	Log        LogConfig   `mapstructure:"log" json:"log"`
+	Storage    StorageConfig `mapstructure:"storage" json:"storage"`
+	Registry   RegistryConfig `mapstructure:"registry" json:"registry"`
+}
+
+type RegistryConfig struct {
+	HeartbeatIntervalSeconds    int `mapstructure:"heartbeat_interval_seconds" json:"heartbeat_interval_seconds"`
+	HeartbeatMaxFailures        int `mapstructure:"heartbeat_max_failures" json:"heartbeat_max_failures"`
+	InstanceRemovalDelaySeconds int `mapstructure:"instance_removal_delay_seconds" json:"instance_removal_delay_seconds"`
+}
+
+type StorageConfig struct {
+	EventRetentionDays int      `mapstructure:"event_retention_days" json:"event_retention_days"`
+	LogRetentionDays   int      `mapstructure:"log_retention_days" json:"log_retention_days"`
+	EventTypes         []string `mapstructure:"event_types" json:"event_types"`
 }
 
 type LogConfig struct {
@@ -115,6 +129,15 @@ func LoadConfig(path string) (*Config, error) {
 	})
 	viper.SetDefault("join", "")
 	viper.SetDefault("bootstrap", false)
+
+	// Default Storage Configuration
+	viper.SetDefault("storage.event_retention_days", 30)
+	viper.SetDefault("storage.log_retention_days", 30)
+	viper.SetDefault("storage.event_types", []string{"Server Node Sync", "Client Registration", "Heartbeat"})
+
+	viper.SetDefault("registry.heartbeat_interval_seconds", 10)
+	viper.SetDefault("registry.heartbeat_max_failures", 3)
+	viper.SetDefault("registry.instance_removal_delay_seconds", 3600)
 
 	// Default Log Configuration
 	viper.SetDefault("log.level", "INFO")

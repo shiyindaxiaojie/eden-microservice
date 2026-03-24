@@ -1,5 +1,12 @@
 {
   "mode": "ap",
-  "environment": "standalone",
-  "log_level": ""
+  "environment": "cluster",
+  "log_level": "INFO",
+  "event_retention_days": 7,
+  "log_retention_days": 30,
+  "event_types": [
+    "Server Node Sync",
+    "Heartbeat",
+    "Client Registration"
+  ]
 }

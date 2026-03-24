@@ -162,12 +162,66 @@ func (s *settingsService) SetLogLevel(level string) error {
 	mode := s.store.GetMode()
 	if mode == "cp" && s.cpNode != nil {
 		cmd := cp.Command{Type: cp.CmdSetLogLevel, LogLevel: level}
-		return s.cpNode.Apply(cmd, 5*time.Second)
+		_ = s.cpNode.Apply(cmd, 5*time.Second)
 	}
 	s.store.SetLogLevel(level)
 	// Sync to peers via HTTP
 	s.syncSettingsToPeers(map[string]string{"log_level": level})
 	return nil
+}
+
+func (s *settingsService) SetEventRetentionDays(days int) error {
+	mode := s.store.GetMode()
+	if mode == "cp" && s.cpNode != nil {
+		// Need CmdSetEventRetention in CP if we want strong consistency on settings
+	}
+	s.store.SetEventRetentionDays(days)
+	s.syncSettingsToPeers(map[string]interface{}{"event_retention_days": days})
+	return nil
+}
+
+func (s *settingsService) GetEventRetentionDays() int {
+	return s.store.GetEventRetentionDays()
+}
+
+func (s *settingsService) SetLogRetentionDays(days int) error {
+	s.store.SetLogRetentionDays(days)
+	s.syncSettingsToPeers(map[string]interface{}{"log_retention_days": days})
+	return nil
+}
+
+func (s *settingsService) GetLogRetentionDays() int {
+	return s.store.GetLogRetentionDays()
+}
+
+func (s *settingsService) SetEventTypes(types []string) error {
+	s.store.SetEventTypes(types)
+	s.syncSettingsToPeers(map[string]interface{}{"event_types": types})
+	return nil
+}
+
+func (s *settingsService) GetEventTypes() []string {
+	return s.store.GetEventTypes()
+}
+
+func (s *settingsService) SetHeartbeatMaxFailures(n int) error {
+	s.store.SetHeartbeatMaxFailures(n)
+	s.syncSettingsToPeers(map[string]interface{}{"heartbeat_max_failures": n})
+	return nil
+}
+
+func (s *settingsService) GetHeartbeatMaxFailures() int {
+	return s.store.GetHeartbeatMaxFailures()
+}
+
+func (s *settingsService) SetInstanceRemovalDelaySeconds(n int) error {
+	s.store.SetInstanceRemovalDelaySeconds(n)
+	s.syncSettingsToPeers(map[string]interface{}{"instance_removal_delay_seconds": n})
+	return nil
+}
+
+func (s *settingsService) GetInstanceRemovalDelaySeconds() int {
+	return s.store.GetInstanceRemovalDelaySeconds()
 }
 
 func (s *settingsService) GetMode() string {
@@ -190,13 +244,33 @@ func (s *settingsService) SaveSeedsLocal(seeds []string) {
 }
 
 func (s *settingsService) SaveSettingLocal(key, value string) {
+	// Value is handled as interface{} in syncSettingsToPeers
+	// but here we get raw strings from internal sync handlers usually.
+	// We might need to handle different types if we use interface{} in handlers.
+}
+
+func (s *settingsService) SaveSettingLocalV2(key string, value interface{}) {
 	switch key {
 	case "mode":
-		s.store.SetMode(value)
+		if v, ok := value.(string); ok { s.store.SetMode(v) }
 	case "environment":
-		s.store.SetEnvironment(value)
+		if v, ok := value.(string); ok { s.store.SetEnvironment(v) }
 	case "log_level":
-		s.store.SetLogLevel(value)
+		if v, ok := value.(string); ok {
+			s.store.SetLogLevel(v)
+		}
+	case "event_retention_days":
+		if v, ok := value.(float64); ok { s.store.SetEventRetentionDays(int(v)) }
+	case "log_retention_days":
+		if v, ok := value.(float64); ok { s.store.SetLogRetentionDays(int(v)) }
+	case "event_types":
+		if v, ok := value.([]interface{}); ok {
+			types := make([]string, len(v))
+			for i, t := range v {
+				if ts, ok := t.(string); ok { types[i] = ts }
+			}
+			s.store.SetEventTypes(types)
+		}
 	}
 }
 func (s *settingsService) SetSeeds(seeds []string) error {
@@ -273,7 +347,7 @@ func (s *settingsService) syncSeedsToPeerHTTP(peerAddr string, seeds []string) {
 	logger.Info("[SetSeeds] Synced seeds to %s", peerAddr)
 }
 
-func (s *settingsService) syncSettingsToPeers(settings map[string]string) {
+func (s *settingsService) syncSettingsToPeers(settings interface{}) {
 	if s.apNode == nil {
 		return
 	}

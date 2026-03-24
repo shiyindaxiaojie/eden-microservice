@@ -302,7 +302,7 @@ func (s *ServiceStore) Stats() Stats {
 }
 
 // MarkCritical marks instances that have not sent heartbeat within ttl as critical.
-func (s *ServiceStore) MarkCritical(ttl time.Duration) ([]*model.Instance, []*model.Instance) {
+func (s *ServiceStore) MarkCritical(ttl time.Duration, maxFailures int, removalDelay time.Duration) ([]*model.Instance, []*model.Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -310,18 +310,22 @@ func (s *ServiceStore) MarkCritical(ttl time.Duration) ([]*model.Instance, []*mo
 	var markedCritical []*model.Instance
 	var removed []*model.Instance
 
+	criticalTTL := ttl * time.Duration(maxFailures)
+	removalTTL := criticalTTL + removalDelay
+
 	for ns, nsSvcs := range s.services {
 		for svcName, instances := range nsSvcs {
 			changed := false
 			for id, inst := range instances {
-				if now.Sub(inst.LastHeartbeat) > ttl {
+				elapsed := now.Sub(inst.LastHeartbeat)
+				if elapsed > criticalTTL {
 					if inst.Status == model.HealthPassing {
 						inst.Status = model.HealthCritical
 						markedCritical = append(markedCritical, inst)
 						changed = true
 					}
-					// If critical for more than 2x TTL, remove entirely
-					if now.Sub(inst.LastHeartbeat) > ttl*2 {
+					// If critical for more than removal threshold, remove entirely
+					if elapsed > removalTTL {
 						delete(instances, id)
 						removed = append(removed, inst)
 						changed = true

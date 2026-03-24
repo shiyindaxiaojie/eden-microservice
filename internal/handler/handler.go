@@ -88,6 +88,8 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/cluster/member", h.Auth(adminOnly(http.HandlerFunc(h.handleMember))))
 	h.mux.Handle("/v1/cluster/stats", h.Auth(adminOrDev(http.HandlerFunc(h.handleStats))))
 	h.mux.Handle("/v1/events", h.Auth(adminOrDev(http.HandlerFunc(h.handleEvents))))
+	h.mux.Handle("/v1/cluster/logs", h.Auth(adminOrDev(http.HandlerFunc(h.handleGetLogs))))
+	h.mux.Handle("/v1/cluster/log-files", h.Auth(adminOrDev(http.HandlerFunc(h.handleGetLogFiles))))
 
 	// --- Auth (Public & Profile) ---
 	h.mux.HandleFunc("/v1/auth/login", h.handleLogin)
@@ -103,6 +105,13 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/settings/apikey", h.Auth(adminOnly(http.HandlerFunc(h.handleSaveAPIKey))))
 	h.mux.Handle("/v1/settings/apikey/delete", h.Auth(adminOnly(http.HandlerFunc(h.handleDeleteAPIKey))))
 	h.mux.Handle("/v1/settings/mode", h.Auth(adminOrDev(http.HandlerFunc(h.handleMode))))
+	h.mux.Handle("/v1/settings/storage", h.Auth(adminOrDev(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			h.handleGetStorage(w, r)
+		} else if r.Method == http.MethodPost {
+			h.handleUpdateStorage(w, r)
+		}
+	}))))
 
 	// --- Internal Sync (no auth, for inter-node communication) ---
 	h.mux.HandleFunc("/internal/sync/seeds", h.handleInternalSyncSeeds)

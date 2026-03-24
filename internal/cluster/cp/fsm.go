@@ -71,8 +71,11 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		_, ok := f.registry.Services.DeregisterNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		return ok
 	case CmdHeartbeat:
-		_, ok := f.registry.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
-		return ok
+		inst, _ := f.registry.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
+		if inst == nil {
+			return fmt.Errorf("instance not found")
+		}
+		return nil
 	case CmdAddAPIKey:
 		f.registry.AddAPIKey(cmd.APIKey)
 		return nil

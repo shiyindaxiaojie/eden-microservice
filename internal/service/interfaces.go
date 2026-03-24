@@ -62,6 +62,16 @@ type SettingsService interface {
 	SetSeeds(seeds []string) error
 	SaveSeedsLocal(seeds []string)      // save locally only, no broadcast
 	SaveSettingLocal(key, value string) // save setting locally, no broadcast
+	SetEventRetentionDays(days int) error
+	GetEventRetentionDays() int
+	SetLogRetentionDays(days int) error
+	GetLogRetentionDays() int
+	SetEventTypes(types []string) error
+	GetEventTypes() []string
+	SetHeartbeatMaxFailures(n int) error
+	GetHeartbeatMaxFailures() int
+	SetInstanceRemovalDelaySeconds(n int) error
+	GetInstanceRemovalDelaySeconds() int
 }
 
 // ClusterService handles cluster membership and monitoring.

@@ -14,6 +14,11 @@ type ConfigStore struct {
 	environment string
 	seeds       []string
 	logLevel    string
+	eventRetDays int
+	logRetDays   int
+	eventTypes   []string
+	hbMaxFail     int
+	removalDelay  int
 	dataPath    string
 }
 
@@ -22,6 +27,11 @@ func NewConfigStore(dataPath string) *ConfigStore {
 		mode:        "ap",
 		environment: "standalone",
 		seeds:       []string{},
+		eventRetDays: 30,
+		logRetDays:   30,
+		eventTypes:   []string{"Server Node Sync", "Client Registration", "Heartbeat"},
+		hbMaxFail:    3,
+		removalDelay: 3600,
 		dataPath:    dataPath,
 	}
 	s.Load()
@@ -76,13 +86,88 @@ func (s *ConfigStore) SetLogLevel(l string) {
 	s.logLevel = l
 }
 
-func (s *ConfigStore) Restore(mode, env, logLevel string, seeds []string) {
+func (s *ConfigStore) GetEventRetentionDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.eventRetDays
+}
+
+func (s *ConfigStore) SetEventRetentionDays(days int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.eventRetDays = days
+}
+
+func (s *ConfigStore) GetLogRetentionDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.logRetDays
+}
+
+func (s *ConfigStore) SetLogRetentionDays(days int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logRetDays = days
+}
+
+func (s *ConfigStore) GetEventTypes() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.eventTypes
+}
+
+func (s *ConfigStore) SetEventTypes(types []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.eventTypes = types
+}
+
+func (s *ConfigStore) GetHeartbeatMaxFailures() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.hbMaxFail
+}
+
+func (s *ConfigStore) SetHeartbeatMaxFailures(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hbMaxFail = n
+}
+
+func (s *ConfigStore) GetInstanceRemovalDelaySeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.removalDelay
+}
+
+func (s *ConfigStore) SetInstanceRemovalDelaySeconds(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.removalDelay = n
+}
+
+func (s *ConfigStore) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.mode = mode
 	s.environment = env
 	s.logLevel = logLevel
 	s.seeds = seeds
+	if eventRet > 0 {
+		s.eventRetDays = eventRet
+	}
+	if logRet > 0 {
+		s.logRetDays = logRet
+	}
+	if len(eventTypes) > 0 {
+		s.eventTypes = eventTypes
+	}
+	if hbMaxFail > 0 {
+		s.hbMaxFail = hbMaxFail
+	}
+	if removalDelay > 0 {
+		s.removalDelay = removalDelay
+	}
 	s.Save()
 }
 
@@ -94,14 +179,34 @@ func (s *ConfigStore) Load() {
 	settingsFile := filepath.Join(s.dataPath, "settings.json")
 	if data, err := os.ReadFile(settingsFile); err == nil {
 		var meta struct {
-			Mode        string `json:"mode"`
-			Environment string `json:"environment"`
-			LogLevel    string `json:"log_level"`
+			Mode               string   `json:"mode"`
+			Environment        string   `json:"environment"`
+			LogLevel           string   `json:"log_level"`
+			EventRetentionDays int      `json:"event_retention_days"`
+			LogRetentionDays   int      `json:"log_retention_days"`
+			EventTypes         []string `json:"event_types"`
+			HBMaxFail          int      `json:"heartbeat_max_failures"`
+			RemovalDelay       int      `json:"instance_removal_delay_seconds"`
 		}
 		if err := json.Unmarshal(data, &meta); err == nil {
 			s.mode = meta.Mode
 			s.environment = meta.Environment
 			s.logLevel = meta.LogLevel
+			if meta.EventRetentionDays > 0 {
+				s.eventRetDays = meta.EventRetentionDays
+			}
+			if meta.LogRetentionDays > 0 {
+				s.logRetDays = meta.LogRetentionDays
+			}
+			if len(meta.EventTypes) > 0 {
+				s.eventTypes = meta.EventTypes
+			}
+			if meta.HBMaxFail > 0 {
+				s.hbMaxFail = meta.HBMaxFail
+			}
+			if meta.RemovalDelay > 0 {
+				s.removalDelay = meta.RemovalDelay
+			}
 		}
 	}
 	// Load nodes
@@ -123,13 +228,23 @@ func (s *ConfigStore) Save() {
 	// Save settings
 	settingsFile := filepath.Join(s.dataPath, "settings.json")
 	meta := struct {
-		Mode        string `json:"mode"`
-		Environment string `json:"environment"`
-		LogLevel    string `json:"log_level"`
+		Mode               string   `json:"mode"`
+		Environment        string   `json:"environment"`
+		LogLevel           string   `json:"log_level"`
+		EventRetentionDays int      `json:"event_retention_days"`
+		LogRetentionDays   int      `json:"log_retention_days"`
+		EventTypes         []string `json:"event_types"`
+		HBMaxFail          int      `json:"heartbeat_max_failures"`
+		RemovalDelay       int      `json:"instance_removal_delay_seconds"`
 	}{
-		Mode:        s.GetMode(),
-		Environment: s.GetEnvironment(),
-		LogLevel:    s.GetLogLevel(),
+		Mode:               s.GetMode(),
+		Environment:        s.GetEnvironment(),
+		LogLevel:           s.GetLogLevel(),
+		EventRetentionDays: s.GetEventRetentionDays(),
+		LogRetentionDays:   s.GetLogRetentionDays(),
+		EventTypes:         s.GetEventTypes(),
+		HBMaxFail:          s.GetHeartbeatMaxFailures(),
+		RemovalDelay:       s.GetInstanceRemovalDelaySeconds(),
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(settingsFile, data, 0644)

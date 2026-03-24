@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -515,6 +518,129 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, events)
 }
 
+func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		EventRetention int      `json:"event_retention"`
+		LogRetention   int      `json:"log_retention"`
+		EventTypes     []string `json:"event_types"`
+		HBMaxFail      int      `json:"heartbeat_max_failures"`
+		RemovalDelay   int      `json:"instance_removal_delay_seconds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+
+	if req.EventRetention > 0 {
+		h.settings.SetEventRetentionDays(req.EventRetention)
+	}
+	if req.LogRetention > 0 {
+		h.settings.SetLogRetentionDays(req.LogRetention)
+	}
+	if len(req.EventTypes) > 0 {
+		h.settings.SetEventTypes(req.EventTypes)
+	}
+	if req.HBMaxFail > 0 {
+		h.settings.SetHeartbeatMaxFailures(req.HBMaxFail)
+	}
+	if req.RemovalDelay > 0 {
+		h.settings.SetInstanceRemovalDelaySeconds(req.RemovalDelay)
+	}
+
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleGetStorage(w http.ResponseWriter, r *http.Request) {
+	jsonOK(w, map[string]interface{}{
+		"event_retention":                h.settings.GetEventRetentionDays(),
+		"log_retention":                  h.settings.GetLogRetentionDays(),
+		"event_types":                    h.settings.GetEventTypes(),
+		"heartbeat_max_failures":         h.settings.GetHeartbeatMaxFailures(),
+		"instance_removal_delay_seconds": h.settings.GetInstanceRemovalDelaySeconds(),
+	})
+}
+
+func (h *Handler) handleGetLogFiles(w http.ResponseWriter, r *http.Request) {
+	var files []map[string]string
+	for _, appender := range h.config.Log.Appenders {
+		if appender.FileName != "" {
+			files = append(files, map[string]string{
+				"name": appender.Name,
+				"file": appender.FileName,
+			})
+		}
+	}
+	// Fallback/Default if none configured
+	if len(files) == 0 {
+		files = append(files, map[string]string{
+			"name": "InfoLog",
+			"file": "logs/info.log",
+		})
+	}
+	jsonOK(w, files)
+}
+
+func (h *Handler) handleGetLogs(w http.ResponseWriter, r *http.Request) {
+	countStr := r.URL.Query().Get("count")
+	count := 100
+	if countStr != "" {
+		fmt.Sscanf(countStr, "%d", &count)
+	}
+
+	fileName := r.URL.Query().Get("file")
+	if fileName == "" {
+		fileName = "logs/info.log" // Default
+	}
+
+	// Validate fileName is one of the appender's files to prevent arbitrary file reading
+	isValid := false
+	if fileName == "logs/info.log" {
+		isValid = true
+	} else {
+		for _, appender := range h.config.Log.Appenders {
+			if appender.FileName == fileName {
+				isValid = true
+				break
+			}
+		}
+	}
+
+	if !isValid {
+		httpError(w, http.StatusForbidden, "Invalid log file")
+		return
+	}
+
+	// Resolve path relative to DataDir if it doesn't exist directly
+	logFile := fileName
+	if _, err := os.Stat(logFile); os.IsNotExist(err) && h.config.DataDir != "" {
+		logFile = filepath.Join(h.config.DataDir, fileName)
+	}
+
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		jsonOK(w, []string{fmt.Sprintf("Log file [%s] not found", fileName)})
+		return
+	}
+
+	file, err := os.Open(logFile)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "Failed to open log file")
+		return
+	}
+	defer file.Close()
+
+	// tail -n count
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+		if len(lines) > count {
+			lines = lines[len(lines)-count:]
+		}
+	}
+
+	jsonOK(w, lines)
+}
+
 // Internal sync handlers
 func (h *Handler) handleInternalSyncSeeds(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -559,21 +685,15 @@ func (h *Handler) handleInternalDeleteAPIKey(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *Handler) handleInternalSyncSettings(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Mode        string `json:"mode,omitempty"`
-		Environment string `json:"environment,omitempty"`
-		LogLevel    string `json:"log_level,omitempty"`
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid sync body")
+		return
 	}
-	json.NewDecoder(r.Body).Decode(&req)
 	// Save directly to avoid re-broadcast (prevent infinite loop)
-	if req.Mode != "" {
-		h.settings.SaveSettingLocal("mode", req.Mode)
-	}
-	if req.Environment != "" {
-		h.settings.SaveSettingLocal("environment", req.Environment)
-	}
-	if req.LogLevel != "" {
-		h.settings.SaveSettingLocal("log_level", req.LogLevel)
+	for k, v := range req {
+		// Use the new V2 logic that handles interface{} types (int, string, []interface{})
+		h.settings.(interface{ SaveSettingLocalV2(string, interface{}) }).SaveSettingLocalV2(k, v)
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }

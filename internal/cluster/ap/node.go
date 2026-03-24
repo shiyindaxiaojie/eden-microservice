@@ -3,6 +3,7 @@ package ap
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
@@ -93,6 +94,7 @@ func (n *Node) fullSync() {
 	if len(payload.TopologyReports) > 0 {
 		n.Registry.Topology.Restore(payload.TopologyReports)
 	}
+	n.Registry.AppendEvent("Server Node Sync", "Cluster", target.ID, "Full sync completed")
 	logger.Info("[AP Node] Full sync completed with %s", target.ID)
 }
 
@@ -127,7 +129,10 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 		}
 	case "heartbeat":
 		if d, ok := data.(map[string]string); ok {
-			n.Registry.HeartbeatNS(d["namespace"], d["service_name"], d["instance_id"])
+			inst, _ := n.Registry.HeartbeatNS(d["namespace"], d["service_name"], d["instance_id"])
+			if inst == nil {
+				return fmt.Errorf("instance not found")
+			}
 		}
 	case "add_api_key":
 		if k, ok := data.(*model.APIKey); ok {

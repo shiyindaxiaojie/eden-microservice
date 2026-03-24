@@ -422,10 +422,16 @@ func (c *Client) Register(instance *registry.ServiceInstance) error {
 				pi.Namespace = c.namespace
 			}
 
-			_, err = client.Register(ctx, &pb.RegisterRequest{
+			resp, err := client.Register(ctx, &pb.RegisterRequest{
 				Instance: pi,
 			})
-			return err
+			if err != nil {
+				return err
+			}
+			if !resp.Success {
+				return fmt.Errorf("register failed")
+			}
+			return nil
 		}
 
 		// HTTP fallback
@@ -479,13 +485,19 @@ func (c *Client) Deregister(instance *registry.ServiceInstance) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, err = client.SetInstanceStatus(ctx, &pb.SetInstanceStatusRequest{
+			resp, err := client.SetInstanceStatus(ctx, &pb.SetInstanceStatusRequest{
 				Namespace:   c.namespace,
 				ServiceName: instance.ServiceName,
 				InstanceId:  instance.ID,
 				Status:      "offline",
 			})
-			return err
+			if err != nil {
+				return err
+			}
+			if !resp.Success {
+				return fmt.Errorf("deregister failed")
+			}
+			return nil
 		}
 
 		// HTTP fallback
@@ -736,12 +748,18 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			_, err = client.Heartbeat(ctx, &pb.HeartbeatRequest{
+			resp, err := client.Heartbeat(ctx, &pb.HeartbeatRequest{
 				Namespace:   c.namespace,
 				ServiceName: instance.ServiceName,
 				InstanceId:  instance.ID,
 			})
-			return err
+			if err != nil {
+				return err
+			}
+			if !resp.Success {
+				return fmt.Errorf("instance not found")
+			}
+			return nil
 		}
 
 		body := map[string]string{

@@ -322,391 +322,398 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="svc-shell">
-    <!-- ─── Toolbar ─── -->
-    <div class="svc-toolbar">
-      <!-- Row 1: Filters & Controls -->
-      <div class="toolbar-row">
-        <!-- Left: Namespace + Search -->
-        <div class="toolbar-group">
-          <div class="field-item">
-            <span class="field-label">{{ text('命名空间', 'Namespace') }}</span>
-            <el-select v-model="currentNamespace" size="default" class="ns-select">
-              <el-option
-                v-for="namespace in namespaces"
-                :key="namespace.name"
-                :label="namespace.name"
-                :value="namespace.name"
+    <div class="svc-main glass-card">
+      <!-- ─── Toolbar ─── -->
+      <div class="svc-toolbar">
+        <!-- Row 1: Filters & Controls -->
+        <div class="toolbar-row">
+          <!-- Left: Namespace + Search -->
+          <div class="toolbar-group">
+            <div class="field-item">
+              <span class="field-label">{{ text('命名空间', 'Namespace') }}</span>
+              <el-select v-model="currentNamespace" size="default" class="ns-select">
+                <el-option
+                  v-for="namespace in namespaces"
+                  :key="namespace.name"
+                  :label="namespace.name"
+                  :value="namespace.name"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="toolbar-group">
+            <div class="field-item">
+              <span class="field-label">{{ text('服务名称', 'Service Name') }}</span>
+              <el-input
+                v-model="search"
+                size="default"
+                clearable
+                :prefix-icon="Search"
+                :placeholder="text('输入服务名', 'Service')"
+                class="search-input"
               />
-            </el-select>
-          </div>
-        </div>
-
-        <div class="toolbar-group">
-          <div class="field-item">
-            <span class="field-label">{{ text('服务名称', 'Service Name') }}</span>
-            <el-input
-              v-model="search"
-              size="default"
-              clearable
-              :prefix-icon="Search"
-              :placeholder="text('输入服务名', 'Service')"
-              class="search-input"
-            />
-          </div>
-        </div>
-
-        <div class="toolbar-group">
-          <div class="field-item">
-            <span class="field-label">{{ text('IP地址', 'IP Address') }}</span>
-            <el-input
-              v-model="searchIP"
-              size="default"
-              clearable
-              :prefix-icon="Search"
-              :placeholder="text('输入 IP', 'IP')"
-              class="search-input"
-            />
-          </div>
-        </div>
-
-        <div class="toolbar-group">
-          <button
-            type="button"
-            class="refresh-btn"
-            :title="text('重置', 'Reset Filters')"
-            @click="resetFilters()"
-          >
-            <el-icon><RefreshLeft /></el-icon>
-          </button>
-        </div>
-
-        <!-- Right: Filters + View switch -->
-        <div class="toolbar-group right-align">
-          <div class="pill-group">
-            <button
-              type="button"
-              :class="{ active: healthFilter === '' }"
-              @click="healthFilter = ''"
-            >
-              {{ text('全部', 'All') }}
-              <span class="pill-count">{{ totalServices }}</span>
-            </button>
-            <button
-              type="button"
-              :class="{ active: healthFilter === 'healthy' }"
-              @click="healthFilter = 'healthy'"
-            >
-              {{ text('健康', 'OK') }}
-              <span class="pill-count">{{ healthyServiceCount }}</span>
-            </button>
-            <button
-              type="button"
-              :class="{ active: healthFilter === 'degraded' }"
-              @click="healthFilter = 'degraded'"
-            >
-              {{ text('异常', 'Err') }}
-              <span class="pill-count" :class="{ 'err-count': degradedServiceCount > 0 }">{{ degradedServiceCount }}</span>
-            </button>
-          </div>
-
-          <div class="toolbar-sep" />
-
-          <div class="pill-group icon-pills">
-            <button
-              type="button"
-              :class="{ active: activePanel === 'catalog' && catalogMode === 'list' }"
-              :title="text('列表', 'List View')"
-              @click="activePanel = 'catalog'; catalogMode = 'list'"
-            >
-              <el-icon><List /></el-icon>
-            </button>
-
-            <button
-              type="button"
-              :class="{ active: activePanel === 'catalog' && catalogMode === 'grid' }"
-              :title="text('卡片', 'Card View')"
-              @click="activePanel = 'catalog'; catalogMode = 'grid'"
-            >
-              <el-icon><Grid /></el-icon>
-            </button>
-
-            <button
-              type="button"
-              :class="{ active: activePanel === 'topology' }"
-              :title="text('拓扑', 'Topology View')"
-              @click="activePanel = 'topology'"
-            >
-              <el-icon><Share /></el-icon>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── Catalog Panel ─── -->
-    <section v-if="activePanel === 'catalog'" class="svc-content" v-loading="loading">
-      <div v-if="filteredServices.length === 0 && !loading" class="empty-panel">
-        <div class="empty-inner">
-          <strong>{{ text('当前筛选下没有匹配的服务', 'No services matched') }}</strong>
-          <p>{{ text('试试切换命名空间或清空搜索条件。', 'Try another namespace or clear filters.') }}</p>
-        </div>
-      </div>
-
-      <template v-else>
-        <!-- Card View -->
-        <div v-if="catalogMode === 'grid'" class="card-grid">
-          <article
-            v-for="service in pagedServices"
-            :key="service.name"
-            class="svc-card"
-            :style="{ '--svc-tone': service.healthTone, '--svc-surface': service.healthSurface, '--svc-border': service.healthBorder }"
-            @click="openService(service.name)"
-          >
-            <div class="card-head">
-              <strong class="card-name">{{ service.name }}</strong>
-              <div class="status-wrap">
-                <span class="status-label" :style="{ color: service.healthTone }">{{ service.healthText }}</span>
-                <span class="health-dot" :style="{ background: service.healthTone, boxShadow: `0 0 6px ${service.healthTone}` }"></span>
-              </div>
             </div>
+          </div>
 
-            <div class="card-body">
-              <div class="addr-box">
-                <el-icon><Connection /></el-icon>
-                <div class="addr-list">
-                  <code v-for="inst in service.instances.slice(0, 2)" :key="inst.id">
-                    {{ inst.host }}:{{ inst.port }}
-                  </code>
-                  <div v-if="service.instances.length > 2" class="more-tag">
-                    +{{ service.instances.length - 2 }}
-                  </div>
-                </div>
-              </div>
-
-              <div class="health-info">
-                <div class="health-bar-container">
-                  <div class="health-bar-fill" :style="{ width: `${service.healthRatio}%`, background: service.healthTone }"></div>
-                </div>
-                <span class="health-val">{{ service.healthy_count }}/{{ service.instance_count }}</span>
-              </div>
+          <div class="toolbar-group">
+            <div class="field-item">
+              <span class="field-label">{{ text('IP地址', 'IP Address') }}</span>
+              <el-input
+                v-model="searchIP"
+                size="default"
+                clearable
+                :prefix-icon="Search"
+                :placeholder="text('输入 IP', 'IP')"
+                class="search-input"
+              />
             </div>
+          </div>
 
-            <div class="card-footer">
-              <div class="metrics">
-                <el-tooltip :content="text('实例数量', 'Instances')">
-                  <div class="metric-item">
-                    <el-icon><Monitor /></el-icon>
-                    <span>{{ service.instance_count }}</span>
-                  </div>
-                </el-tooltip>
-                <div class="metric-sep"></div>
-                <el-tooltip :content="text('上游依赖', 'Upstream')">
-                  <div class="metric-item">
-                    <el-icon><Top /></el-icon>
-                    <span>{{ service.upstreamCount }}</span>
-                  </div>
-                </el-tooltip>
-                <el-tooltip :content="text('下游依赖', 'Downstream')">
-                  <div class="metric-item">
-                    <el-icon><Bottom /></el-icon>
-                    <span>{{ service.downstreamCount }}</span>
-                  </div>
-                </el-tooltip>
-              </div>
-              <button type="button" class="topo-btn" @click.stop="openTopology(service.name)">
-                <el-icon><Share /></el-icon>
+          <div class="toolbar-group">
+            <button
+              type="button"
+              class="refresh-btn"
+              :title="text('重置', 'Reset Filters')"
+              @click="resetFilters()"
+            >
+              <el-icon><RefreshLeft /></el-icon>
+            </button>
+          </div>
+
+          <!-- Right: Filters + View switch -->
+          <div class="toolbar-group right-align">
+            <div class="pill-group">
+              <button
+                type="button"
+                :class="{ active: healthFilter === '' }"
+                @click="healthFilter = ''"
+              >
+                {{ text('全部', 'All') }}
+                <span class="pill-count">{{ totalServices }}</span>
+              </button>
+              <button
+                type="button"
+                :class="{ active: healthFilter === 'healthy' }"
+                @click="healthFilter = 'healthy'"
+              >
+                {{ text('健康', 'OK') }}
+                <span class="pill-count">{{ healthyServiceCount }}</span>
+              </button>
+              <button
+                type="button"
+                :class="{ active: healthFilter === 'degraded' }"
+                @click="healthFilter = 'degraded'"
+              >
+                {{ text('异常', 'Err') }}
+                <span class="pill-count" :class="{ 'err-count': degradedServiceCount > 0 }">{{ degradedServiceCount }}</span>
               </button>
             </div>
 
+            <div class="toolbar-sep" />
 
+            <div class="pill-group icon-pills">
+              <button
+                type="button"
+                :class="{ active: activePanel === 'catalog' && catalogMode === 'list' }"
+                :title="text('列表', 'List View')"
+                @click="activePanel = 'catalog'; catalogMode = 'list'"
+              >
+                <el-icon><List /></el-icon>
+              </button>
 
-          </article>
+              <button
+                type="button"
+                :class="{ active: activePanel === 'catalog' && catalogMode === 'grid' }"
+                :title="text('卡片', 'Card View')"
+                @click="activePanel = 'catalog'; catalogMode = 'grid'"
+              >
+                <el-icon><Grid /></el-icon>
+              </button>
+
+              <button
+                type="button"
+                :class="{ active: activePanel === 'topology' }"
+                :title="text('拓扑', 'Topology View')"
+                @click="activePanel = 'topology'"
+              >
+                <el-icon><Share /></el-icon>
+              </button>
+            </div>
+          </div>
         </div>
-
-        <!-- List View -->
-        <div v-if="catalogMode === 'list'" class="table-wrap">
-          <el-table :data="pagedServices" height="100%" style="width: 100%; font-size: 14px;">
-            <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
-            <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
-            <el-table-column :label="text('命名空间', 'Namespace')" width="120" prop="namespace" />
-
-            <el-table-column :label="text('地址', 'Address')" min-width="180">
-              <template #default="{ row }">
-                <code class="cell-addr" style="font-family: inherit; font-size: 14px;">{{ row.instances[0] ? `${row.instances[0].host}:${row.instances[0].port}` : '-' }}</code>
-                <span v-if="row.instances.length > 1" style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">+{{ row.instances.length - 1 }}</span>
-              </template>
-            </el-table-column>
-
-            <el-table-column :label="text('状态', 'Status')" width="180">
-              <template #default="{ row }">
-                <div class="cell-health">
-                  <span class="health-badge" :style="{ color: row.healthTone, background: row.healthSurface, borderColor: row.healthBorder, fontSize: '13px' }">
-                    {{ row.healthText }}
-                  </span>
-                  <b style="font-size: 14px;">{{ row.healthy_count }}/{{ row.instance_count }}</b>
-                </div>
-              </template>
-            </el-table-column>
-
-            <el-table-column :label="text('实例', 'Inst')" width="80" align="center">
-              <template #default="{ row }">{{ row.instance_count }}</template>
-            </el-table-column>
-
-            <el-table-column :label="text('上游依赖', 'Upstream')" width="100" align="center">
-              <template #default="{ row }">
-                <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.upstreamCount">
-                  <template #reference>
-                    <span :style="{ fontWeight: 600, cursor: row.upstreamCount ? 'pointer' : 'default', color: row.upstreamCount ? 'var(--accent-blue)' : 'var(--text-muted)', fontSize: '14px' }">
-                      {{ row.upstreamCount }}
-                    </span>
-                  </template>
-                  <div style="font-size: 13px;">
-                    <div v-for="sn in topologyMeta?.upstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
-                  </div>
-                </el-popover>
-              </template>
-            </el-table-column>
-
-            <el-table-column :label="text('下游依赖', 'Downstream')" width="100" align="center">
-              <template #default="{ row }">
-                <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.downstreamCount">
-                  <template #reference>
-                    <span :style="{ fontWeight: 600, cursor: row.downstreamCount ? 'pointer' : 'default', color: row.downstreamCount ? 'var(--accent-blue)' : 'var(--text-muted)', fontSize: '14px' }">
-                      {{ row.downstreamCount }}
-                    </span>
-                  </template>
-                  <div style="font-size: 13px;">
-                    <div v-for="sn in topologyMeta?.downstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
-                  </div>
-                </el-popover>
-              </template>
-            </el-table-column>
-
-            <el-table-column :label="text('操作', 'Actions')" width="180" fixed="right">
-              <template #default="{ row }">
-                <div class="cell-actions" style="display: flex; gap: 8px;">
-                  <el-button link :icon="Share" @click="openTopology(row.name)">{{ text('拓扑', 'Topo') }}</el-button>
-                  <el-button link :icon="Grid" @click="openService(row.name)">{{ text('详情', 'Detail') }}</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-
-        <footer class="svc-footer">
-          <span class="footer-info">{{ filteredServices.length }} {{ text('条', 'records') }}</span>
-          <el-config-provider :locale="elLocale">
-            <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :page-sizes="[12, 20, 50]"
-              :total="filteredServices.length"
-              layout="sizes, prev, pager, next"
-              background
-            />
-          </el-config-provider>
-        </footer>
-      </template>
-    </section>
-
-    <!-- ─── Topology Panel ─── -->
-    <section v-else class="topo-stage">
-      <div class="topo-canvas" v-loading="loading">
-        <TopologyGraphCanvas
-          :graph="topology"
-          :loading="loading"
-          :selected-node="selectedTopologyNode"
-          @select="selectTopologyNode"
-        />
       </div>
 
-      <aside class="topo-side">
-        <div v-if="selectedNodeDetail" class="side-inner">
-          <div class="side-header">
-            <span class="side-meta">{{ text('当前服务', 'Current Service') }}</span>
-            <div class="side-header-row">
-              <h3 class="side-title">
-                {{ selectedNodeDetail.name }}
-                <el-tag size="small" type="info" class="ns-tag">{{ selectedNodeDetail.namespace }}</el-tag>
-              </h3>
-              <a class="detail-link" @click="openService(selectedNodeDetail.name)">
-                <el-icon><Monitor /></el-icon> {{ text('查看详情', 'View detail') }}
-              </a>
-            </div>
-          </div>
-
-          <div class="side-scroll">
-            <div class="side-group">
-              <div class="group-title">
-                {{ text('实例列表', 'Instances') }}
-                <span class="count">{{ selectedNodeDetail.instances.length }}</span>
-              </div>
-              <div v-if="selectedNodeDetail.instances.length" class="inst-list">
-                <div v-for="instance in selectedNodeDetail.instances" :key="instance.id" class="simple-inst">
-                  <span class="inst-addr">{{ instance.host }}:{{ instance.port }}</span>
-                  <em :class="{ ok: instance.status === 'passing', err: instance.status !== 'passing' }">
-                    {{ instance.status === 'passing' ? text('健康', 'OK') : text('异常', 'Err') }}
-                  </em>
-                </div>
-              </div>
-              <div v-else class="empty-text">{{ text('无可用实例', 'No instances') }}</div>
-            </div>
-
-            <div class="side-group">
-              <div class="group-title">{{ text('上游依赖', 'Upstream') }}</div>
-              <div v-if="selectedUpstream.length" class="dep-list scrollable">
-                <div
-                  v-for="sn in selectedUpstream"
-                  :key="sn"
-                  @click="selectTopologyNode(sn)"
-                  class="dep-item"
-                >
-                  <span class="dep-name">{{ sn }}</span>
-                  <div v-if="serviceEntryMap[sn]" class="dep-info">
-                    <span
-                      class="dep-status"
-                      :style="{ color: serviceEntryMap[sn].healthTone, background: serviceEntryMap[sn].healthSurface }"
-                    >
-                      {{ serviceEntryMap[sn].healthy_count }}/{{ serviceEntryMap[sn].instance_count }}
-                    </span>
-                    <span class="dep-status-text" :style="{ color: serviceEntryMap[sn].healthTone }">{{ serviceEntryMap[sn].healthText }}</span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="empty-text">{{ text('无', 'None') }}</div>
-            </div>
-
-            <div class="side-group">
-              <div class="group-title">{{ text('下游依赖', 'Downstream') }}</div>
-              <div v-if="selectedDownstream.length" class="dep-list scrollable">
-                <div
-                  v-for="sn in selectedDownstream"
-                  :key="sn"
-                  @click="selectTopologyNode(sn)"
-                  class="dep-item"
-                >
-                  <span class="dep-name">{{ sn }}</span>
-                  <div v-if="serviceEntryMap[sn]" class="dep-info">
-                    <span
-                      class="dep-status"
-                      :style="{ color: serviceEntryMap[sn].healthTone, background: serviceEntryMap[sn].healthSurface }"
-                    >
-                      {{ serviceEntryMap[sn].healthy_count }}/{{ serviceEntryMap[sn].instance_count }}
-                    </span>
-                    <span class="dep-status-text" :style="{ color: serviceEntryMap[sn].healthTone }">{{ serviceEntryMap[sn].healthText }}</span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="empty-text">{{ text('无', 'None') }}</div>
-            </div>
+      <!-- ─── Catalog Panel ─── -->
+      <section v-if="activePanel === 'catalog'" class="svc-content" v-loading="loading">
+        <div v-if="filteredServices.length === 0 && !loading" class="empty-panel">
+          <div class="empty-inner">
+            <strong>{{ text('当前筛选下没有匹配的服务', 'No services matched') }}</strong>
+            <p>{{ text('试试切换命名空间或清空搜索条件。', 'Try another namespace or clear filters.') }}</p>
           </div>
         </div>
 
-        <div v-else class="side-empty">
-          {{ text('请在左侧拓扑图中选择一个节点查看详细信息。', 'Select a node from the topology graph.') }}
+        <template v-else>
+          <!-- Card View -->
+          <div v-if="catalogMode === 'grid'" class="card-grid">
+            <article
+              v-for="service in pagedServices"
+              :key="service.name"
+              class="svc-card"
+              :style="{ '--svc-tone': service.healthTone, '--svc-surface': service.healthSurface, '--svc-border': service.healthBorder }"
+              @click="openService(service.name)"
+            >
+              <div class="card-head">
+                <strong class="card-name">{{ service.name }}</strong>
+                <div class="status-wrap">
+                  <span class="status-label" :style="{ color: service.healthTone }">{{ service.healthText }}</span>
+                  <span class="health-dot" :style="{ background: service.healthTone, boxShadow: `0 0 6px ${service.healthTone}` }"></span>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="inst-matrix">
+                  <el-tooltip
+                    v-for="inst in service.instances"
+                    :key="inst.id"
+                    :content="`${inst.host}:${inst.port} (${inst.status === 'passing' ? (isZh ? '健康' : 'Healthy') : (isZh ? '异常' : 'Critical')})`"
+                    placement="top"
+                  >
+                    <div
+                      class="inst-dot"
+                      :class="inst.status"
+                    ></div>
+                  </el-tooltip>
+                  <div v-if="service.instances.length === 0" class="empty-text">
+                    {{ text('暂无实例', 'No instances') }}
+                  </div>
+                </div>
+
+                <div class="health-info">
+                  <div class="health-bar-container">
+                    <div class="health-bar-fill" :style="{ width: `${service.healthRatio}%`, background: service.healthTone }"></div>
+                  </div>
+                  <span class="health-val">{{ service.healthy_count }}/{{ service.instance_count }}</span>
+                </div>
+              </div>
+
+              <div class="card-footer">
+                <div class="metrics">
+                  <el-tooltip :content="text('实例数量', 'Instances')">
+                    <div class="metric-item">
+                      <el-icon><Monitor /></el-icon>
+                      <span>{{ service.instance_count }}</span>
+                    </div>
+                  </el-tooltip>
+                  <div class="metric-sep"></div>
+                  <el-tooltip :content="text('上游依赖', 'Upstream')">
+                    <div class="metric-item">
+                      <el-icon><Top /></el-icon>
+                      <span>{{ service.upstreamCount }}</span>
+                    </div>
+                  </el-tooltip>
+                  <el-tooltip :content="text('下游依赖', 'Downstream')">
+                    <div class="metric-item">
+                      <el-icon><Bottom /></el-icon>
+                      <span>{{ service.downstreamCount }}</span>
+                    </div>
+                  </el-tooltip>
+                </div>
+                <button type="button" class="topo-btn" @click.stop="openTopology(service.name)">
+                  <el-icon><Share /></el-icon>
+                </button>
+              </div>
+
+
+
+            </article>
+          </div>
+
+          <!-- List View -->
+          <div v-if="catalogMode === 'list'" class="table-wrap">
+            <el-table :data="pagedServices" height="100%" style="width: 100%; font-size: 14px;">
+              <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
+              <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
+              <el-table-column :label="text('命名空间', 'Namespace')" width="120" prop="namespace" />
+
+              <el-table-column :label="text('地址', 'Address')" min-width="180">
+                <template #default="{ row }">
+                  <code class="cell-addr" style="font-family: inherit; font-size: 14px;">{{ row.instances[0] ? `${row.instances[0].host}:${row.instances[0].port}` : '-' }}</code>
+                  <span v-if="row.instances.length > 1" style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">+{{ row.instances.length - 1 }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column :label="text('状态', 'Status')" width="180">
+                <template #default="{ row }">
+                  <div class="cell-health">
+                    <span class="health-badge" :style="{ color: row.healthTone, background: row.healthSurface, borderColor: row.healthBorder, fontSize: '13px' }">
+                      {{ row.healthText }}
+                    </span>
+                    <b style="font-size: 14px;">{{ row.healthy_count }}/{{ row.instance_count }}</b>
+                  </div>
+                </template>
+              </el-table-column>
+
+              <el-table-column :label="text('实例', 'Inst')" width="80" align="center">
+                <template #default="{ row }">{{ row.instance_count }}</template>
+              </el-table-column>
+
+              <el-table-column :label="text('上游依赖', 'Upstream')" width="100" align="center">
+                <template #default="{ row }">
+                  <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.upstreamCount">
+                    <template #reference>
+                      <span :style="{ fontWeight: 600, cursor: row.upstreamCount ? 'pointer' : 'default', color: row.upstreamCount ? 'var(--accent-blue)' : 'var(--text-muted)', fontSize: '14px' }">
+                        {{ row.upstreamCount }}
+                      </span>
+                    </template>
+                    <div style="font-size: 13px;">
+                      <div v-for="sn in topologyMeta?.upstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
+                    </div>
+                  </el-popover>
+                </template>
+              </el-table-column>
+
+              <el-table-column :label="text('下游依赖', 'Downstream')" width="100" align="center">
+                <template #default="{ row }">
+                  <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.downstreamCount">
+                    <template #reference>
+                      <span :style="{ fontWeight: 600, cursor: row.downstreamCount ? 'pointer' : 'default', color: row.downstreamCount ? 'var(--accent-blue)' : 'var(--text-muted)', fontSize: '14px' }">
+                        {{ row.downstreamCount }}
+                      </span>
+                    </template>
+                    <div style="font-size: 13px;">
+                      <div v-for="sn in topologyMeta?.downstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
+                    </div>
+                  </el-popover>
+                </template>
+              </el-table-column>
+
+              <el-table-column :label="text('操作', 'Actions')" width="180" fixed="right">
+                <template #default="{ row }">
+                  <div class="cell-actions" style="display: flex; gap: 8px;">
+                    <el-button link :icon="Share" @click="openTopology(row.name)">{{ text('拓扑', 'Topo') }}</el-button>
+                    <el-button link :icon="Grid" @click="openService(row.name)">{{ text('详情', 'Detail') }}</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <footer class="svc-footer">
+            <span class="footer-info">{{ filteredServices.length }} {{ text('条', 'records') }}</span>
+            <el-config-provider :locale="elLocale">
+              <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[12, 20, 50]"
+                :total="filteredServices.length"
+                layout="sizes, prev, pager, next"
+                background
+              />
+            </el-config-provider>
+          </footer>
+        </template>
+      </section>
+
+      <!-- ─── Topology Panel ─── -->
+      <section v-else class="topo-stage">
+        <div class="topo-canvas" v-loading="loading">
+          <TopologyGraphCanvas
+            :graph="topology"
+            :loading="loading"
+            :selected-node="selectedTopologyNode"
+            @select="selectTopologyNode"
+          />
         </div>
-      </aside>
-    </section>
+
+        <aside class="topo-side">
+          <div v-if="selectedNodeDetail" class="side-inner">
+            <div class="side-header">
+              <span class="side-meta">{{ text('当前服务', 'Current Service') }}</span>
+              <div class="side-header-row">
+                <h3 class="side-title">
+                  {{ selectedNodeDetail.name }}
+                  <el-tag size="small" type="info" class="ns-tag">{{ selectedNodeDetail.namespace }}</el-tag>
+                </h3>
+                <a class="detail-link" @click="openService(selectedNodeDetail.name)">
+                  <el-icon><Monitor /></el-icon> {{ text('查看详情', 'View detail') }}
+                </a>
+              </div>
+            </div>
+
+            <div class="side-scroll">
+              <div class="side-group">
+                <div class="group-title">
+                  {{ text('实例列表', 'Instances') }}
+                  <span class="count">{{ selectedNodeDetail.instances.length }}</span>
+                </div>
+                <div v-if="selectedNodeDetail.instances.length" class="inst-list">
+                  <div v-for="instance in selectedNodeDetail.instances" :key="instance.id" class="simple-inst">
+                    <span class="inst-addr">{{ instance.host }}:{{ instance.port }}</span>
+                    <em :class="{ ok: instance.status === 'passing', err: instance.status !== 'passing' }">
+                      {{ instance.status === 'passing' ? text('健康', 'OK') : text('异常', 'Err') }}
+                    </em>
+                  </div>
+                </div>
+                <div v-else class="empty-text">{{ text('无可用实例', 'No instances') }}</div>
+              </div>
+
+              <div class="side-group">
+                <div class="group-title">{{ text('上游依赖', 'Upstream') }}</div>
+                <div v-if="selectedUpstream.length" class="dep-list scrollable">
+                  <div
+                    v-for="sn in selectedUpstream"
+                    :key="sn"
+                    @click="selectTopologyNode(sn)"
+                    class="dep-item"
+                  >
+                    <span class="dep-name">{{ sn }}</span>
+                    <div v-if="serviceEntryMap[sn]" class="dep-info">
+                      <span
+                        class="dep-status"
+                        :style="{ color: serviceEntryMap[sn].healthTone, background: serviceEntryMap[sn].healthSurface }"
+                      >
+                        {{ serviceEntryMap[sn].healthy_count }}/{{ serviceEntryMap[sn].instance_count }}
+                      </span>
+                      <span class="dep-status-text" :style="{ color: serviceEntryMap[sn].healthTone }">{{ serviceEntryMap[sn].healthText }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-text">{{ text('无', 'None') }}</div>
+              </div>
+
+              <div class="side-group">
+                <div class="group-title">{{ text('下游依赖', 'Downstream') }}</div>
+                <div v-if="selectedDownstream.length" class="dep-list scrollable">
+                  <div
+                    v-for="sn in selectedDownstream"
+                    :key="sn"
+                    @click="selectTopologyNode(sn)"
+                    class="dep-item"
+                  >
+                    <span class="dep-name">{{ sn }}</span>
+                    <div v-if="serviceEntryMap[sn]" class="dep-info">
+                      <span
+                        class="dep-status"
+                        :style="{ color: serviceEntryMap[sn].healthTone, background: serviceEntryMap[sn].healthSurface }"
+                      >
+                        {{ serviceEntryMap[sn].healthy_count }}/{{ serviceEntryMap[sn].instance_count }}
+                      </span>
+                      <span class="dep-status-text" :style="{ color: serviceEntryMap[sn].healthTone }">{{ serviceEntryMap[sn].healthText }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-text">{{ text('无', 'None') }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="side-empty">
+            {{ text('请在左侧拓扑图中选择一个节点查看详细信息。', 'Select a node from the topology graph.') }}
+          </div>
+        </aside>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -715,17 +722,31 @@ onBeforeUnmount(() => {
 .svc-shell {
   display: flex;
   flex-direction: column;
+  /* 100vh - header(64) - page-body top/bottom padding(24*2) */
   height: calc(100vh - var(--header-height) - 48px);
   min-height: 0;
   overflow: hidden;
-  gap: 0;
-  padding: 0;
+  box-sizing: border-box;
 }
+
+.svc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+}
+
+/* glass-card removed as a class and absorbed into .svc-main for clarity */
 
 /* ===== Toolbar ===== */
 .svc-toolbar {
   flex-shrink: 0;
-  padding: 12px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -925,8 +946,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
-  padding: 16px 24px 12px;
+  overflow: hidden; /* confined to table scroll */
+  padding: 12px 24px 12px;
 }
 
 /* ===== Card grid ===== */
@@ -948,15 +969,14 @@ onBeforeUnmount(() => {
 .svc-card {
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 16px;
   border-radius: 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease-out;
   position: relative;
   overflow: hidden;
-  min-height: 240px;
 }
 
 .svc-card::before {
@@ -971,17 +991,16 @@ onBeforeUnmount(() => {
 }
 
 .svc-card:hover {
-  transform: translateY(-4px);
   border-color: var(--svc-tone);
-  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--svc-tone);
-  background: var(--bg-glass);
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.05));
+  box-shadow: inset 0 0 0 1px var(--svc-tone); /* Internal Highlight border */
 }
 
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .card-name {
@@ -1013,40 +1032,42 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.addr-box {
-  display: flex;
   gap: 12px;
-  align-items: flex-start;
-  color: var(--text-muted);
+  margin-bottom: 10px;
 }
 
-.addr-box .el-icon {
-  margin-top: 3px;
-  font-size: 16px;
-}
-
-.addr-list {
+.inst-matrix {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+  align-items: center;
 }
 
-.addr-list code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.more-tag {
-  font-size: 11px;
-  padding: 1px 6px;
-  background: var(--border-color);
+.inst-dot {
+  width: 14px;
+  height: 14px;
   border-radius: 4px;
-  width: fit-content;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.inst-dot:hover {
+  transform: scale(1.25);
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.inst-dot.passing {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
+
+.inst-dot.critical {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
 }
 
 .health-info {
@@ -1080,8 +1101,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
+  margin-top: auto;
 }
 
 .metrics {
@@ -1139,6 +1159,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   background: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 :deep(.table-wrap .el-table) {
@@ -1403,9 +1425,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
-  padding: 2px 2px 24px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 2px 2px 20px;
 }
 
 /* Hide scrollbar for Chrome/Safari */
@@ -1580,7 +1602,7 @@ onBeforeUnmount(() => {
 .field-label {
   font-size: 14px;
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 

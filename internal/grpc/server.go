@@ -50,7 +50,7 @@ func (s *RegistryServer) Deregister(ctx context.Context, req *pb.DeregisterReque
 
 	logger.Info("[gRPC] Set instance offline (legacy): %s (%s) namespace=%s success=%v", req.ServiceName, req.InstanceId, req.Namespace, success)
 	if err != nil {
-		return &pb.DeregisterResponse{Success: false}, nil
+		return &pb.DeregisterResponse{Success: false}, err
 	}
 	return &pb.DeregisterResponse{Success: true}, nil
 }
@@ -61,7 +61,7 @@ func (s *RegistryServer) SetInstanceStatus(ctx context.Context, req *pb.SetInsta
 
 	logger.Info("[gRPC] Set instance status %s: %s (%s) namespace=%s success=%v", req.Status, req.ServiceName, req.InstanceId, req.Namespace, success)
 	if err != nil {
-		return &pb.SetInstanceStatusResponse{Success: false}, nil
+		return &pb.SetInstanceStatusResponse{Success: false}, err
 	}
 	return &pb.SetInstanceStatusResponse{Success: true}, nil
 }
@@ -69,7 +69,7 @@ func (s *RegistryServer) SetInstanceStatus(ctx context.Context, req *pb.SetInsta
 func (s *RegistryServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	err := s.catalog.Heartbeat(req.Namespace, req.ServiceName, req.InstanceId)
 	if err != nil {
-		return &pb.HeartbeatResponse{Success: false}, nil
+		return &pb.HeartbeatResponse{Success: false}, err
 	}
 	return &pb.HeartbeatResponse{Success: true}, nil
 }

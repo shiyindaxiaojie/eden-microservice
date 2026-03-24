@@ -61,6 +61,7 @@ func (s *catalogService) Register(inst *model.Instance) error {
 		return s.apNode.Apply("register", inst, false)
 	}
 	s.store.Register(inst)
+	s.store.AppendEvent("Client Registration", inst.ServiceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Instance registered")
 	return nil
 }
 
@@ -82,10 +83,11 @@ func (s *catalogService) SetInstanceStatus(namespace, serviceName, instanceID st
 		return fmt.Errorf("invalid status: %s, must be 'online' or 'offline'", status)
 	}
 
-	_, ok := s.store.SetInstanceStatus(namespace, serviceName, instanceID, healthStatus)
+	inst, ok := s.store.SetInstanceStatus(namespace, serviceName, instanceID, healthStatus)
 	if !ok {
 		return fmt.Errorf("instance not found: %s/%s", serviceName, instanceID)
 	}
+	s.store.AppendEvent("Client Registration", serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), fmt.Sprintf("Status changed to %s", status))
 	return nil
 }
 
@@ -102,10 +104,11 @@ func (s *catalogService) Heartbeat(namespace, serviceName, instanceID string) er
 	if s.apNode != nil {
 		return s.apNode.Apply("heartbeat", data, false)
 	}
-	_, ok := s.store.Services.HeartbeatNS(namespace, serviceName, instanceID)
-	if !ok {
+	inst, _ := s.store.Services.HeartbeatNS(namespace, serviceName, instanceID)
+	if inst == nil {
 		return fmt.Errorf("instance not found")
 	}
+	s.store.AppendEvent("Heartbeat", serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Heartbeat received")
 	return nil
 }
 

@@ -94,14 +94,66 @@ func (r *Registry) SetMode(m string)             { r.Config.SetMode(m); r.Config
 func (r *Registry) SetEnvironment(e string)      { r.Config.SetEnvironment(e); r.Config.Save() }
 func (r *Registry) SetSeeds(s []string)          { r.Config.SetSeeds(s); r.Config.Save() }
 func (r *Registry) SetLogLevel(l string)         { r.Config.SetLogLevel(l); r.Config.Save() }
+func (r *Registry) GetEventRetentionDays() int   { return r.Config.GetEventRetentionDays() }
+func (r *Registry) SetEventRetentionDays(d int)  { r.Config.SetEventRetentionDays(d); r.Config.Save() }
+func (r *Registry) GetLogRetentionDays() int     { return r.Config.GetLogRetentionDays() }
+func (r *Registry) SetLogRetentionDays(d int)    { r.Config.SetLogRetentionDays(d); r.Config.Save() }
+func (r *Registry) GetEventTypes() []string      { return r.Config.GetEventTypes() }
+func (r *Registry) SetEventTypes(t []string)     { r.Config.SetEventTypes(t); r.Config.Save() }
+func (r *Registry) GetHeartbeatMaxFailures() int { return r.Config.GetHeartbeatMaxFailures() }
+func (r *Registry) SetHeartbeatMaxFailures(n int) {
+	r.Config.SetHeartbeatMaxFailures(n)
+	r.Config.Save()
+}
+func (r *Registry) GetInstanceRemovalDelaySeconds() int {
+	return r.Config.GetInstanceRemovalDelaySeconds()
+}
+func (r *Registry) SetInstanceRemovalDelaySeconds(n int) {
+	r.Config.SetInstanceRemovalDelaySeconds(n)
+	r.Config.Save()
+}
 func (r *Registry) ListEvents() []*model.Event   { return r.Events.List() }
 func (r *Registry) MarkCritical(ttl time.Duration) ([]*model.Instance, []*model.Instance) {
-	return r.Services.MarkCritical(ttl)
+	// Dynamically calculate based on settings if needed, or pass fixed ttl
+	// For now, let's update ServiceStore.MarkCritical to take both.
+	maxFail := r.GetHeartbeatMaxFailures()
+	if maxFail <= 0 {
+		maxFail = 3
+	}
+	removalDelay := time.Duration(r.GetInstanceRemovalDelaySeconds()) * time.Second
+	return r.Services.MarkCritical(ttl, maxFail, removalDelay)
 }
 
 // Namespace convenience methods
 func (r *Registry) ListNamespaces() []*model.Namespace       { return r.Namespaces.List() }
 func (r *Registry) CreateNamespace(ns *model.Namespace) bool { return r.Namespaces.Create(ns) }
+
+func (r *Registry) AppendEvent(etype, service, instance, message string) {
+	if !r.shouldRecordEvent(etype) {
+		return
+	}
+	r.Events.Append(&model.Event{
+		Type:      etype,
+		Service:   service,
+		Instance:  instance,
+		Message:   message,
+		Timestamp: time.Now(),
+	})
+}
+
+func (r *Registry) shouldRecordEvent(etype string) bool {
+	allowed := r.GetEventTypes()
+	if len(allowed) == 0 {
+		return true
+	}
+	// Map internal types to UI labels if needed, or just compare
+	for _, t := range allowed {
+		if t == etype {
+			return true
+		}
+	}
+	return false
+}
 func (r *Registry) UpdateNamespace(ns *model.Namespace) bool { return r.Namespaces.Update(ns) }
 func (r *Registry) DeleteNamespace(name string) bool         { return r.Namespaces.Delete(name) }
 func (r *Registry) SetInstanceStatus(ns, svc, id string, status model.HealthStatus) (*model.Instance, bool) {
@@ -116,9 +168,15 @@ type SnapshotData struct {
 	TopologyReports map[string]map[string]*model.TopologyReport `json:"topology_reports,omitempty"`
 	APIKeys         map[string]*model.APIKey                    `json:"api_keys"`
 	Users           map[string]*model.User                      `json:"users"`
-	Mode            string                                      `json:"mode"`
-	Environment     string                                      `json:"environment"`
-	Seeds           []string                                    `json:"seeds"`
+	Mode               string                                      `json:"mode"`
+	Environment        string                                      `json:"environment"`
+	Seeds              []string                                    `json:"seeds"`
+	LogLevel           string                                      `json:"log_level"`
+	EventRetentionDays int                                         `json:"event_retention_days"`
+	LogRetentionDays   int                                         `json:"log_retention_days"`
+	EventTypes         []string                                    `json:"event_types"`
+	HBMaxFail          int                                         `json:"heartbeat_max_failures"`
+	RemovalDelay       int                                         `json:"instance_removal_delay_seconds"`
 }
 
 // Snapshot returns a deep copy of all data.
@@ -144,9 +202,15 @@ func (r *Registry) Snapshot() *SnapshotData {
 		TopologyReports: r.Topology.Snapshot(),
 		APIKeys:         r.Auth.GetAllAPIKeys(),
 		Users:           r.Auth.GetAllUsers(),
-		Mode:            r.Config.GetMode(),
-		Environment:     r.Config.GetEnvironment(),
-		Seeds:           r.Config.GetSeeds(),
+		Mode:               r.Config.GetMode(),
+		Environment:        r.Config.GetEnvironment(),
+		Seeds:              r.Config.GetSeeds(),
+		LogLevel:           r.Config.GetLogLevel(),
+		EventRetentionDays: r.Config.GetEventRetentionDays(),
+		LogRetentionDays:   r.Config.GetLogRetentionDays(),
+		EventTypes:         r.Config.GetEventTypes(),
+		HBMaxFail:          r.Config.GetHeartbeatMaxFailures(),
+		RemovalDelay:       r.Config.GetInstanceRemovalDelaySeconds(),
 	}
 	return snap
 }
@@ -185,7 +249,7 @@ func (r *Registry) Restore(data *SnapshotData) {
 		r.Topology.Restore(data.TopologyReports)
 	}
 	r.Auth.Restore(data.Users, data.APIKeys)
-	r.Config.Restore(data.Mode, data.Environment, "", data.Seeds)
+	r.Config.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay)
 
 	r.Services.Save()
 	r.Auth.Save()
