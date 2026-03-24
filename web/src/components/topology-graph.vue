@@ -53,7 +53,7 @@ function nodeTone(node: TopologyNode) {
   }
 }
 
-function buildOption() {
+function buildOption(): echarts.EChartsOption {
   const nodes = graphData.value.nodes.map((node) => {
     const tone = nodeTone(node)
     const isSelected = props.selectedNode === node.id

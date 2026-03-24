@@ -142,6 +142,10 @@ async function handleRemove(row: ClusterMember) {
   }
 }
 
+function canRemoveMember(member: ClusterMember) {
+  return !member.is_local && member.role !== 'Leader' && (stats.value?.mode !== 'cp' || stats.value?.role === 'Leader')
+}
+
 function roleTagType(role: string) {
   switch (role) {
     case 'Leader':
@@ -313,7 +317,7 @@ onMounted(fetchCluster)
             <el-table-column :label="t.common.actions" width="100" fixed="right" align="center">
               <template #default="{ row }">
                 <el-button
-                  v-if="!row.is_local && row.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
+                  v-if="canRemoveMember(row)"
                   type="danger"
                   size="small"
                   link
@@ -374,10 +378,8 @@ onMounted(fetchCluster)
               </div>
             </div>
 
-            <div class="card-footer">
-              <div class="footer-spacer"></div>
+            <div v-if="canRemoveMember(member)" class="card-footer">
               <el-button
-                v-if="!member.is_local && member.role !== 'Leader' && (stats?.mode !== 'cp' || stats?.role === 'Leader')"
                 type="danger"
                 size="small"
                 link
@@ -1134,9 +1136,56 @@ onMounted(fetchCluster)
 }
 
 .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+  justify-content: start;
   gap: 16px;
   align-content: start;
   padding: 2px 2px 8px;
+}
+
+.node-card {
+  max-width: 340px;
+  min-height: 0;
+  padding: 18px;
+}
+
+.card-head {
+  margin-bottom: 14px;
+}
+
+.card-body {
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.status-line {
+  padding: 8px 12px;
+}
+
+.addr-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.addr-box {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.addr-box code {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.card-footer {
+  justify-content: flex-end;
+  padding-top: 12px;
 }
 
 .mono-addr {
@@ -1215,6 +1264,14 @@ onMounted(fetchCluster)
   }
 
   .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .node-card {
+    max-width: none;
+  }
+
+  .addr-group {
     grid-template-columns: 1fr;
   }
 

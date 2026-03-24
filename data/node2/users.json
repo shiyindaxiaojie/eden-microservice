@@ -2,8 +2,10 @@
   "users": {
     "admin": {
       "username": "admin",
-      "password": "$2a$10$QbXLXmdLxMorCLe8xn2OJul9F5XGwft52/dPlKlCfWztYduYEj9zu",
+      "password": "$2a$10$Udg7x7HypY1tcqlfX6IPn.NHg1tAF6BcI/Pz.InKP09bKZCaE7p.y",
       "nickname": "",
+      "phone": "",
+      "email": "",
       "remark": "",
       "role": "admin",
       "is_builtin": true

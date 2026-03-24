@@ -137,6 +137,17 @@ const getRoleTag = (role: string) => {
   }
 }
 
+const roleLabel = (role: string) => {
+  switch (role) {
+    case 'admin':
+      return text('管理员', 'Admin')
+    case 'developer':
+      return text('开发者', 'Developer')
+    default:
+      return text('访客', 'Guest')
+  }
+}
+
 const getErrorMessage = (error: any, fallbackZh: string, fallbackEn: string) =>
   error?.response?.data?.error || text(fallbackZh, fallbackEn)
 
@@ -150,9 +161,11 @@ const mapUser = (user: RbacUser): UserRow => ({
   isBuiltIn: !!user.is_builtin,
 })
 
-const displayNickname = (row: UserRow) => row.nickname || text('未设置昵称', 'No nickname')
-const displayContact = (row: UserRow) => row.email || row.phone || text('未填写', 'Not provided')
-const displayRemark = (row: UserRow) => row.remark || text('未填写备注', 'No remark')
+const displayNickname = (row: UserRow) => row.nickname || '-'
+const displayContact = (row: UserRow) => row.email || row.phone || '-'
+const displayRemark = (row: UserRow) => row.remark || '-'
+
+const userInitial = (row: UserRow) => (row.nickname || row.username || '?').trim().charAt(0).toUpperCase()
 
 const fetchData = async () => {
   loading.value = true
@@ -399,7 +412,7 @@ onMounted(() => {
               </el-table-column>
               <el-table-column :label="text('角色', 'Role')" width="140">
                 <template #default="{ row }">
-                  <el-tag :type="getRoleTag(row.role)" size="small" effect="plain">{{ row.role }}</el-tag>
+                  <el-tag :type="getRoleTag(row.role)" size="small" effect="plain">{{ roleLabel(row.role) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column :label="text('联系信息', 'Contact')" min-width="220" show-overflow-tooltip>
@@ -438,7 +451,9 @@ onMounted(() => {
               <div class="card-accent"></div>
 
               <div class="card-head">
-                <div>
+                <div class="identity-block">
+                  <div class="identity-avatar">{{ userInitial(row) }}</div>
+                  <div class="identity-copy">
                   <div class="title-row">
                     <strong class="card-title">{{ row.username }}</strong>
                     <el-tag v-if="row.isBuiltIn" size="small" effect="plain" type="warning">
@@ -446,18 +461,21 @@ onMounted(() => {
                     </el-tag>
                   </div>
                   <p class="card-subtitle">{{ displayNickname(row) }}</p>
+                  </div>
                 </div>
-                <el-tag :type="getRoleTag(row.role)" size="small" effect="plain">{{ row.role }}</el-tag>
+                <div class="role-pill">
+                  <el-tag :type="getRoleTag(row.role)" size="small" effect="light">{{ roleLabel(row.role) }}</el-tag>
+                </div>
               </div>
 
               <div class="card-body">
-                <div class="meta-panel">
+                <div class="meta-panel compact">
                   <span class="meta-label">{{ text('联系信息', 'Contact') }}</span>
                   <span class="meta-value">{{ displayContact(row) }}</span>
                 </div>
-                <div class="meta-panel">
+                <div class="meta-panel compact">
                   <span class="meta-label">{{ text('备注', 'Remark') }}</span>
-                  <span class="meta-value">{{ displayRemark(row) }}</span>
+                  <span class="meta-value clamp-two">{{ displayRemark(row) }}</span>
                 </div>
               </div>
 
@@ -495,10 +513,11 @@ onMounted(() => {
     <el-dialog
       v-model="dialogVisible"
       :title="dialogType === 'add' ? text('添加用户', 'Add User') : text('编辑用户', 'Edit User')"
-      width="560px"
-      class="glass-dialog"
+      width="460px"
+      class="glass-dialog user-dialog"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="user-dialog-form">
+        <div class="form-grid">
         <el-form-item :label="text('用户名', 'Username')" prop="username">
           <el-input
             v-model="form.username"
@@ -541,6 +560,7 @@ onMounted(() => {
             :placeholder="text('请输入备注', 'Please input remark')"
           />
         </el-form-item>
+        </div>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -753,11 +773,8 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 :deep(.search-input .el-input__wrapper),
@@ -838,22 +855,26 @@ onMounted(() => {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 360px));
+  justify-content: start;
+  gap: 20px;
   align-content: start;
-  padding: 2px 2px 8px;
+  padding: 4px 2px 10px;
 }
 
 .info-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px;
-  border-radius: 16px;
-  background: var(--bg-secondary);
+  gap: 16px;
+  padding: 18px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+    var(--bg-secondary);
   border: 1px solid var(--border-color);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -867,9 +888,10 @@ onMounted(() => {
 .card-accent {
   position: absolute;
   inset: 0 auto auto 0;
-  width: 100%;
-  height: 4px;
+  width: 84px;
+  height: 3px;
   background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.18));
+  border-radius: 0 0 999px 0;
 }
 
 .builtin-card .card-accent {
@@ -880,24 +902,72 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
 }
 
 .title-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.identity-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.identity-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-blue);
+  font-size: 16px;
+  font-weight: 700;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.14);
+}
+
+.builtin-card .identity-avatar {
+  color: var(--accent-orange);
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.identity-copy {
+  min-width: 0;
+}
+
+.role-pill {
+  flex-shrink: 0;
+}
+
+.builtin-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent-orange);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .card-title {
   display: block;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 
 .card-subtitle {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
@@ -1008,7 +1078,7 @@ onMounted(() => {
   }
 
   .table-wrap {
-    padding: 0 12px;
+    min-height: 0;
   }
 
   .card-grid {

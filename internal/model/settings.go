@@ -44,12 +44,12 @@ var eventTypeAliases = map[string][]string{
 	"heartbeat":        {EventTypeServiceHeartbeat},
 	"server node sync": {EventTypeRegistryNodeSync},
 
-	"服务注册":     {EventTypeServiceRegister},
-	"服务上线":     {EventTypeServiceOnline},
-	"服务下线":     {EventTypeServiceOffline},
-	"注册中心节点同步": {EventTypeRegistryNodeSync},
-	"服务心跳":     {EventTypeServiceHeartbeat},
-	"服务移除":     {EventTypeServiceRemove},
+	"服务注册": {EventTypeServiceRegister},
+	"服务上线": {EventTypeServiceOnline},
+	"服务下线": {EventTypeServiceOffline},
+	"节点同步": {EventTypeRegistryNodeSync},
+	"服务心跳": {EventTypeServiceHeartbeat},
+	"服务移除": {EventTypeServiceRemove},
 }
 
 var validLogLevels = map[string]struct{}{

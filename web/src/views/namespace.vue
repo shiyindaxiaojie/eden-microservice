@@ -98,8 +98,8 @@ const emptyDesc = computed(() =>
 const mapNamespace = (item: Namespace): NamespaceRow => ({
   name: item.name,
   description: item.description || '',
-  createdAt: item.created_at || '-',
-  updatedAt: item.updated_at || '-',
+  createdAt: formatDateTime(item.created_at || '-'),
+  updatedAt: formatDateTime(item.updated_at || '-'),
 })
 
 const getErrorMessage = (error: any, fallbackZh: string, fallbackEn: string) =>
@@ -107,6 +107,22 @@ const getErrorMessage = (error: any, fallbackZh: string, fallbackEn: string) =>
 
 const displayDescription = (row: NamespaceRow) =>
   row.description || text('未填写描述', 'No description')
+
+const formatDateTime = (value: string) => {
+  if (!value || value === '-') return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  const hours = `${date.getHours()}`.padStart(2, '0')
+  const minutes = `${date.getMinutes()}`.padStart(2, '0')
+  const seconds = `${date.getSeconds()}`.padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -609,11 +625,8 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 :deep(.search-input .el-input__wrapper) {
@@ -845,7 +858,7 @@ onMounted(() => {
   }
 
   .table-wrap {
-    padding: 0 12px;
+    min-height: 0;
   }
 
   .card-grid {

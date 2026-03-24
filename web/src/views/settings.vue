@@ -70,12 +70,12 @@ const EVENT_OPTIONS = [
   { value: 'service_register', label: '服务注册' },
   { value: 'service_online', label: '服务上线' },
   { value: 'service_offline', label: '服务下线' },
-  { value: 'registry_node_sync', label: '注册中心节点同步' },
+  { value: 'registry_node_sync', label: '节点同步' },
   { value: 'service_heartbeat', label: '服务心跳' },
   { value: 'service_remove', label: '服务移除' },
 ]
 
-const LOG_LEVEL_OPTIONS = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
+const LOG_LEVEL_OPTIONS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
 
 function createDefaultSettings(): SystemSettings {
   return {
@@ -110,12 +110,18 @@ function normalizeEventTypes(values?: string[]): string[] {
   })
 }
 
+function normalizeLogLevel(level?: string | null): string {
+  if (level === 'TRACE') return 'DEBUG'
+  if (level === 'FATAL') return 'ERROR'
+  return LOG_LEVEL_OPTIONS.includes((level || '') as (typeof LOG_LEVEL_OPTIONS)[number]) ? level! : 'INFO'
+}
+
 function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettings {
   const defaults = createDefaultSettings()
   return {
     mode: input?.mode === 'cp' ? 'cp' : defaults.mode,
     environment: input?.environment === 'cluster' ? 'cluster' : defaults.environment,
-    log_level: LOG_LEVEL_OPTIONS.includes(input?.log_level || '') ? input!.log_level! : defaults.log_level,
+    log_level: normalizeLogLevel(input?.log_level ?? defaults.log_level),
     event_retention_days: Math.max(1, input?.event_retention_days ?? defaults.event_retention_days),
     log_retention_days: Math.max(1, input?.log_retention_days ?? defaults.log_retention_days),
     event_types: normalizeEventTypes(input?.event_types ?? defaults.event_types),
@@ -375,12 +381,31 @@ onMounted(() => {
               <section class="settings-section glass-card registry-section">
                 <div class="section-header">
                   <el-icon><Connection /></el-icon>
-                  <h4>注册中心配置</h4>
+                  <div class="section-title-with-tip">
+                    <h4>注册中心配置</h4>
+                    <el-tooltip
+                      content="注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。"
+                      placement="top"
+                    >
+                      <el-icon class="help-icon"><InfoFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
                 </div>
 
-                <el-form label-position="top" class="compact-form">
+                <el-form label-position="left" label-width="140px" class="compact-form basic-inline-form registry-form">
                   <div class="form-grid">
-                    <el-form-item label="服务心跳超时次数">
+                    <el-form-item>
+                      <template #label>
+                        <span class="label-with-tip">
+                          心跳超时次数
+                          <el-tooltip
+                            content="默认 3 次。连续丢失心跳达到阈值后，实例会先标记为下线，而不是立即删除。"
+                            placement="top"
+                          >
+                            <el-icon class="help-icon"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </span>
+                      </template>
                       <el-input-number
                         v-model="draftSettings.heartbeat_max_failures"
                         :min="1"
@@ -388,10 +413,20 @@ onMounted(() => {
                         controls-position="right"
                         style="width: 100%"
                       />
-                      <div class="field-tip">默认 3 次。连续丢失心跳达到阈值后，实例会先标记为下线而不是立即删除。</div>
                     </el-form-item>
 
-                    <el-form-item label="失效服务实例保留时长（分钟）">
+                    <el-form-item>
+                      <template #label>
+                        <span class="label-with-tip">
+                          实例保留（分钟）
+                          <el-tooltip
+                            content="默认 10 分钟。适合处理服务重启、网络抖动或 CPU 过高导致的心跳延迟。"
+                            placement="top"
+                          >
+                            <el-icon class="help-icon"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </span>
+                      </template>
                       <el-input-number
                         v-model="removalDelayMinutes"
                         :min="1"
@@ -399,14 +434,9 @@ onMounted(() => {
                         controls-position="right"
                         style="width: 100%"
                       />
-                      <div class="field-tip">默认 10 分钟。适合处理服务重启、网络抖动或 CPU 过高导致的心跳延迟。</div>
                     </el-form-item>
                   </div>
                 </el-form>
-
-                <div class="setting-note">
-                  注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。
-                </div>
               </section>
             </div>
 
@@ -417,11 +447,11 @@ onMounted(() => {
                   <h4>事件设置</h4>
                 </div>
 
-                <el-form label-position="top" class="compact-form">
-                  <el-form-item label="事件保留时长（天）">
+                <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
+                  <el-form-item label="事件保留（天）">
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.event_retention_days" :min="1" :max="365" style="flex: 1" />
-                      <span class="val-text">{{ draftSettings.event_retention_days }}d</span>
+                      <span class="val-text">{{ draftSettings.event_retention_days }}</span>
                     </div>
                   </el-form-item>
 
@@ -438,39 +468,45 @@ onMounted(() => {
               <section class="settings-section glass-card side-section">
                 <div class="section-header">
                   <el-icon><Document /></el-icon>
-                  <h4>日志配置</h4>
+                  <div class="section-title-with-tip">
+                    <h4>日志配置</h4>
+                    <el-tooltip
+                      content="日志级别会在保存后立即更新当前进程；日志保留时长会同步写入持久化配置，用于后续日志滚动与清理策略。"
+                      placement="top"
+                    >
+                      <el-icon class="help-icon"><InfoFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
                 </div>
 
-                <el-form label-position="top" class="compact-form">
+                <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
                   <el-form-item label="日志级别">
-                    <el-select v-model="draftSettings.log_level" style="width: 100%">
-                      <el-option v-for="level in LOG_LEVEL_OPTIONS" :key="level" :label="level" :value="level" />
-                    </el-select>
+                    <div class="log-level-options" role="radiogroup" aria-label="日志级别">
+                      <button
+                        v-for="level in LOG_LEVEL_OPTIONS"
+                        :key="level"
+                        type="button"
+                        :class="['log-level-option', `log-level-${level.toLowerCase()}`, { active: draftSettings.log_level === level }]"
+                        :aria-checked="draftSettings.log_level === level"
+                        @click="draftSettings.log_level = level"
+                      >
+                        {{ level }}
+                      </button>
+                    </div>
                   </el-form-item>
 
-                  <el-form-item label="日志保留时长（天）">
+                  <el-form-item label="日志保留（天）">
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.log_retention_days" :min="1" :max="365" style="flex: 1" />
-                      <span class="val-text">{{ draftSettings.log_retention_days }}d</span>
+                      <span class="val-text">{{ draftSettings.log_retention_days }}</span>
                     </div>
                   </el-form-item>
                 </el-form>
-
-                <div class="setting-note">
-                  日志级别会在保存后立即更新当前进程；日志保留时长会同步写入持久化配置，用于后续日志滚动与清理策略。
-                </div>
               </section>
             </div>
           </div>
 
-          <div class="save-footer glass-card">
-            <div class="save-copy">
-              <div class="save-title">{{ isDirty ? '存在未保存的修改' : '当前配置已是最新状态' }}</div>
-              <div class="save-desc">
-                运行模式切换、事件设置、日志配置和注册中心保护策略都会在点击右下角按钮后统一生效。
-              </div>
-            </div>
-
+          <div class="save-toolbar">
             <div class="save-actions">
               <el-button @click="resetDraftSettings" :disabled="!isDirty || saveLoading">重置</el-button>
               <el-button type="primary" @click="saveSystemConfig" :loading="saveLoading" :disabled="!isDirty">
@@ -697,7 +733,7 @@ onMounted(() => {
 }
 
 .settings-tabs :deep(.el-tabs__header) {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .settings-tabs :deep(.el-tabs__nav-wrap::after) {
@@ -728,20 +764,20 @@ onMounted(() => {
 .basic-settings {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .basic-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.95fr);
-  gap: 20px;
+  gap: 16px;
   align-items: start;
 }
 
 .settings-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .channels-grid {
@@ -762,18 +798,18 @@ onMounted(() => {
 }
 
 .settings-section {
-  padding: 24px;
+  padding: 20px 22px;
 }
 
 .mode-section {
-  padding: 32px;
+  padding: 28px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 
 .section-header h4 {
@@ -783,8 +819,26 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.section-title-with-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
 .section-header .el-icon {
   font-size: 20px;
+  color: var(--accent-blue);
+}
+
+.help-icon {
+  color: var(--text-muted);
+  cursor: help;
+  transition: color 0.2s ease;
+}
+
+.help-icon:hover {
   color: var(--accent-blue);
 }
 
@@ -983,7 +1037,7 @@ onMounted(() => {
 }
 
 .technical-footer-v7 {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .info-bubble-v7 {
@@ -1042,39 +1096,130 @@ onMounted(() => {
 }
 
 .compact-form :deep(.el-form-item) {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.basic-inline-form :deep(.el-form-item) {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.basic-inline-form :deep(.el-form-item__label) {
+  min-height: 32px;
+  padding-top: 6px;
+  line-height: 20px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.basic-inline-form :deep(.el-form-item__content) {
+  min-width: 0;
+}
+
+.label-with-tip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.label-with-tip .help-icon {
+  flex-shrink: 0;
+}
+
+.side-inline-form :deep(.el-form-item__label) {
+  padding-top: 4px;
+}
+
+.registry-form :deep(.el-form-item__label) {
+  padding-top: 5px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.field-tip,
-.setting-note {
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.setting-note {
-  margin-top: 4px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.06);
-  border: 1px solid rgba(59, 130, 246, 0.14);
+  gap: 12px 16px;
 }
 
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  min-height: 32px;
+  width: 100%;
+  min-width: 0;
+}
+
+.slider-row :deep(.el-slider) {
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.log-level-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.log-level-option {
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.log-level-option:hover {
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--text-primary);
+}
+
+.log-level-option.active {
+  background: var(--bg-secondary);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.log-level-debug.active {
+  color: #64748b;
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.22), 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.log-level-info.active {
+  color: var(--accent-blue);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.24), 0 6px 14px rgba(59, 130, 246, 0.12);
+}
+
+.log-level-warn.active {
+  color: #d97706;
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.24), 0 6px 14px rgba(217, 119, 6, 0.12);
+}
+
+.log-level-error.active {
+  color: #dc2626;
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.22), 0 6px 14px rgba(220, 38, 38, 0.1);
 }
 
 .val-text {
-  min-width: 44px;
-  text-align: right;
+  min-width: 40px;
+  text-align: left;
   color: var(--accent-blue);
   font-size: 14px;
   font-weight: 700;
@@ -1083,37 +1228,30 @@ onMounted(() => {
 .event-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 8px;
+  gap: 10px 8px;
 }
 
-.save-footer {
+.save-toolbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 22px;
-}
-
-.save-copy {
-  min-width: 0;
-}
-
-.save-title {
-  margin-bottom: 6px;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.save-desc {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 14px 0 6px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0), var(--bg-primary) 38%);
 }
 
 .save-actions {
   display: flex;
   gap: 12px;
   flex-shrink: 0;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .credentials-header {
@@ -1269,6 +1407,14 @@ onMounted(() => {
   .form-grid {
     grid-template-columns: 1fr;
   }
+
+  .registry-form :deep(.el-form-item__label) {
+    width: 140px !important;
+  }
+
+  .side-inline-form :deep(.el-form-item__label) {
+    width: 108px !important;
+  }
 }
 
 @media (max-width: 900px) {
@@ -1278,7 +1424,33 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .save-footer,
+  .log-level-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .log-level-option {
+    min-width: 0;
+  }
+
+  .basic-inline-form :deep(.el-form-item) {
+    display: block;
+  }
+
+  .basic-inline-form :deep(.el-form-item__label) {
+    display: block;
+    width: 100% !important;
+    min-height: auto;
+    padding-top: 0;
+    margin-bottom: 6px;
+  }
+
+  .basic-inline-form :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
   .title-row {
     flex-direction: column;
     align-items: stretch;
