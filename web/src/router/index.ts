@@ -1,4 +1,4 @@
-﻿import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   {
@@ -58,6 +58,12 @@ const routes = [
     name: 'Docs',
     component: () => import('../views/docs.vue'),
     meta: { title: 'Documentation' },
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('../views/profile.vue'),
+    meta: { title: 'Personal Center' },
   },
 ]
 

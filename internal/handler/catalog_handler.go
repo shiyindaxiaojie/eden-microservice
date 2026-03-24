@@ -81,6 +81,10 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.catalog.Heartbeat(req.Namespace, req.ServiceName, req.InstanceID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			httpError(w, http.StatusNotFound, err.Error())
+			return
+		}
 		h.handleLeaderRedirect(w, err)
 		return
 	}

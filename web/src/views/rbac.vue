@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Grid, List as ListIcon, Lock, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Edit, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import api from '../api/index'
 import { useI18n } from '../utils/i18n'
 import { sha256 } from '../utils/crypto'
@@ -195,7 +195,7 @@ onMounted(fetchUsers)
             :title="t.common.refresh"
             @click="resetFilters()"
           >
-            <el-icon><Refresh /></el-icon>
+            <el-icon><RefreshLeft /></el-icon>
           </button>
         </div>
         
@@ -243,7 +243,7 @@ onMounted(fetchUsers)
       <template v-else>
         <div v-if="viewMode === 'list'" class="table-wrap">
           <el-table :data="pagedUsers" height="100%" style="width: 100%; font-size: 14px;">
-            <el-table-column type="index" label="#" width="60" align="center" />
+            <el-table-column type="index" :label="locale === 'zh' ? '序号' : 'No.'" width="60" align="center" />
             <el-table-column :label="t.rbac.username" min-width="200">
               <template #default="{ row }">
                 <div class="user-cell">
@@ -275,7 +275,7 @@ onMounted(fetchUsers)
               <template #default="{ row }">
                 <div class="row-actions">
                   <el-button type="primary" link :icon="Edit" @click="handleShowEdit(row)">{{ t.common.edit }}</el-button>
-                  <el-button v-if="!row.is_builtin" type="danger" link :icon="Lock" @click="deleteUser(row.username)">{{ t.common.delete }}</el-button>
+                  <el-button v-if="!row.is_builtin" type="danger" link :icon="Delete" @click="deleteUser(row.username)">{{ t.common.delete }}</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -298,10 +298,10 @@ onMounted(fetchUsers)
             </div>
             <div class="user-card-foot">
                <div class="footer-spacer"></div>
-               <div class="card-actions">
-                  <el-button type="primary" link :icon="Edit" @click="handleShowEdit(user)" />
-                  <el-button v-if="!user.is_builtin" type="danger" link :icon="Delete" @click="deleteUser(user.username)" />
-               </div>
+                <div class="card-actions">
+                   <el-button type="primary" link :icon="Edit" @click="handleShowEdit(user)">{{ t.common.edit }}</el-button>
+                   <el-button v-if="!user.is_builtin" type="danger" link :icon="Delete" @click="deleteUser(user.username)">{{ t.common.delete }}</el-button>
+                </div>
             </div>
           </article>
         </div>
@@ -363,6 +363,33 @@ onMounted(fetchUsers)
   overflow: hidden;
   gap: 0;
   padding: 0;
+}
+
+.svc-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 24px 12px;
+}
+
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding: 2px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 8px;
 }
 
 /* ===== Toolbar ===== */
@@ -430,6 +457,7 @@ onMounted(fetchUsers)
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
+  margin-left: -20px;
 }
 
 .refresh-btn:hover {
@@ -752,6 +780,7 @@ onMounted(fetchUsers)
   color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

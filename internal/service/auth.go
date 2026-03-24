@@ -47,3 +47,34 @@ func (s *authService) VerifyAPIKey(key string) (*model.APIKey, bool) {
 func (s *authService) GetUser(username string) (*model.User, bool) {
 	return s.store.GetUser(username)
 }
+
+func (s *authService) UpdateProfile(username, nickname, phone, email string) error {
+	user, ok := s.store.GetUser(username)
+	if !ok {
+		return errors.New("user not found")
+	}
+	user.Nickname = nickname
+	user.Phone = phone
+	user.Email = email
+	s.store.AddUser(user) // store.AddUser will call save internally
+	return nil
+}
+
+func (s *authService) UpdatePassword(username, oldPassword, newPassword string) error {
+	user, ok := s.store.GetUser(username)
+	if !ok {
+		return errors.New("user not found")
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword))
+	if err != nil && user.Password != oldPassword {
+		return errors.New("current password incorrect")
+	}
+
+	// In this project it seems sometimes plain text is used if bcrypt fails or is not applied yet
+	// But let's use bcrypt for new password
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	user.Password = string(hashed)
+	s.store.AddUser(user)
+	return nil
+}

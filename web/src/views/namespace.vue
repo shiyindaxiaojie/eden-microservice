@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Delete, Edit, Grid, List as ListIcon, Lock, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Calendar, Delete, Edit, Grid, List as ListIcon, Lock, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import { createNamespace, deleteNamespace, getNamespaces, updateNamespace } from '../api/registry'
 import type { Namespace } from '../api/registry'
 import { useI18n } from '../utils/i18n'
@@ -170,8 +170,6 @@ onMounted(fetchNamespaces)
           </div>
         </div>
 
-        <div class="toolbar-sep"></div>
-
         <div class="toolbar-group">
           <button
             type="button"
@@ -179,7 +177,7 @@ onMounted(fetchNamespaces)
             :title="t.common.refresh"
             @click="resetFilters()"
           >
-            <el-icon><Refresh /></el-icon>
+            <el-icon><RefreshLeft /></el-icon>
           </button>
         </div>
         
@@ -238,12 +236,8 @@ onMounted(fetchNamespaces)
                 <span v-else class="ns-badge">{{ t.namespace.customBadge }}</span>
               </div>
               <div class="ns-actions">
-                <button type="button" class="action-btn" @click="handleEdit(ns)" :disabled="ns.name === 'default'">
-                  <el-icon><Edit /></el-icon>
-                </button>
-                <button type="button" class="action-btn delete" @click="handleDelete(ns)" :disabled="ns.name === 'default'">
-                  <el-icon><Delete /></el-icon>
-                </button>
+                <el-button link :icon="Edit" @click="handleEdit(ns)" :disabled="ns.name === 'default'">{{ t.common.edit }}</el-button>
+                <el-button link type="danger" :icon="Delete" @click="handleDelete(ns)" :disabled="ns.name === 'default'">{{ t.common.delete }}</el-button>
               </div>
             </div>
 
@@ -265,7 +259,7 @@ onMounted(fetchNamespaces)
 
         <div v-else class="table-wrap">
             <el-table :data="pagedNamespaces" height="100%" style="width: 100%; font-size: 14px;">
-              <el-table-column type="index" label="#" width="60" align="center" />
+              <el-table-column type="index" :label="locale === 'zh' ? '序号' : 'No.'" width="60" align="center" />
             <el-table-column :label="t.namespace.name" min-width="180">
               <template #default="{ row }">
                 <div class="ns-list-info">
@@ -291,11 +285,11 @@ onMounted(fetchNamespaces)
               </template>
             </el-table-column>
 
-            <el-table-column :label="t.common.actions" width="120" align="center" fixed="right">
+            <el-table-column :label="t.common.actions" width="160" align="center" fixed="right">
               <template #default="{ row }">
                 <div class="ns-list-actions">
-                  <el-button link :icon="Edit" @click="handleEdit(row)" :disabled="row.name === 'default'" />
-                  <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" :disabled="row.name === 'default'" />
+                  <el-button link :icon="Edit" @click="handleEdit(row)" :disabled="row.name === 'default'">{{ t.common.edit }}</el-button>
+                  <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" :disabled="row.name === 'default'">{{ t.common.delete }}</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -407,12 +401,52 @@ onMounted(fetchNamespaces)
   opacity: 0.5;
 }
 
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: -20px;
+}
+
+.refresh-btn:hover {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
 /* ── Content ── */
 .svc-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 24px 12px;
+}
+
+.namespace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 24px 12px;
+  align-content: start;
+  padding: 2px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 8px;
 }
 
 .empty-panel {
@@ -722,6 +756,7 @@ onMounted(fetchNamespaces)
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

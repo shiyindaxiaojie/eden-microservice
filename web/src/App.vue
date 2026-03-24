@@ -1,7 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Moon, QuestionFilled, Sunny } from '@element-plus/icons-vue'
+import { ArrowDown, Moon, QuestionFilled, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { useI18n } from './utils/i18n'
 import logo from './assets/logo.png'
 
@@ -12,7 +12,7 @@ const router = useRouter()
 const userRole = ref(localStorage.getItem('user_role') || '')
 const username = ref(localStorage.getItem('username') || '')
 const nickname = ref(localStorage.getItem('nickname') || '')
-const theme = ref('light')
+const theme = ref(localStorage.getItem('theme') || 'light')
 
 watch(
   () => route.path,
@@ -45,6 +45,7 @@ const currentTitle = computed(() => {
   if (route.path.startsWith('/rbac')) return t.value.nav.accessControl
   if (route.path.startsWith('/settings')) return t.value.nav.settings
   if (route.path.startsWith('/docs')) return t.value.nav.docs
+  if (route.path.startsWith('/profile')) return locale.value === 'zh' ? '个人中心' : 'Profile'
   return 'Eden Registry'
 })
 
@@ -96,6 +97,11 @@ onMounted(() => {
   const savedTheme = getCookie('theme') || 'light'
   theme.value = savedTheme
   applyTheme(savedTheme)
+  
+  window.addEventListener('storage', () => {
+    username.value = localStorage.getItem('username') || ''
+    nickname.value = localStorage.getItem('nickname') || ''
+  })
 })
 </script>
 
@@ -156,8 +162,12 @@ onMounted(() => {
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item>{{ t.common.profile }}</el-dropdown-item>
+                <el-dropdown-item @click="router.push('/profile')">
+                  <el-icon><User /></el-icon>
+                  {{ t.common.profile || '个人中心' }}
+                </el-dropdown-item>
                 <el-dropdown-item divided @click="handleLogout" style="color: var(--el-color-danger)">
+                  <el-icon><SwitchButton /></el-icon>
                   {{ t.common.logout }}
                 </el-dropdown-item>
               </el-dropdown-menu>

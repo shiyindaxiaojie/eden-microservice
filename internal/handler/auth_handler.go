@@ -268,3 +268,80 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	httpError(w, http.StatusUnauthorized, "invalid credentials")
 }
+
+// handleProfile handles retrieving and updating the user's basic profile.
+func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
+	username, _ := r.Context().Value(UserContextKey).(string)
+	if username == "" {
+		httpError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		user, ok := h.auth.GetUser(username)
+		if !ok {
+			httpError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		jsonOK(w, map[string]interface{}{
+			"username": user.Username,
+			"nickname": user.Nickname,
+			"phone":    user.Phone,
+			"email":    user.Email,
+			"role":     user.Role,
+		})
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
+		return
+	}
+
+	var req struct {
+		Nickname string `json:"nickname"`
+		Phone    string `json:"phone"`
+		Email    string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if err := h.auth.UpdateProfile(username, req.Nickname, req.Phone, req.Email); err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonOK(w, "Profile updated")
+}
+
+// handleUpdatePassword updates the user's password.
+func (h *Handler) handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+
+	username, _ := r.Context().Value(UserContextKey).(string)
+	if username == "" {
+		httpError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old"`
+		NewPassword string `json:"new"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if err := h.auth.UpdatePassword(username, req.OldPassword, req.NewPassword); err != nil {
+		httpError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonOK(w, "Password updated")
+}

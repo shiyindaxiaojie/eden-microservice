@@ -6,22 +6,20 @@ import { useI18n } from '../utils/i18n'
 import { 
   Setting, 
   Key, 
-  Message, 
-  Bell, 
   Operation, 
   CopyDocument, 
-  RefreshRight, 
   Delete,
-  Sunny,
-  Moon,
+  Grid,
+  Plus,
+  RefreshRight,
   Timer,
   Share,
   Monitor,
-  Grid,
-  Plus
+  Bell,
+  Message
 } from '@element-plus/icons-vue'
 
-const { locale, t, toggleLocale } = useI18n()
+const { t } = useI18n()
 
 // Tab state
 const activeTab = ref('basic')
@@ -39,7 +37,6 @@ const showDialog = ref(false)
 const keyForm = ref({ key: '', description: '', expDays: 0 })
 
 // Preferences
-const theme = ref(document.documentElement.getAttribute('data-theme') || 'light')
 const eventRetention = ref(30)
 
 // Advanced Settings States
@@ -138,23 +135,6 @@ async function handleModeChange(targetMode: string) {
     fetchMode()
   } finally {
     modeLoading.value = false
-  }
-}
-
-function handleThemeChange(val: string) {
-  theme.value = val
-  document.documentElement.setAttribute('data-theme', val)
-  if (val === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-  document.cookie = `theme=${val};path=/;max-age=31536000`
-}
-
-function handleLangChange(val: string) {
-  if (locale.value !== val) {
-    toggleLocale()
   }
 }
 
@@ -330,31 +310,12 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Preferences -->
           <div class="settings-section glass-card">
             <div class="section-header">
               <el-icon><Operation /></el-icon>
-              <h4>{{ t.settings.preferences }}</h4>
+              <h4>存储设置</h4>
             </div>
             <el-form label-position="left" label-width="140px">
-              <el-form-item :label="t.settings.language">
-                <el-radio-group v-model="locale" @change="handleLangChange">
-                  <el-radio-button label="zh">简体中文</el-radio-button>
-                  <el-radio-button label="en">English</el-radio-button>
-                </el-radio-group>
-              </el-form-item>
-              
-              <el-form-item :label="t.settings.theme">
-                <el-radio-group v-model="theme" @change="handleThemeChange">
-                  <el-radio-button label="light">
-                    <el-icon><Sunny /></el-icon> {{ t.settings.light }}
-                  </el-radio-button>
-                  <el-radio-button label="dark">
-                    <el-icon><Moon /></el-icon> {{ t.settings.dark }}
-                  </el-radio-button>
-                </el-radio-group>
-              </el-form-item>
-
               <el-form-item :label="t.settings.retention">
                 <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                   <el-slider v-model="eventRetention" :min="1" :max="365" style="flex: 1" />

@@ -177,8 +177,7 @@ func (s *AuthStore) SeedBuiltInUsers(builtin []model.User) {
 			s.users[u.Username] = &u
 			changed = true
 		} else {
-			if existing.Password != u.Password || existing.Role != u.Role {
-				existing.Password = u.Password
+			if existing.Role != u.Role {
 				existing.Role = u.Role
 				existing.IsBuiltIn = true
 				changed = true

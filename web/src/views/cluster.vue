@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Grid, List as ListIcon, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   addClusterMember,
   getClusterMembers,
@@ -212,7 +212,7 @@ onMounted(fetchCluster)
             :title="t.common.refresh"
             @click="resetFilters()"
           >
-            <el-icon><Refresh /></el-icon>
+            <el-icon><RefreshLeft /></el-icon>
           </button>
         </div>
 
@@ -270,7 +270,7 @@ onMounted(fetchCluster)
       <template v-else>
         <div v-if="viewMode === 'list'" class="table-wrap">
           <el-table :data="pagedMembers" height="100%" style="width: 100%; font-size: 14px;">
-            <el-table-column type="index" label="#" width="60" align="center" />
+            <el-table-column type="index" :label="locale === 'zh' ? '序号' : 'No.'" width="60" align="center" />
             <el-table-column :label="t.cluster.nodeId" min-width="100">
               <template #default="{ row }">
                 <div class="node-id-cell">
@@ -443,6 +443,33 @@ onMounted(fetchCluster)
   padding: 0;
 }
 
+.svc-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 24px 12px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding: 2px;
+}
+
 /* ===== Toolbar ===== */
 .svc-toolbar {
   flex-shrink: 0;
@@ -508,6 +535,7 @@ onMounted(fetchCluster)
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
+  margin-left: -20px;
 }
 
 .refresh-btn:hover {

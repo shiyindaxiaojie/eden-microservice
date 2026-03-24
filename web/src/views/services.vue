@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Grid, List, RefreshRight, Search, Share, Top, Bottom } from '@element-plus/icons-vue'
+import { Bottom, Grid, List, RefreshLeft, Search, Share, Top } from '@element-plus/icons-vue'
 import {
   getNamespaces,
   getServices,
@@ -341,8 +341,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="toolbar-sep"></div>
-
         <div class="toolbar-group">
           <div class="field-item">
             <span class="field-label">{{ text('服务名称', 'Service Name') }}</span>
@@ -356,8 +354,6 @@ onBeforeUnmount(() => {
             />
           </div>
         </div>
-
-        <div class="toolbar-sep"></div>
 
         <div class="toolbar-group">
           <div class="field-item">
@@ -373,8 +369,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="toolbar-sep"></div>
-
         <div class="toolbar-group">
           <button
             type="button"
@@ -382,7 +376,7 @@ onBeforeUnmount(() => {
             :title="text('重置', 'Reset Filters')"
             @click="resetFilters()"
           >
-            <el-icon><RefreshRight /></el-icon>
+            <el-icon><RefreshLeft /></el-icon>
           </button>
         </div>
 
@@ -588,11 +582,11 @@ onBeforeUnmount(() => {
               </template>
             </el-table-column>
 
-            <el-table-column :label="text('操作', 'Actions')" width="140" fixed="right">
+            <el-table-column :label="text('操作', 'Actions')" width="180" fixed="right">
               <template #default="{ row }">
-                <div class="cell-actions">
-                  <button type="button" @click="openTopology(row.name)">{{ text('拓扑', 'Topo') }}</button>
-                  <button type="button" @click="openService(row.name)">{{ text('详情', 'Detail') }}</button>
+                <div class="cell-actions" style="display: flex; gap: 8px;">
+                  <el-button link :icon="Share" @click="openTopology(row.name)">{{ text('拓扑', 'Topo') }}</el-button>
+                  <el-button link :icon="Grid" @click="openService(row.name)">{{ text('详情', 'Detail') }}</el-button>
                 </div>
               </template>
             </el-table-column>

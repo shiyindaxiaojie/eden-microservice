@@ -89,8 +89,10 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/cluster/stats", h.Auth(adminOrDev(http.HandlerFunc(h.handleStats))))
 	h.mux.Handle("/v1/events", h.Auth(adminOrDev(http.HandlerFunc(h.handleEvents))))
 
-	// --- Auth (Public) ---
+	// --- Auth (Public & Profile) ---
 	h.mux.HandleFunc("/v1/auth/login", h.handleLogin)
+	h.mux.Handle("/v1/auth/profile", h.Auth(http.HandlerFunc(h.handleProfile)))
+	h.mux.Handle("/v1/auth/password", h.Auth(http.HandlerFunc(h.handleUpdatePassword)))
 
 	// --- RBAC & Settings (Admin only) ---
 	h.mux.Handle("/v1/rbac/users", h.Auth(http.HandlerFunc(h.handleListUsers)))

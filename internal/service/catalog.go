@@ -102,7 +102,10 @@ func (s *catalogService) Heartbeat(namespace, serviceName, instanceID string) er
 	if s.apNode != nil {
 		return s.apNode.Apply("heartbeat", data, false)
 	}
-	s.store.Services.HeartbeatNS(namespace, serviceName, instanceID)
+	_, ok := s.store.Services.HeartbeatNS(namespace, serviceName, instanceID)
+	if !ok {
+		return fmt.Errorf("instance not found")
+	}
 	return nil
 }
 

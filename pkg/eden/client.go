@@ -208,6 +208,23 @@ func (c *Client) startNodeDiscovery() {
 			case <-c.stopCh:
 				return
 			}
+
+			// If all nodes are unhealthy, be more aggressive
+			c.mu.RLock()
+			allDown := true
+			for _, n := range c.allNodes {
+				if n.isHealthy() {
+					allDown = false
+					break
+				}
+			}
+			c.mu.RUnlock()
+
+			if allDown {
+				// Re-sync after 5s if everything is down
+				time.Sleep(5 * time.Second)
+				c.syncNodes()
+			}
 		}
 	}()
 }
@@ -606,16 +623,19 @@ func (c *Client) Subscribe(serviceName string, callback func([]*registry.Service
 			default:
 			}
 
-			// Try gRPC Watch on the first healthy node
+			// 1. Try establishing gRPC Watch (Real-time)
 			if c.transport == "grpc" || c.transport == "quic" {
 				if c.tryWatch(serviceName, callback) {
-					continue // Watch ended, retry
+					// tryWatch returns true if it successfully connected and then disconnected.
+					// We loop back to try reconnecting Watch.
+					time.Sleep(1 * time.Second) // Avoid tight loop
+					continue
 				}
 			}
 
-			// Fallback to polling
-			c.pollSubscribe(serviceName, callback)
-			return
+			// 2. Fallback to Polling (If Watch fails or transport is HTTP)
+			// pollSubscribe will now run for a few cycles and then exit to let us try Watch again.
+			c.pollSubscribeThenRetry(serviceName, callback)
 		}
 	}()
 	return nil
@@ -676,16 +696,22 @@ func (c *Client) tryWatch(serviceName string, callback func([]*registry.ServiceI
 	return false
 }
 
-// pollSubscribe polls Discovery at regular intervals as a Watch fallback.
-func (c *Client) pollSubscribe(serviceName string, callback func([]*registry.ServiceInstance)) {
+// pollSubscribeThenRetry polls Discovery for a while, then returns to allow attempting Watch upgrade.
+func (c *Client) pollSubscribeThenRetry(serviceName string, callback func([]*registry.ServiceInstance)) {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
+
+	// Try polling for 30 seconds before attempting to switch back to gRPC Watch
+	retryWatchTimer := time.NewTimer(30 * time.Second)
+	defer retryWatchTimer.Stop()
 
 	var lastHash string
 	for {
 		select {
 		case <-c.stopCh:
 			return
+		case <-retryWatchTimer.C:
+			return // Time to try gRPC Watch again
 		case <-ticker.C:
 			instances, err := c.Discovery(serviceName)
 			if err != nil {
@@ -701,7 +727,7 @@ func (c *Client) pollSubscribe(serviceName string, callback func([]*registry.Ser
 }
 
 func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
-	return c.executeWithFailover("Heartbeat", func(node *RegistryNode) error {
+	err := c.executeWithFailover("Heartbeat", func(node *RegistryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
 			client, err := node.getClient(c.transport)
 			if err != nil {
@@ -738,10 +764,21 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusNotFound {
+				return fmt.Errorf("instance not found")
+			}
 			return fmt.Errorf("status %d", resp.StatusCode)
 		}
 		return nil
 	})
+
+	// Self-repair: If the registry lost our registration (e.g. restart without persistence), re-register.
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		logger.Warn("[Registry SDK] Heartbeat failed (not found), attempting auto-recovery registration for %s/%s", instance.ServiceName, instance.ID)
+		return c.Register(instance)
+	}
+
+	return err
 }
 
 func (c *Client) startCacheRefresh() {

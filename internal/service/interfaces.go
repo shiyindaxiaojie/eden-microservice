@@ -40,6 +40,8 @@ type AuthService interface {
 	Login(username, password string) (string, error)
 	VerifyAPIKey(key string) (*model.APIKey, bool)
 	GetUser(username string) (*model.User, bool)
+	UpdateProfile(username, nickname, phone, email string) error
+	UpdatePassword(username, oldPassword, newPassword string) error
 }
 
 // SettingsService handles system settings and user management.

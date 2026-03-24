@@ -5,6 +5,8 @@ type User struct {
 	Username string `json:"username"`
 	Password string `json:"password"` // In memory/config it might be plain, in production should be hashed
 	Nickname string `json:"nickname"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
 	Remark   string `json:"remark"`
 	Role     string `json:"role"` // "admin", "viewer"
 	IsBuiltIn bool  `json:"is_builtin"`
