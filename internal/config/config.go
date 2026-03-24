@@ -4,25 +4,27 @@ import (
 	"fmt"
 	"strings"
 
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/spf13/viper"
 )
 
 // Config represents the registry configuration.
 type Config struct {
-	NodeID   string   `mapstructure:"node_id" json:"node_id"`
-	Mode     string   `mapstructure:"mode" json:"mode"` // "ap" or "cp"
-	HTTPAddr   string   `mapstructure:"http_addr" json:"http_addr"`
-	GRPCAddr   string   `mapstructure:"grpc_addr" json:"grpc_addr"`
-	QUICAddr   string   `mapstructure:"quic_addr" json:"quic_addr"`
-	RaftAddr   string   `mapstructure:"raft_addr" json:"raft_addr"`
-	DataDir    string   `mapstructure:"data_dir" json:"data_dir"`
-	Datacenter string   `mapstructure:"datacenter" json:"datacenter"`
-	Bootstrap  bool     `mapstructure:"bootstrap" json:"bootstrap"`
-	Join       string   `mapstructure:"join" json:"join"`
-	Seeds      []string `mapstructure:"seeds" json:"seeds"`
-	Auth       Auth        `mapstructure:"auth" json:"auth"`
-	Log        LogConfig   `mapstructure:"log" json:"log"`
-	Storage    StorageConfig `mapstructure:"storage" json:"storage"`
+	NodeID     string         `mapstructure:"node_id" json:"node_id"`
+	Mode       string         `mapstructure:"mode" json:"mode"` // "ap" or "cp"
+	HTTPAddr   string         `mapstructure:"http_addr" json:"http_addr"`
+	GRPCAddr   string         `mapstructure:"grpc_addr" json:"grpc_addr"`
+	QUICAddr   string         `mapstructure:"quic_addr" json:"quic_addr"`
+	RaftAddr   string         `mapstructure:"raft_addr" json:"raft_addr"`
+	DataDir    string         `mapstructure:"data_dir" json:"data_dir"`
+	Datacenter string         `mapstructure:"datacenter" json:"datacenter"`
+	Bootstrap  bool           `mapstructure:"bootstrap" json:"bootstrap"`
+	Join       string         `mapstructure:"join" json:"join"`
+	Seeds      []string       `mapstructure:"seeds" json:"seeds"`
+	Auth       Auth           `mapstructure:"auth" json:"auth"`
+	Log        LogConfig      `mapstructure:"log" json:"log"`
+	Storage    StorageConfig  `mapstructure:"storage" json:"storage"`
 	Registry   RegistryConfig `mapstructure:"registry" json:"registry"`
 }
 
@@ -98,12 +100,11 @@ type UserConfig struct {
 	Role     string `mapstructure:"role"` // "admin", "viewer"
 }
 
-
 // LoadConfig loads configuration from yaml file and environment variables.
 func LoadConfig(path string) (*Config, error) {
 	viper.SetConfigFile(path)
 	viper.SetConfigType("yaml")
-	
+
 	// Environment variables bindings
 	// e.g. REGISTRY_NODE_ID overrides node_id in yaml
 	viper.SetEnvPrefix("REGISTRY")
@@ -133,11 +134,11 @@ func LoadConfig(path string) (*Config, error) {
 	// Default Storage Configuration
 	viper.SetDefault("storage.event_retention_days", 30)
 	viper.SetDefault("storage.log_retention_days", 30)
-	viper.SetDefault("storage.event_types", []string{"Server Node Sync", "Client Registration", "Heartbeat"})
+	viper.SetDefault("storage.event_types", model.DefaultEventTypes())
 
 	viper.SetDefault("registry.heartbeat_interval_seconds", 10)
 	viper.SetDefault("registry.heartbeat_max_failures", 3)
-	viper.SetDefault("registry.instance_removal_delay_seconds", 3600)
+	viper.SetDefault("registry.instance_removal_delay_seconds", 600)
 
 	// Default Log Configuration
 	viper.SetDefault("log.level", "INFO")
@@ -165,4 +166,61 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &conf, nil
+}
+
+func ToLoggerConfiguration(lc LogConfig) logger.Configuration {
+	var appenders []logger.AppenderConfig
+	for _, a := range lc.Appenders {
+		var rollover *logger.RolloverConfig
+		if a.Rollover != nil {
+			rollover = &logger.RolloverConfig{
+				MaxFile:   a.Rollover.MaxFile,
+				Retention: a.Rollover.Retention,
+			}
+		}
+		appenders = append(appenders, logger.AppenderConfig{
+			Name:        a.Name,
+			Type:        a.Type,
+			Level:       a.Level,
+			Pattern:     a.Pattern,
+			FileName:    a.FileName,
+			FilePattern: a.FilePattern,
+			Filter:      a.Filter,
+			Async:       a.Async,
+			Rollover:    rollover,
+		})
+	}
+
+	var policies *logger.PoliciesConfig
+	if lc.Policies != nil {
+		policies = &logger.PoliciesConfig{}
+		if lc.Policies.CronTriggeringPolicy != nil {
+			policies.CronTriggeringPolicy = &logger.CronPolicyConfig{
+				Schedule: lc.Policies.CronTriggeringPolicy.Schedule,
+			}
+		}
+		if lc.Policies.SizeBasedTriggeringPolicy != nil {
+			policies.SizeBasedTriggeringPolicy = &logger.SizePolicyConfig{
+				Size: lc.Policies.SizeBasedTriggeringPolicy.Size,
+			}
+		}
+	}
+
+	var rollover *logger.RolloverConfig
+	if lc.Rollover != nil {
+		rollover = &logger.RolloverConfig{
+			MaxFile:   lc.Rollover.MaxFile,
+			Retention: lc.Rollover.Retention,
+		}
+	}
+
+	return logger.Configuration{
+		Level:           lc.Level,
+		Format:          lc.Format,
+		Pattern:         lc.Pattern,
+		Policies:        policies,
+		Rollover:        rollover,
+		IncludeLocation: lc.IncludeLocation,
+		Appenders:       appenders,
+	}
 }

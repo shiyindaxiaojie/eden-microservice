@@ -83,7 +83,8 @@ func main() {
 	if persistedLevel != "" {
 		cfg.Log.Level = persistedLevel
 	}
-	logger.Init(convertToLoggerConfig(cfg.Log))
+	applyLogRetentionDays(&cfg.Log, registry.GetLogRetentionDays())
+	logger.Init(config.ToLoggerConfiguration(cfg.Log))
 	// (Logs moved and combined below after port resolution)
 
 	// Seed built-in users from config
@@ -296,60 +297,25 @@ func main() {
 	logger.Info("Eden Go Registry stopped.")
 }
 
-func convertToLoggerConfig(lc config.LogConfig) logger.Configuration {
-	var appenders []logger.AppenderConfig
-	for _, a := range lc.Appenders {
-		var rollover *logger.RolloverConfig
-		if a.Rollover != nil {
-			rollover = &logger.RolloverConfig{
-				MaxFile:   a.Rollover.MaxFile,
-				Retention: a.Rollover.Retention,
-			}
-		}
-		appenders = append(appenders, logger.AppenderConfig{
-			Name:        a.Name,
-			Type:        a.Type,
-			Level:       a.Level,
-			Pattern:     a.Pattern,
-			FileName:    a.FileName,
-			FilePattern: a.FilePattern,
-			Filter:      a.Filter,
-			Async:       a.Async,
-			Rollover:    rollover,
-		})
+func applyLogRetentionDays(logCfg *config.LogConfig, days int) {
+	if logCfg == nil || days <= 0 {
+		return
 	}
 
-	var policies *logger.PoliciesConfig
-	if lc.Policies != nil {
-		policies = &logger.PoliciesConfig{}
-		if lc.Policies.CronTriggeringPolicy != nil {
-			policies.CronTriggeringPolicy = &logger.CronPolicyConfig{
-				Schedule: lc.Policies.CronTriggeringPolicy.Schedule,
-			}
-		}
-		if lc.Policies.SizeBasedTriggeringPolicy != nil {
-			policies.SizeBasedTriggeringPolicy = &logger.SizePolicyConfig{
-				Size: lc.Policies.SizeBasedTriggeringPolicy.Size,
-			}
-		}
+	retention := fmt.Sprintf("%dd", days)
+	if logCfg.Rollover == nil {
+		logCfg.Rollover = &config.RolloverConfig{}
 	}
+	logCfg.Rollover.Retention = retention
 
-	var rollover *logger.RolloverConfig
-	if lc.Rollover != nil {
-		rollover = &logger.RolloverConfig{
-			MaxFile:   lc.Rollover.MaxFile,
-			Retention: lc.Rollover.Retention,
+	for i := range logCfg.Appenders {
+		if logCfg.Appenders[i].Type == "" {
+			continue
 		}
-	}
-
-	return logger.Configuration{
-		Level:           lc.Level,
-		Format:          lc.Format,
-		Pattern:         lc.Pattern,
-		Policies:        policies,
-		Rollover:        rollover,
-		IncludeLocation: lc.IncludeLocation,
-		Appenders:       appenders,
+		if logCfg.Appenders[i].Rollover == nil {
+			logCfg.Appenders[i].Rollover = &config.RolloverConfig{}
+		}
+		logCfg.Appenders[i].Rollover.Retention = retention
 	}
 }
 

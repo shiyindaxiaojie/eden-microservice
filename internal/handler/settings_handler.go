@@ -126,8 +126,9 @@ func (h *Handler) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		jsonOK(w, map[string]string{
-			"mode": h.settings.GetMode(),
-			"env":  h.settings.GetEnvironment(),
+			"mode":      h.settings.GetMode(),
+			"env":       h.settings.GetEnvironment(),
+			"log_level": h.settings.GetLogLevel(),
 		})
 		return
 	}
@@ -162,5 +163,25 @@ func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 
 		jsonOK(w, map[string]string{"status": "ok"})
 		return
+	}
+}
+
+func (h *Handler) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		jsonOK(w, h.settings.GetSystemSettings())
+	case http.MethodPost:
+		var req model.SystemSettings
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httpError(w, http.StatusBadRequest, "invalid body")
+			return
+		}
+		if err := h.settings.ApplySystemSettings(&req); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
+		jsonOK(w, map[string]string{"status": "ok"})
+	default:
+		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
 	}
 }

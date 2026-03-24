@@ -15,11 +15,12 @@ import (
 
 // EventStore handles auditing and events.
 type EventStore struct {
-	mu        sync.RWMutex
-	events    []*model.Event
-	eventSeq  uint64
-	maxEvents int
-	dataPath  string
+	mu                    sync.RWMutex
+	events                []*model.Event
+	eventSeq              uint64
+	maxEvents             int
+	dataPath              string
+	retentionDaysProvider func() int
 }
 
 func NewEventStore(maxEvents int, dataPath string) *EventStore {
@@ -85,7 +86,7 @@ func (s *EventStore) appendToFile(e *model.Event) {
 func (s *EventStore) List() []*model.Event {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	result := make([]*model.Event, len(s.events))
 	copy(result, s.events)
 	return result
@@ -162,17 +163,22 @@ func (s *EventStore) Save() {
 	// No-op for sequential writing as Append handles it per event
 }
 
+func (s *EventStore) SetRetentionDaysProvider(fn func() int) {
+	s.retentionDaysProvider = fn
+}
+
 func (s *EventStore) retentionCleaner() {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.mu.RLock()
-		// This is a bit tricky because EventStore doesn't know retention settings directly
-		// but we can pass it or assume a default and let it be triggered externally.
-		// For now, let's keep it simple and assume 30 days default if not triggered.
-		s.Cleanup(30)
-		s.mu.RUnlock()
+		days := 30
+		if s.retentionDaysProvider != nil {
+			if provided := s.retentionDaysProvider(); provided > 0 {
+				days = provided
+			}
+		}
+		s.Cleanup(days)
 	}
 }
 

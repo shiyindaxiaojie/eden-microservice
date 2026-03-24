@@ -1,395 +1,540 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
-import api from '../api/index'
-import { useI18n } from '../utils/i18n'
-import { 
-  Setting, 
-  Key, 
-  Operation, 
-  CopyDocument, 
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Bell,
+  Connection,
+  CopyDocument,
   Delete,
+  Document,
   Grid,
+  InfoFilled,
+  Key,
+  Message,
+  Monitor,
+  Operation,
   Plus,
   RefreshRight,
-  Timer,
+  Setting,
   Share,
-  Monitor,
-  Bell,
-  Message
+  Timer,
 } from '@element-plus/icons-vue'
+import api from '../api'
+import { getSystemSettings, updateSystemSettings, type SystemSettings } from '../api/registry'
 
-const { t } = useI18n()
+type CredentialView = 'grid' | 'list'
 
-// Tab state
+interface ApiKeyItem {
+  key: string
+  description?: string
+  created_at: number
+  expires_at: number
+  status?: string
+}
+
 const activeTab = ref('basic')
+const credentialView = ref<CredentialView>('grid')
 
-// View state
-const credentialView = ref('grid') // 'grid' | 'list'
-
-// Settings Data
-const keys = ref<any[]>([])
-const loading = ref(false)
-const modeLoading = ref(false)
-const currentEnv = ref('standalone')
-const currentMode = ref('ap')
+const systemLoading = ref(false)
+const saveLoading = ref(false)
+const keysLoading = ref(false)
 const showDialog = ref(false)
-const keyForm = ref({ key: '', description: '', expDays: 0 })
 
-// Preferences
-const eventRetention = ref(30)
+const keys = ref<ApiKeyItem[]>([])
+const keyForm = ref({
+  key: '',
+  description: '',
+  expDays: 0,
+})
 
-// Advanced Settings States
 const webhookForm = ref({
   url: '',
-  events: ['register', 'deregister', 'health_change']
+  events: ['service_register', 'service_offline'],
 })
+
 const alarmForm = ref({
   enabled: false,
   threshold: 80,
-  contact: 'email'
+  contact: 'email',
 })
+
 const smtpForm = ref({
   host: 'smtp.example.com',
   port: 465,
   user: '',
   pass: '',
-  from: ''
+  from: '',
 })
 
+const EVENT_OPTIONS = [
+  { value: 'service_register', label: '服务注册' },
+  { value: 'service_online', label: '服务上线' },
+  { value: 'service_offline', label: '服务下线' },
+  { value: 'registry_node_sync', label: '注册中心节点同步' },
+  { value: 'service_heartbeat', label: '服务心跳' },
+  { value: 'service_remove', label: '服务移除' },
+]
+
+const LOG_LEVEL_OPTIONS = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
+
+function createDefaultSettings(): SystemSettings {
+  return {
+    mode: 'ap',
+    environment: 'standalone',
+    log_level: 'INFO',
+    event_retention_days: 30,
+    log_retention_days: 30,
+    event_types: EVENT_OPTIONS.map((item) => item.value),
+    heartbeat_max_failures: 3,
+    instance_removal_delay_seconds: 600,
+  }
+}
+
+function cloneSettings(settings: SystemSettings): SystemSettings {
+  return {
+    ...settings,
+    event_types: [...settings.event_types],
+  }
+}
+
+function normalizeEventTypes(values?: string[]): string[] {
+  if (!values) return []
+  const valid = new Set(EVENT_OPTIONS.map((item) => item.value))
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    if (!valid.has(value) || seen.has(value)) {
+      return false
+    }
+    seen.add(value)
+    return true
+  })
+}
+
+function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettings {
+  const defaults = createDefaultSettings()
+  return {
+    mode: input?.mode === 'cp' ? 'cp' : defaults.mode,
+    environment: input?.environment === 'cluster' ? 'cluster' : defaults.environment,
+    log_level: LOG_LEVEL_OPTIONS.includes(input?.log_level || '') ? input!.log_level! : defaults.log_level,
+    event_retention_days: Math.max(1, input?.event_retention_days ?? defaults.event_retention_days),
+    log_retention_days: Math.max(1, input?.log_retention_days ?? defaults.log_retention_days),
+    event_types: normalizeEventTypes(input?.event_types ?? defaults.event_types),
+    heartbeat_max_failures: Math.max(1, input?.heartbeat_max_failures ?? defaults.heartbeat_max_failures),
+    instance_removal_delay_seconds: Math.max(60, input?.instance_removal_delay_seconds ?? defaults.instance_removal_delay_seconds),
+  }
+}
+
+const appliedSettings = ref<SystemSettings>(createDefaultSettings())
+const draftSettings = ref<SystemSettings>(createDefaultSettings())
+
+const previewEnvironment = computed(() => draftSettings.value.environment)
+const previewMode = computed(() => draftSettings.value.mode)
+const appliedEnvironment = computed(() => appliedSettings.value.environment)
+const appliedMode = computed(() => appliedSettings.value.mode)
+
+const removalDelayMinutes = computed({
+  get: () => Math.max(1, Math.round(draftSettings.value.instance_removal_delay_seconds / 60)),
+  set: (value: number) => {
+    draftSettings.value.instance_removal_delay_seconds = Math.max(60, value * 60)
+  },
+})
+
+const isDirty = computed(() => {
+  const normalizeForCompare = (settings: SystemSettings) => ({
+    ...settings,
+    event_types: [...settings.event_types].sort(),
+  })
+  return JSON.stringify(normalizeForCompare(draftSettings.value)) !== JSON.stringify(normalizeForCompare(appliedSettings.value))
+})
+
+async function fetchSystemConfig() {
+  systemLoading.value = true
+  try {
+    const { data } = await getSystemSettings()
+    const normalized = normalizeSettings(data)
+    appliedSettings.value = cloneSettings(normalized)
+    draftSettings.value = cloneSettings(normalized)
+  } catch (error) {
+    console.error('fetch system settings failed', error)
+    ElMessage.error('加载系统设置失败')
+  } finally {
+    systemLoading.value = false
+  }
+}
+
+async function saveSystemConfig() {
+  saveLoading.value = true
+  try {
+    const payload = normalizeSettings(draftSettings.value)
+    await updateSystemSettings(payload)
+    appliedSettings.value = cloneSettings(payload)
+    draftSettings.value = cloneSettings(payload)
+    ElMessage.success('系统设置已保存')
+  } catch (error: any) {
+    const data = error.response?.data
+    if (data?.error === 'not leader' && data?.leader) {
+      ElMessage.warning(`当前节点不是 Leader，请到 ${data.leader} 节点执行保存`)
+    } else {
+      ElMessage.error(data?.error || '保存系统设置失败')
+    }
+  } finally {
+    saveLoading.value = false
+  }
+}
+
 async function fetchKeys() {
-  loading.value = true
+  keysLoading.value = true
   try {
     const res = await api.get('/v1/settings/apikeys')
     keys.value = res.data || []
-  } catch (e) {
-    console.error('fetch keys failed', e)
+  } catch (error) {
+    console.error('fetch api keys failed', error)
   } finally {
-    loading.value = false
-  }
-}
-
-async function fetchMode() {
-  try {
-    const res = await api.get('/v1/settings/mode')
-    currentMode.value = res.data.mode || 'ap'
-    currentEnv.value = res.data.env || 'standalone'
-  } catch (e) {
-    console.error('fetch mode failed', e)
-  }
-}
-
-async function handleEnvChange(targetEnv: string) {
-  if (currentEnv.value === targetEnv) return
-  
-  modeLoading.value = true
-  try {
-    await api.post(`/v1/settings/mode?env=${targetEnv}`)
-    const label = targetEnv === 'cluster' ? t.value.settings.clusterTitle : t.value.settings.singleTitle
-    ElMessage.success(t.value.settings.envSwitchSuccess.replace('{env}', label))
-    
-    // Force local state update immediately to avoid UI lag/flicker
-    currentEnv.value = targetEnv
-    
-    // Wait a bit before fetching to allow backend state to propagate
-    setTimeout(() => {
-      fetchMode()
-    }, 1000)
-  } catch (e: any) {
-    const data = e.response?.data
-    if (data?.error === 'not leader' && data?.leader) {
-      const tip = t.value.settings.notLeaderTip.replace('{addr}', data.leader)
-      ElMessage.warning(tip)
-    } else {
-      const errorMsg = data?.error || 'Switch failed'
-      ElMessage.error(errorMsg)
-    }
-    fetchMode()
-  } finally {
-    modeLoading.value = false
-  }
-}
-
-async function handleModeChange(targetMode: string) {
-  if (currentMode.value === targetMode) return
-  
-  modeLoading.value = true
-  try {
-    await api.post(`/v1/settings/mode?mode=${targetMode}`)
-    const modeLabel = targetMode === 'cp' ? '强一致性' : '最终一致性'
-    ElMessage.success(t.value.settings.modeSwitchSuccess.replace('{mode}', modeLabel))
-    
-    currentMode.value = targetMode
-    setTimeout(() => {
-      fetchMode()
-    }, 1000)
-  } catch (e: any) {
-    const data = e.response?.data
-    if (data?.error === 'not leader' && data?.leader) {
-      const tip = t.value.settings.notLeaderTip.replace('{addr}', data.leader)
-      ElMessage.warning(tip)
-    } else {
-      const errorMsg = data?.error || 'Switch failed'
-      ElMessage.error(errorMsg)
-    }
-    fetchMode()
-  } finally {
-    modeLoading.value = false
+    keysLoading.value = false
   }
 }
 
 function generateRandKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let res = 'eden_'
-  for (let i = 0; i < 24; i++) {
-    res += chars.charAt(Math.floor(Math.random() * chars.length))
+  let result = 'eden_'
+  for (let i = 0; i < 24; i += 1) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
   }
-  keyForm.value.key = res
+  keyForm.value.key = result
 }
 
 async function handleGenerate() {
   try {
-    const payload = {
+    await api.post('/v1/settings/apikey', {
       key: keyForm.value.key,
       description: keyForm.value.description,
-      expires_at: keyForm.value.expDays > 0 ? Math.floor(Date.now() / 1000) + keyForm.value.expDays * 86400 : 0
-    }
-    await api.post('/v1/settings/apikey', payload)
-    ElMessage.success(t.value.common.success)
+      expires_at: keyForm.value.expDays > 0 ? Math.floor(Date.now() / 1000) + keyForm.value.expDays * 86400 : 0,
+    })
+    ElMessage.success('API Key 已创建')
     showDialog.value = false
-    fetchKeys()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Failed')
+    keyForm.value.description = ''
+    keyForm.value.expDays = 0
+    await fetchKeys()
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '创建 API Key 失败')
   }
 }
 
 async function deleteKey(key: string) {
   try {
-    await ElMessageBox.confirm(
-      t.value.settings.deleteConfirm,
-      t.value.common.warning,
-      { type: 'warning' }
-    )
-    await api.post(`/v1/settings/apikey/delete?key=${key}`)
-    ElMessage.success(t.value.common.success)
-    fetchKeys()
-  } catch {}
+    await ElMessageBox.confirm(`确定删除 API Key：${key.slice(0, 12)}... 吗？`, '删除确认', {
+      type: 'warning',
+    })
+    await api.post(`/v1/settings/apikey/delete?key=${encodeURIComponent(key)}`)
+    ElMessage.success('API Key 已删除')
+    await fetchKeys()
+  } catch (error) {
+    if (error) {
+      console.debug('delete key cancelled or failed', error)
+    }
+  }
 }
 
-function copyKey(key: string) {
-  navigator.clipboard.writeText(key)
-  ElMessage.success(t.value.settings.copySuccess)
+async function copyKey(key: string) {
+  try {
+    await navigator.clipboard.writeText(key)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.error('复制失败')
+  }
 }
 
-function handleSaveGeneral() {
-  ElMessage.success(t.value.settings.saveSettings)
+function formatDate(ts: number) {
+  if (!ts) return '永不过期'
+  return new Date(ts * 1000).toLocaleString('zh-CN')
 }
 
-function formatTime(ts: number) {
-  if (!ts) return t.value.settings.neverExpire
-  return new Date(ts * 1000).toLocaleDateString()
+function setDraftEnvironment(env: 'standalone' | 'cluster') {
+  draftSettings.value.environment = env
+}
+
+function setDraftMode(mode: 'ap' | 'cp') {
+  draftSettings.value.mode = mode
+}
+
+function resetDraftSettings() {
+  draftSettings.value = cloneSettings(appliedSettings.value)
+}
+
+function handleNonBlockingSave() {
+  ElMessage.info('这一页签暂未接入后端，这次已优先完善基础设置和注册中心配置')
 }
 
 onMounted(() => {
+  fetchSystemConfig()
   fetchKeys()
-  fetchMode()
 })
 </script>
 
 <template>
   <div class="settings-container">
     <el-tabs v-model="activeTab" class="settings-tabs">
-      <!-- 1. Basic Settings -->
       <el-tab-pane name="basic">
         <template #label>
-          <span class="tab-label"><el-icon><Setting /></el-icon>{{ t.settings.basic }}</span>
+          <span class="tab-label"><el-icon><Setting /></el-icon>基本设置</span>
         </template>
-        
-        <div class="tab-content grid-layout">
-          <!-- Consistency Mode -->
-          <div class="settings-section glass-card mode-section">
-            <div class="section-header">
-              <el-icon><Operation /></el-icon>
-              <h4>运行模式</h4>
-              <div class="status-tags">
-                <div class="status-indicator">
-                  <span class="indicator-dot" :class="currentEnv === 'cluster' ? 'active' : 'idle'"></span>
-                  <span class="dot-label">当前运行:</span>
-                  <el-tag :type="currentEnv === 'cluster' ? 'primary' : 'info'" size="small" effect="dark">
-                    {{ currentEnv === 'cluster' ? '集群模式' : '单机模式' }}
-                  </el-tag>
-                </div>
-                <!-- Only show protocol if in cluster mode -->
-                <div class="status-indicator" v-if="currentEnv === 'cluster'">
-                  <span class="dot-label">一致性:</span>
-                  <el-tag :class="currentMode === 'cp' ? 'tag-cp' : 'tag-ap'" size="small" effect="dark">
-                    {{ currentMode === 'cp' ? '强一致性' : '最终一致性' }}
-                  </el-tag>
-                </div>
-              </div>
-            </div>
-            
-            <div class="consistency-wrapper-v7" v-loading="modeLoading">
-              <!-- Grid Selection -->
-              <div class="main-mode-grid">
-                <!-- Standalone Mode Card -->
-                <div 
-                  class="mode-card-v7" 
-                  :class="{ active: currentEnv === 'standalone' }"
-                  @click="handleEnvChange('standalone')"
-                >
-                  <div class="card-glow"></div>
-                  <div class="card-inner">
-                    <div class="mode-icon-v7"><el-icon><Monitor /></el-icon></div>
-                    <div class="mode-content-v7">
-                      <div class="mode-title-v7">单机模式</div>
-                      <div class="mode-desc-v7">本地自闭环，轻量化部署，不涉及分布式一致性协议。</div>
+
+        <div class="tab-content basic-settings">
+          <div class="basic-grid">
+            <div class="settings-column">
+              <section class="settings-section glass-card mode-section">
+                <div class="section-header">
+                  <el-icon><Operation /></el-icon>
+                  <h4>运行模式</h4>
+                  <div class="status-tags">
+                    <div class="status-indicator">
+                      <span class="indicator-dot" :class="appliedEnvironment === 'cluster' ? 'active' : 'idle'"></span>
+                      <span class="dot-label">当前运行:</span>
+                      <el-tag :type="appliedEnvironment === 'cluster' ? 'primary' : 'info'" size="small" effect="dark">
+                        {{ appliedEnvironment === 'cluster' ? '集群模式' : '单机模式' }}
+                      </el-tag>
+                    </div>
+                    <div class="status-indicator" v-if="appliedEnvironment === 'cluster'">
+                      <span class="dot-label">一致性:</span>
+                      <el-tag :class="appliedMode === 'cp' ? 'tag-cp' : 'tag-ap'" size="small" effect="dark">
+                        {{ appliedMode === 'cp' ? '强一致性' : '最终一致性' }}
+                      </el-tag>
                     </div>
                   </div>
                 </div>
-                
-                <!-- Cluster Mode Card with Integrated Switch -->
-                <div 
-                  class="mode-card-v7 cluster" 
-                  :class="{ active: currentEnv === 'cluster' }"
-                  @click="handleEnvChange('cluster')"
-                >
-                  <div class="card-glow"></div>
-                  <div class="card-inner">
-                    <div class="mode-icon-v7 cluster"><el-icon><Share /></el-icon></div>
-                    <div class="mode-content-v7">
-                      <div class="mode-title-v7">分布式集群模式</div>
-                      
-                      <div class="integrated-toggle-v7" :class="[currentMode]" v-if="currentEnv === 'cluster'" @click.stop>
-                        <div 
-                          class="toggle-option" 
-                          :class="{ selected: currentMode === 'ap' }"
-                          @click="handleModeChange('ap')"
-                        >
-                          <div class="toggle-bg"></div>
-                          <div class="toggle-text">
-                            <span class="primary">AP 模式</span>
-                            <span class="secondary">可用性优先</span>
-                          </div>
-                        </div>
-                        <div 
-                          class="toggle-option" 
-                          :class="{ selected: currentMode === 'cp' }"
-                          @click="handleModeChange('cp')"
-                        >
-                          <div class="toggle-bg"></div>
-                          <div class="toggle-text">
-                            <span class="primary">CP 模式</span>
-                            <span class="secondary">强一致性</span>
-                          </div>
+
+                <div class="consistency-wrapper-v7" v-loading="systemLoading">
+                  <div class="main-mode-grid">
+                    <div
+                      class="mode-card-v7"
+                      :class="{ active: previewEnvironment === 'standalone' }"
+                      @click="setDraftEnvironment('standalone')"
+                    >
+                      <div class="card-glow"></div>
+                      <div class="card-inner">
+                        <div class="mode-icon-v7"><el-icon><Monitor /></el-icon></div>
+                        <div class="mode-content-v7">
+                          <div class="mode-title-v7">单机模式</div>
+                          <div class="mode-desc-v7">本地闭环，轻量化部署，不涉及分布式一致性协议。</div>
                         </div>
                       </div>
-                      <div class="mode-desc-v7" v-else>启用分布式协调，支持 AP / CP 协议切换。</div>
+                    </div>
+
+                    <div
+                      class="mode-card-v7 cluster"
+                      :class="{ active: previewEnvironment === 'cluster' }"
+                      @click="setDraftEnvironment('cluster')"
+                    >
+                      <div class="card-glow"></div>
+                      <div class="card-inner">
+                        <div class="mode-icon-v7 cluster"><el-icon><Share /></el-icon></div>
+                        <div class="mode-content-v7">
+                          <div class="mode-title-v7">分布式集群模式</div>
+
+                          <div class="integrated-toggle-v7" :class="[previewMode]" v-if="previewEnvironment === 'cluster'" @click.stop>
+                            <div class="toggle-option" :class="{ selected: previewMode === 'ap' }" @click="setDraftMode('ap')">
+                              <div class="toggle-bg"></div>
+                              <div class="toggle-text">
+                                <span class="primary">AP 模式</span>
+                                <span class="secondary">可用性优先</span>
+                              </div>
+                            </div>
+                            <div class="toggle-option" :class="{ selected: previewMode === 'cp' }" @click="setDraftMode('cp')">
+                              <div class="toggle-bg"></div>
+                              <div class="toggle-text">
+                                <span class="primary">CP 模式</span>
+                                <span class="secondary">强一致性</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mode-desc-v7" v-else>启用分布式协调，支持 AP / CP 协议切换。</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <div class="technical-footer-v7">
+                  <div class="info-bubble-v7" :class="[previewEnvironment === 'standalone' ? 'standalone' : previewMode]">
+                    <el-icon><InfoFilled /></el-icon>
+                    <div class="bubble-content">
+                      <template v-if="previewEnvironment === 'standalone'">
+                        <strong>单机模式:</strong> 本地闭环，适用于开发测试或边缘单点场景。
+                      </template>
+                      <template v-else-if="previewMode === 'ap'">
+                        <strong>AP 模式 (Gossip):</strong> 分区容错性高，优先保证系统可用性，节点间数据最终对齐。
+                      </template>
+                      <template v-else>
+                        <strong>CP 模式 (Raft):</strong> 通过多数派与 Leader 协调保证强一致，适合关键元数据管理。
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="settings-section glass-card registry-section">
+                <div class="section-header">
+                  <el-icon><Connection /></el-icon>
+                  <h4>注册中心配置</h4>
+                </div>
+
+                <el-form label-position="top" class="compact-form">
+                  <div class="form-grid">
+                    <el-form-item label="服务心跳超时次数">
+                      <el-input-number
+                        v-model="draftSettings.heartbeat_max_failures"
+                        :min="1"
+                        :max="10"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                      <div class="field-tip">默认 3 次。连续丢失心跳达到阈值后，实例会先标记为下线而不是立即删除。</div>
+                    </el-form-item>
+
+                    <el-form-item label="失效服务实例保留时长（分钟）">
+                      <el-input-number
+                        v-model="removalDelayMinutes"
+                        :min="1"
+                        :max="1440"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                      <div class="field-tip">默认 10 分钟。适合处理服务重启、网络抖动或 CPU 过高导致的心跳延迟。</div>
+                    </el-form-item>
+                  </div>
+                </el-form>
+
+                <div class="setting-note">
+                  注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。
+                </div>
+              </section>
             </div>
 
-            <!-- Technical Summary -->
-            <div class="technical-footer-v7">
-              <div class="info-bubble-v7" :class="[currentEnv === 'standalone' ? 'standalone' : currentMode]">
-                <el-icon><InfoFilled /></el-icon>
-                <div class="bubble-content">
-                  <template v-if="currentEnv === 'standalone'">
-                    <strong>单机模式：</strong>本地存储，适用于测试或边缘单点场景。
-                  </template>
-                  <template v-else-if="currentMode === 'ap'">
-                    <strong>AP 模式 (Gossip)：</strong>分区容错性高，优先保证系统可用性，节点间数据最终对齐。
-                  </template>
-                  <template v-else>
-                    <strong>CP 模式 (Raft)：</strong>强一致性保证，要求集群多数派存活，适用于核心元数据管理。
-                  </template>
+            <div class="settings-column">
+              <section class="settings-section glass-card side-section">
+                <div class="section-header">
+                  <el-icon><Bell /></el-icon>
+                  <h4>事件设置</h4>
                 </div>
-              </div>
+
+                <el-form label-position="top" class="compact-form">
+                  <el-form-item label="事件保留时长（天）">
+                    <div class="slider-row">
+                      <el-slider v-model="draftSettings.event_retention_days" :min="1" :max="365" style="flex: 1" />
+                      <span class="val-text">{{ draftSettings.event_retention_days }}d</span>
+                    </div>
+                  </el-form-item>
+
+                  <el-form-item label="触发事件">
+                    <el-checkbox-group v-model="draftSettings.event_types" class="event-checkbox-grid">
+                      <el-checkbox v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.value">
+                        {{ item.label }}
+                      </el-checkbox>
+                    </el-checkbox-group>
+                  </el-form-item>
+                </el-form>
+              </section>
+
+              <section class="settings-section glass-card side-section">
+                <div class="section-header">
+                  <el-icon><Document /></el-icon>
+                  <h4>日志配置</h4>
+                </div>
+
+                <el-form label-position="top" class="compact-form">
+                  <el-form-item label="日志级别">
+                    <el-select v-model="draftSettings.log_level" style="width: 100%">
+                      <el-option v-for="level in LOG_LEVEL_OPTIONS" :key="level" :label="level" :value="level" />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="日志保留时长（天）">
+                    <div class="slider-row">
+                      <el-slider v-model="draftSettings.log_retention_days" :min="1" :max="365" style="flex: 1" />
+                      <span class="val-text">{{ draftSettings.log_retention_days }}d</span>
+                    </div>
+                  </el-form-item>
+                </el-form>
+
+                <div class="setting-note">
+                  日志级别会在保存后立即更新当前进程；日志保留时长会同步写入持久化配置，用于后续日志滚动与清理策略。
+                </div>
+              </section>
             </div>
           </div>
 
-          <div class="settings-section glass-card">
-            <div class="section-header">
-              <el-icon><Operation /></el-icon>
-              <h4>存储设置</h4>
-            </div>
-            <el-form label-position="left" label-width="140px">
-              <el-form-item :label="t.settings.retention">
-                <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                  <el-slider v-model="eventRetention" :min="1" :max="365" style="flex: 1" />
-                  <span class="val-text">{{ eventRetention }}d</span>
-                </div>
-              </el-form-item>
-
-              <div style="margin-top: auto; padding-top: 24px;">
-                <el-button type="primary" @click="handleSaveGeneral" style="width: 100%; height: 44px; font-weight: 600;">
-                  {{ t.settings.saveSettings }}
-                </el-button>
+          <div class="save-footer glass-card">
+            <div class="save-copy">
+              <div class="save-title">{{ isDirty ? '存在未保存的修改' : '当前配置已是最新状态' }}</div>
+              <div class="save-desc">
+                运行模式切换、事件设置、日志配置和注册中心保护策略都会在点击右下角按钮后统一生效。
               </div>
-            </el-form>
+            </div>
+
+            <div class="save-actions">
+              <el-button @click="resetDraftSettings" :disabled="!isDirty || saveLoading">重置</el-button>
+              <el-button type="primary" @click="saveSystemConfig" :loading="saveLoading" :disabled="!isDirty">
+                保存设置
+              </el-button>
+            </div>
           </div>
         </div>
       </el-tab-pane>
 
-      <!-- 2. Credentials Tab -->
       <el-tab-pane name="credentials">
         <template #label>
-          <span class="tab-label"><el-icon><Key /></el-icon>{{ t.settings.credentials }}</span>
+          <span class="tab-label"><el-icon><Key /></el-icon>凭据管理</span>
         </template>
-        
+
         <div class="tab-content">
           <div class="content-header credentials-header">
             <div class="header-main">
               <div class="title-row">
-                <h3 class="tab-content-title">{{ t.settings.credentials }}</h3>
+                <h3 class="tab-content-title">API Key 管理</h3>
                 <el-radio-group v-model="credentialView" size="small" class="view-switch">
                   <el-radio-button label="list"><el-icon><Operation /></el-icon></el-radio-button>
                   <el-radio-button label="grid"><el-icon><Grid /></el-icon></el-radio-button>
                 </el-radio-group>
               </div>
-              <p class="content-desc">{{ t.settings.credentialsDesc }}</p>
+              <p class="content-desc">管理服务注册与控制台访问使用的 API Key，支持快速生成、复制与回收。</p>
               <div class="action-row">
                 <el-button type="primary" @click="showDialog = true; generateRandKey()">
-                  <el-icon style="margin-right: 4px;"><Plus /></el-icon>
-                  {{ t.settings.generateKey }}
+                  <el-icon style="margin-right: 4px"><Plus /></el-icon>
+                  新建 API Key
                 </el-button>
               </div>
             </div>
           </div>
 
-          <!-- Card/Grid View -->
-          <div v-if="credentialView === 'grid'" class="key-grid">
-            <div v-for="k in keys" :key="k.key" class="key-card glass-card" :class="{ 'is-expired': k.status === 'expired' }">
+          <div v-if="credentialView === 'grid'" class="key-grid" v-loading="keysLoading">
+            <div v-for="item in keys" :key="item.key" class="key-card glass-card" :class="{ 'is-expired': item.status === 'expired' }">
               <div class="key-header">
-                <code class="key-code" :title="k.key">{{ k.key.substring(0, 24) }}...</code>
+                <code class="key-code" :title="item.key">{{ item.key.substring(0, 24) }}...</code>
                 <div class="key-actions">
-                  <el-tag v-if="k.status === 'expired'" type="danger" size="small" effect="dark" class="status-tag">
-                    {{ t.settings.expired }}
+                  <el-tag v-if="item.status === 'expired'" type="danger" size="small" effect="dark" class="status-tag">
+                    已过期
                   </el-tag>
-                  <el-button link type="primary" :icon="CopyDocument" @click="copyKey(k.key)" />
-                  <el-button link type="danger" :icon="Delete" @click="deleteKey(k.key)" />
+                  <el-button link type="primary" :icon="CopyDocument" @click="copyKey(item.key)" />
+                  <el-button link type="danger" :icon="Delete" @click="deleteKey(item.key)" />
                 </div>
               </div>
               <div class="key-body">
-                <div class="key-desc">{{ k.description || t.settings.noDescription }}</div>
+                <div class="key-desc">{{ item.description || '无描述' }}</div>
                 <div class="key-info">
-                  <div class="key-date" :class="{ 'text-danger': k.status === 'expired' }">
-                    <el-icon><Timer /></el-icon> {{ t.settings.expiration }}: {{ formatTime(k.expires_at) }}
+                  <div class="key-date">
+                    <el-icon><Timer /></el-icon> 过期时间: {{ formatDate(item.expires_at) }}
                   </div>
                   <div class="key-date">
-                    <el-icon><Timer /></el-icon> {{ t.settings.created }}: {{ new Date(k.created_at * 1000).toLocaleDateString() }}
+                    <el-icon><Timer /></el-icon> 创建时间: {{ formatDate(item.created_at) }}
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- List View -->
           <div v-else class="key-list glass-card">
-            <el-table :data="keys" style="width: 100%" class="custom-table">
-              <el-table-column prop="key" label="Key" width="380">
+            <el-table :data="keys" style="width: 100%" class="custom-table" v-loading="keysLoading">
+              <el-table-column prop="key" label="Key" min-width="320">
                 <template #default="scope">
                   <div class="key-with-copy">
                     <code class="key-code-list" :title="scope.row.key">{{ scope.row.key.substring(0, 32) }}...</code>
@@ -397,29 +542,20 @@ onMounted(() => {
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="description" :label="t.settings.description" min-width="150" />
-              <el-table-column prop="status" :label="t.common.status" width="100">
+              <el-table-column prop="description" label="描述" min-width="180" />
+              <el-table-column prop="status" label="状态" width="100">
                 <template #default="scope">
                   <el-tag :type="scope.row.status === 'expired' ? 'danger' : 'success'" size="small">
-                    {{ scope.row.status === 'expired' ? t.settings.expired : t.settings.activeStatus }}
+                    {{ scope.row.status === 'expired' ? '已过期' : '生效中' }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column :label="t.settings.expiration" width="160">
+              <el-table-column label="过期时间" width="180">
                 <template #default="scope">
-                  <span :class="{ 'text-danger': scope.row.status === 'expired' }">
-                    {{ formatTime(scope.row.expires_at) }}
-                  </span>
+                  {{ formatDate(scope.row.expires_at) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="t.settings.created" width="160">
-                <template #default="scope">
-                  <span class="text-muted">
-                    {{ new Date(scope.row.created_at * 1000).toLocaleDateString() }}
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column :label="t.common.actions" width="80" align="right">
+              <el-table-column label="操作" width="80" align="right">
                 <template #default="scope">
                   <el-button link type="danger" :icon="Delete" @click="deleteKey(scope.row.key)" />
                 </template>
@@ -427,160 +563,122 @@ onMounted(() => {
             </el-table>
           </div>
 
-          <el-empty v-if="keys.length === 0" :description="t.settings.noCredentials" />
+          <el-empty v-if="!keysLoading && keys.length === 0" description="暂无 API Key" />
         </div>
       </el-tab-pane>
 
-      <!-- 3. Channels Tab (Combined Webhook & SMTP) -->
       <el-tab-pane name="channels">
         <template #label>
-          <span class="tab-label"><el-icon><Share /></el-icon>{{ t.settings.channels }}</span>
+          <span class="tab-label"><el-icon><Share /></el-icon>通知渠道</span>
         </template>
-        
-        <div class="tab-content two-cols">
-          <!-- Webhook Card -->
-          <div class="settings-section glass-card">
+
+        <div class="tab-content channels-grid">
+          <section class="settings-section glass-card">
             <div class="section-header">
               <el-icon><Share /></el-icon>
-              <h4>{{ t.settings.webhooks }}</h4>
+              <h4>Webhook 配置</h4>
             </div>
-            <el-form label-position="left" label-width="140px">
-              <el-form-item :label="t.settings.webhookUrl">
+            <el-form label-position="top" class="compact-form">
+              <el-form-item label="Webhook 地址">
                 <el-input v-model="webhookForm.url" placeholder="https://api.example.com/webhook" />
               </el-form-item>
-              <el-form-item :label="t.settings.events">
-                <el-checkbox-group v-model="webhookForm.events">
-                  <el-checkbox label="register">{{ t.settings.eventRegister }}</el-checkbox>
-                  <el-checkbox label="deregister">{{ t.settings.eventDeregister }}</el-checkbox>
-                  <el-checkbox label="health_change">{{ t.settings.eventHealth }}</el-checkbox>
+              <el-form-item label="触发事件">
+                <el-checkbox-group v-model="webhookForm.events" class="event-checkbox-grid">
+                  <el-checkbox label="service_register">服务注册</el-checkbox>
+                  <el-checkbox label="service_offline">服务下线</el-checkbox>
+                  <el-checkbox label="service_remove">服务移除</el-checkbox>
                 </el-checkbox-group>
               </el-form-item>
-              <div style="margin-top: auto; padding-top: 16px;">
-                <el-button type="primary" @click="handleSaveGeneral" style="width: 100%">{{ t.settings.saveSettings }}</el-button>
-              </div>
+              <el-button type="primary" @click="handleNonBlockingSave" style="width: 100%">保存设置</el-button>
             </el-form>
-          </div>
+          </section>
 
-          <!-- SMTP Card -->
-          <div class="settings-section glass-card">
+          <section class="settings-section glass-card">
             <div class="section-header">
               <el-icon><Message /></el-icon>
-              <h4>{{ t.settings.smtpSettings }}</h4>
+              <h4>SMTP 配置</h4>
             </div>
-            <el-form label-position="left" label-width="140px">
-              <el-form-item :label="t.settings.smtpHost">
-                <div class="form-row">
-                  <el-input v-model="smtpForm.host" placeholder="smtp.example.com" style="flex: 3" />
-                  <el-input-number v-model="smtpForm.port" :controls="false" placeholder="465" style="flex: 1" />
+            <el-form label-position="top" class="compact-form">
+              <el-form-item label="SMTP Host">
+                <div class="form-inline">
+                  <el-input v-model="smtpForm.host" placeholder="smtp.example.com" />
+                  <el-input-number v-model="smtpForm.port" :controls="false" :min="1" :max="65535" />
                 </div>
               </el-form-item>
-              <el-form-item :label="t.settings.smtpUser">
+              <el-form-item label="用户名">
                 <el-input v-model="smtpForm.user" placeholder="user@example.com" />
               </el-form-item>
-              <el-form-item :label="t.settings.smtpPass">
+              <el-form-item label="密码">
                 <el-input v-model="smtpForm.pass" type="password" show-password />
               </el-form-item>
-              <el-form-item :label="t.settings.smtpFrom">
+              <el-form-item label="发件人">
                 <el-input v-model="smtpForm.from" placeholder="Eden Registry <noreply@example.com>" />
               </el-form-item>
-              <div style="margin-top: auto; padding-top: 16px;">
-                <el-button type="primary" @click="handleSaveGeneral" style="width: 100%">{{ t.settings.saveSettings }}</el-button>
-              </div>
+              <el-button type="primary" @click="handleNonBlockingSave" style="width: 100%">保存设置</el-button>
             </el-form>
-          </div>
+          </section>
         </div>
       </el-tab-pane>
 
-      <!-- 4. Monitoring Tab -->
       <el-tab-pane name="monitoring">
         <template #label>
-          <span class="tab-label"><el-icon><Monitor /></el-icon>{{ t.settings.monitoring }}</span>
+          <span class="tab-label"><el-icon><Monitor /></el-icon>告警监控</span>
         </template>
-        
+
         <div class="tab-content">
-          <div class="settings-section glass-card">
+          <section class="settings-section glass-card monitoring-card">
             <div class="section-header">
               <el-icon><Bell /></el-icon>
-              <h4>{{ t.settings.alarms }}</h4>
+              <h4>告警配置</h4>
               <el-switch v-model="alarmForm.enabled" />
             </div>
-            <el-form label-position="left" label-width="160px" :disabled="!alarmForm.enabled">
-              <el-form-item :label="t.settings.threshold">
-                <div class="val-control">
+            <el-form label-position="top" class="compact-form" :disabled="!alarmForm.enabled">
+              <el-form-item label="健康阈值">
+                <div class="slider-row">
                   <el-slider v-model="alarmForm.threshold" :min="10" :max="99" style="flex: 1" />
                   <span class="val-text">{{ alarmForm.threshold }}%</span>
                 </div>
               </el-form-item>
-              <el-form-item :label="t.settings.notificationChannel">
+              <el-form-item label="通知渠道">
                 <el-radio-group v-model="alarmForm.contact" class="channel-radio">
-                  <el-radio label="email" border>{{ t.settings.email }}</el-radio>
-                  <el-radio label="webhook" border>{{ t.settings.webhook }}</el-radio>
+                  <el-radio label="email" border>邮件</el-radio>
+                  <el-radio label="webhook" border>Webhook</el-radio>
                 </el-radio-group>
               </el-form-item>
-              <div style="margin-top: 16px;">
-                <el-button type="primary" @click="handleSaveGeneral" style="width: 100%">{{ t.settings.saveSettings }}</el-button>
-              </div>
+              <el-button type="primary" @click="handleNonBlockingSave" style="width: 100%">保存设置</el-button>
             </el-form>
-          </div>
+          </section>
         </div>
       </el-tab-pane>
     </el-tabs>
 
-    <!-- Premium Square Dialog -->
-    <el-dialog 
-      v-model="showDialog" 
-      :show-close="false"
-      width="560px" 
-      class="premium-dialog"
-    >
-      <template #header>
-        <div class="dialog-header">
-          <div class="header-title">
-            <el-icon><Key /></el-icon>
-            <span>{{ t.settings.generateKey }}</span>
+    <el-dialog v-model="showDialog" title="新建 API Key" width="520px">
+      <el-form label-position="top" class="compact-form">
+        <el-form-item label="API Key">
+          <div class="key-input-container">
+            <el-input v-model="keyForm.key" readonly />
+            <el-button @click="generateRandKey" :icon="RefreshRight" />
           </div>
-          <el-button link @click="showDialog = false" class="close-btn">
-            <el-icon><Delete /></el-icon>
-          </el-button>
-        </div>
-      </template>
+        </el-form-item>
 
-      <div class="dialog-body">
-        <el-form label-position="left" label-width="120px" class="premium-form">
-          <el-form-item :label="t.settings.apiKey">
-            <div class="key-input-container">
-              <el-input v-model="keyForm.key" readonly class="glass-input" />
-              <el-button @click="generateRandKey" class="regen-btn" :icon="RefreshRight" />
-            </div>
-          </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="keyForm.description" type="textarea" :rows="3" placeholder="用于说明此 API Key 的用途" />
+        </el-form-item>
 
-          <el-form-item :label="t.settings.description">
-            <el-input 
-              v-model="keyForm.description" 
-              type="textarea" 
-              :rows="3" 
-              :placeholder="t.common.none"
-              class="glass-input" 
-            />
-          </el-form-item>
-
-          <el-form-item :label="t.settings.expiration" style="margin-bottom: 0;">
-            <el-select v-model="keyForm.expDays" class="glass-input full-width">
-              <el-option :label="t.settings.neverExpire" :value="0" />
-              <el-option :label="t.settings.expireIn.replace('{n}', '7')" :value="7" />
-              <el-option :label="t.settings.expireIn.replace('{n}', '30')" :value="30" />
-              <el-option :label="t.settings.expireIn.replace('{n}', '90')" :value="90" />
-              <el-option :label="t.settings.expireIn.replace('{n}', '365')" :value="365" />
-            </el-select>
-          </el-form-item>
-        </el-form>
-      </div>
+        <el-form-item label="有效期">
+          <el-select v-model="keyForm.expDays" style="width: 100%">
+            <el-option label="永不过期" :value="0" />
+            <el-option label="7 天" :value="7" />
+            <el-option label="30 天" :value="30" />
+            <el-option label="90 天" :value="90" />
+            <el-option label="365 天" :value="365" />
+          </el-select>
+        </el-form-item>
+      </el-form>
 
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="showDialog = false" class="square-btn">{{ t.common.cancel }}</el-button>
-          <el-button type="primary" @click="handleGenerate" class="square-btn highlight">{{ t.common.confirm }}</el-button>
-        </div>
+        <el-button @click="showDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleGenerate">创建</el-button>
       </template>
     </el-dialog>
   </div>
@@ -589,73 +687,100 @@ onMounted(() => {
 <style scoped>
 .settings-container {
   width: 100%;
+  height: 100%;
 }
 
-/* Structural elements use clean corners */
-.glass-card,
-.settings-section,
-.key-card,
-.key-list {
-  border-radius: 8px;
+.settings-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-tabs :deep(.el-tabs__header) {
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .settings-tabs :deep(.el-tabs__nav-wrap::after) {
   display: none;
 }
 
+.settings-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-tabs :deep(.el-tab-pane) {
+  height: 100%;
+}
+
 .tab-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
   font-size: 15px;
+  font-weight: 600;
 }
 
 .tab-content {
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.25s ease;
 }
 
-.tab-content.grid-layout {
-  display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
-  gap: 24px;
-}
-@media (max-width: 1200px) {
-  .tab-content.grid-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.tab-content.two-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-/* Sections */
-.settings-section {
-  padding: 32px;
-  height: 100%;
+.basic-settings {
   display: flex;
   flex-direction: column;
+  gap: 20px;
+}
+
+.basic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.95fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.channels-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.monitoring-card {
+  max-width: 520px;
+}
+
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  backdrop-filter: blur(18px);
+}
+
+.settings-section {
+  padding: 24px;
+}
+
+.mode-section {
+  padding: 32px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
 }
 
 .section-header h4 {
   margin: 0;
+  flex: 1;
   font-size: 16px;
   font-weight: 700;
-  flex: 1;
 }
 
 .section-header .el-icon {
@@ -663,39 +788,39 @@ onMounted(() => {
   color: var(--accent-blue);
 }
 
-.credentials-header {
-  margin-bottom: 32px;
-}
-
-.title-row {
+.status-tags {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.tab-content-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.content-desc {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-bottom: 24px;
-  line-height: 1.6;
-}
-
-.action-row {
-  padding: 24px;
-  background: var(--bg-card);
-  border: 1px dashed var(--border-color);
-  display: flex;
+  gap: 8px;
   align-items: center;
 }
 
-/* V7 Operation Mode Styles */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.indicator-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.55);
+}
+
+.dot-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .consistency-wrapper-v7 {
   margin-top: 8px;
 }
@@ -709,18 +834,18 @@ onMounted(() => {
 .mode-card-v7 {
   position: relative;
   min-height: 160px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
   display: flex;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mode-card-v7:hover {
   border-color: var(--accent-blue);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
 
@@ -732,10 +857,10 @@ onMounted(() => {
 
 .card-glow {
   position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
+  inset: 0;
   background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 70%);
   opacity: 0;
-  transition: opacity 0.4s;
+  transition: opacity 0.3s ease;
 }
 
 .mode-card-v7.active .card-glow {
@@ -743,33 +868,30 @@ onMounted(() => {
 }
 
 .card-inner {
-  padding: 24px;
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 20px;
   width: 100%;
-  z-index: 1;
+  padding: 24px;
 }
 
 .mode-icon-v7 {
   width: 56px;
   height: 56px;
-  background: rgba(0,0,0,0.03);
+  flex-shrink: 0;
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 26px;
   color: var(--text-muted);
-  transition: all 0.3s;
-  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.03);
+  transition: all 0.3s ease;
 }
 
 .mode-card-v7.active .mode-icon-v7 {
-  background: var(--accent-blue);
-  color: white;
-}
-
-.mode-card-v7.cluster.active .mode-icon-v7 {
+  color: #fff;
   background: var(--accent-blue);
 }
 
@@ -780,39 +902,58 @@ onMounted(() => {
 }
 
 .mode-title-v7 {
+  margin-bottom: 8px;
   font-size: 17px;
   font-weight: 800;
-  margin-bottom: 8px;
-  color: var(--text-color);
+  color: var(--text-primary);
 }
 
 .mode-desc-v7 {
-  font-size: 13px;
   color: var(--text-muted);
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
-/* Integrated Toggle Style */
 .integrated-toggle-v7 {
   display: flex;
-  background: var(--bg-card-alt, rgba(0,0,0,0.04));
-  padding: 4px;
-  border-radius: 10px;
-  margin-top: 12px;
   gap: 4px;
   width: fit-content;
-  flex-shrink: 0; /* Prevent shrinking */
+  margin-top: 12px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .toggle-option {
-  min-width: 100px;
   position: relative;
+  min-width: 100px;
   padding: 8px 16px;
+  overflow: hidden;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.3s;
   text-align: center;
-  overflow: visible;
+  border-radius: 8px;
+}
+
+.toggle-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(0.9);
+  border-radius: 8px;
+  transition: all 0.25s ease;
+}
+
+.integrated-toggle-v7.ap .toggle-bg {
+  background: #10b981;
+}
+
+.integrated-toggle-v7.cp .toggle-bg {
+  background: #f97316;
+}
+
+.toggle-option.selected .toggle-bg {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .toggle-text {
@@ -820,8 +961,8 @@ onMounted(() => {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  white-space: nowrap;
   align-items: center;
+  white-space: nowrap;
 }
 
 .toggle-text .primary {
@@ -832,219 +973,238 @@ onMounted(() => {
 
 .toggle-text .secondary {
   font-size: 10px;
-  font-weight: 500;
-  opacity: 0.7;
+  opacity: 0.75;
   color: var(--text-muted);
 }
 
-.toggle-option.selected .primary { color: white; }
-.toggle-option.selected .secondary { color: rgba(255,255,255,0.85); }
-
-.integrated-toggle-v7.cp .toggle-bg {
-  background: #f97316; /* Orange */
+.toggle-option.selected .primary,
+.toggle-option.selected .secondary {
+  color: #fff;
 }
 
-.integrated-toggle-v7.ap .toggle-bg {
-  background: #10b981; /* Emerald/Green */
-}
-
-.tag-cp {
-  background-color: #f97316 !important;
-  border-color: #f97316 !important;
-  color: white !important;
-}
-
-.tag-ap {
-  background-color: #10b981 !important;
-  border-color: #10b981 !important;
-  color: white !important;
-}
-
-.toggle-bg {
-  position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
-  border-radius: 8px;
-  opacity: 0;
-  transform: scale(0.9);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.toggle-option.selected .toggle-bg {
-  transform: scale(1);
-  opacity: 1;
-}
-
-/* Status Indicators */
-.status-tags {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0,0,0,0.03);
-  padding: 2px 10px;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-
-.indicator-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #94a3b8;
-}
-
-.indicator-dot.active {
-  background: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-  animation: pulse-green 2s infinite;
-}
-
-@keyframes pulse-green {
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-}
-
-.dot-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-/* Technical Footer */
 .technical-footer-v7 {
   margin-top: 24px;
 }
 
 .info-bubble-v7 {
-  padding: 16px 20px;
-  border-radius: 12px;
   display: flex;
   gap: 16px;
   align-items: flex-start;
-  background: rgba(0,0,0,0.02);
+  padding: 16px 20px;
   border: 1px solid var(--border-color);
-  transition: all 0.3s;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.02);
 }
 
-.info-bubble-v7.cp {
-  background: rgba(249, 115, 22, 0.05); /* Orange bg */
-  border-color: rgba(249, 115, 22, 0.2);
+.info-bubble-v7 .el-icon {
+  margin-top: 2px;
+  font-size: 18px;
 }
 
-.info-bubble-v7.cp .el-icon {
-  color: #f97316;
+.bubble-content {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .info-bubble-v7.ap {
+  border-left: 4px solid #10b981;
   background: rgba(16, 185, 129, 0.05);
-  border-color: rgba(16, 185, 129, 0.2);
 }
 
 .info-bubble-v7.ap .el-icon {
   color: #10b981;
 }
 
-.info-bubble-v7 .el-icon {
-  font-size: 18px;
-  margin-top: 2px;
-  color: var(--text-muted);
+.info-bubble-v7.cp {
+  border-left: 4px solid #f97316;
+  background: rgba(249, 115, 22, 0.06);
 }
 
-.bubble-content {
-  font-size: 13px;
-  line-height: 1.6;
+.info-bubble-v7.cp .el-icon {
+  color: #f97316;
+}
+
+.info-bubble-v7.standalone {
+  border-left: 4px solid #94a3b8;
+}
+
+.tag-ap {
+  color: #fff !important;
+  border-color: #10b981 !important;
+  background: #10b981 !important;
+}
+
+.tag-cp {
+  color: #fff !important;
+  border-color: #f97316 !important;
+  background: #f97316 !important;
+}
+
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field-tip,
+.setting-note {
   color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.info-bubble-v7.ap { border-left: 4px solid var(--accent-green); background: rgba(16, 185, 129, 0.03); }
-.info-bubble-v7.cp { border-left: 4px solid var(--accent-blue); background: rgba(59, 130, 246, 0.03); }
-.info-bubble-v7.standalone { border-left: 4px solid #94a3b8; }
+.setting-note {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.14);
+}
 
-.val-control {
+.slider-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .val-text {
+  min-width: 44px;
+  text-align: right;
+  color: var(--accent-blue);
   font-size: 14px;
   font-weight: 700;
-  color: var(--accent-blue);
-  min-width: 45px;
-  text-align: right;
 }
 
-.form-row {
-  display: flex;
-  gap: 16px;
-}
-
-.channel-radio {
+.event-checkbox-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 8px;
 }
 
-/* Key Cards */
+.save-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 22px;
+}
+
+.save-copy {
+  min-width: 0;
+}
+
+.save-title {
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.save-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.save-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.credentials-header {
+  margin-bottom: 24px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.tab-content-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.content-desc {
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .key-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  gap: 18px;
 }
 
 .key-card {
   padding: 24px;
-  transition: all 0.3s ease;
-  border: 1px solid var(--border-color);
-  position: relative;
-}
-
-.key-card.is-expired {
-  border-color: var(--el-color-danger-light-3);
-  background: rgba(245, 108, 108, 0.02);
+  transition: border-color 0.2s ease, transform 0.2s ease;
 }
 
 .key-card:hover {
   border-color: var(--accent-blue);
+  transform: translateY(-2px);
+}
+
+.key-card.is-expired {
+  border-color: var(--el-color-danger-light-5);
+  background: rgba(245, 108, 108, 0.04);
 }
 
 .key-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
-.key-code {
-  font-family: 'Fira Code', monospace;
-  font-size: 13px;
+.key-actions {
+  display: flex;
+  align-items: center;
+}
+
+.key-code,
+.key-code-list {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.1);
+}
+
+.key-code {
   padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.1);
+  font-size: 13px;
 }
 
 .key-code-list {
-  font-family: 'Fira Code', monospace;
   font-size: 12px;
-  color: var(--accent-blue);
-}
-
-.key-with-copy {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .key-body .key-desc {
+  margin-bottom: 12px;
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 12px;
 }
 
 .key-info {
@@ -1054,155 +1214,82 @@ onMounted(() => {
 }
 
 .key-date {
-  font-size: 12px;
-  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.text-danger {
-  color: var(--el-color-danger);
-}
-
-.status-tag {
-  margin-right: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .key-list {
-  border: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
 .custom-table :deep(.el-table__inner-wrapper::before) {
   display: none;
 }
 
-.glass-card {
-  backdrop-filter: blur(20px);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+.key-with-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.key-regen-input {
+.key-input-container,
+.form-inline {
   display: flex;
   gap: 12px;
-  width: 100%;
 }
 
-/* Premium Dialog Styling */
-:deep(.premium-dialog) {
-  background: var(--bg-card) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.4) !important;
-  padding: 0;
-  border-radius: 0 !important;
+.form-inline :deep(.el-input),
+.form-inline :deep(.el-input-number) {
+  flex: 1;
 }
 
-:deep(.premium-dialog .el-dialog__header) {
-  display: none;
-}
-
-.dialog-header {
-  padding: 32px 40px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--text-color);
-}
-
-.header-title .el-icon {
-  color: var(--accent-blue);
-  font-size: 24px;
-}
-
-.close-btn {
-  font-size: 20px;
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
-.close-btn:hover {
-  opacity: 1;
-  color: var(--el-color-danger);
-}
-
-.dialog-body {
-  padding: 0 40px 32px;
-}
-
-.premium-form :deep(.el-form-item) {
-  margin-bottom: 28px;
-}
-
-.premium-form :deep(.el-form-item__label) {
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--text-color);
-  display: flex;
-  align-items: center;
-  height: 44px;
-}
-
-.glass-input :deep(.el-input__wrapper),
-.glass-input :deep(.el-textarea__inner),
-.glass-input :deep(.el-select__wrapper) {
-  background: var(--bg-card-alt, rgba(0, 0, 0, 0.03)) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: none !important;
-  height: 44px;
-  padding: 4px 16px;
-}
-
-.glass-input :deep(.el-textarea__inner) {
-  height: auto;
-  min-height: 100px !important;
-}
-
-.regen-btn {
-  height: 44px;
-  width: 44px;
-  border: 1px solid var(--border-color);
-  background: transparent;
-}
-
-.dialog-footer {
-  padding: 24px 40px 32px;
-  display: flex;
-  gap: 16px;
-  justify-content: flex-end;
-  border-top: 1px solid var(--border-color);
-  background: rgba(0, 0, 0, 0.01);
-}
-
-.square-btn {
-  height: 44px;
-  padding: 0 32px;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.square-btn.highlight {
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+.channel-radio {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Responsive Overrides */
-@media (max-width: 1024px) {
-  .tab-content.grid-layout,
-  .tab-content.two-cols {
+@media (max-width: 1320px) {
+  .basic-grid,
+  .channels-grid,
+  .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .main-mode-grid,
+  .event-checkbox-grid,
+  .channel-radio {
+    grid-template-columns: 1fr;
+  }
+
+  .save-footer,
+  .title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .save-actions {
+    width: 100%;
+  }
+
+  .save-actions :deep(.el-button) {
+    flex: 1;
   }
 }
 </style>

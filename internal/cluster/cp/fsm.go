@@ -15,17 +15,22 @@ import (
 type CommandType string
 
 const (
-	CmdRegister     CommandType = "register"
-	CmdDeregister   CommandType = "deregister"
-	CmdHeartbeat    CommandType = "heartbeat"
-	CmdAddAPIKey    CommandType = "add_api_key"
-	CmdDeleteAPIKey CommandType = "delete_api_key"
-	CmdAddUser      CommandType = "add_user"
-	CmdDeleteUser   CommandType = "delete_user"
-	CmdSetMode      CommandType = "set_mode"
-	CmdSetEnv       CommandType = "set_env"
-	CmdSetSeeds     CommandType = "set_seeds"
-	CmdSetLogLevel  CommandType = "set_log_level"
+	CmdRegister                       CommandType = "register"
+	CmdDeregister                     CommandType = "deregister"
+	CmdHeartbeat                      CommandType = "heartbeat"
+	CmdAddAPIKey                      CommandType = "add_api_key"
+	CmdDeleteAPIKey                   CommandType = "delete_api_key"
+	CmdAddUser                        CommandType = "add_user"
+	CmdDeleteUser                     CommandType = "delete_user"
+	CmdSetMode                        CommandType = "set_mode"
+	CmdSetEnv                         CommandType = "set_env"
+	CmdSetSeeds                       CommandType = "set_seeds"
+	CmdSetLogLevel                    CommandType = "set_log_level"
+	CmdSetEventRetentionDays          CommandType = "set_event_retention_days"
+	CmdSetLogRetentionDays            CommandType = "set_log_retention_days"
+	CmdSetEventTypes                  CommandType = "set_event_types"
+	CmdSetHeartbeatMaxFailures        CommandType = "set_heartbeat_max_failures"
+	CmdSetInstanceRemovalDelaySeconds CommandType = "set_instance_removal_delay_seconds"
 )
 
 // Command represents a Raft log command.
@@ -43,6 +48,8 @@ type Command struct {
 	Environment string          `json:"environment,omitempty"` // for set_env
 	Seeds       []string        `json:"seeds,omitempty"`       // for set_seeds
 	LogLevel    string          `json:"log_level,omitempty"`   // for set_log_level
+	IntValue    int             `json:"int_value,omitempty"`
+	StringList  []string        `json:"string_list,omitempty"`
 }
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
@@ -99,6 +106,24 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		return nil
 	case CmdSetLogLevel:
 		f.registry.SetLogLevel(cmd.LogLevel)
+		if lg, ok := logger.GetLogger().(*logger.Logger); ok {
+			lg.SetLevel(logger.ParseLevel(cmd.LogLevel))
+		}
+		return nil
+	case CmdSetEventRetentionDays:
+		f.registry.SetEventRetentionDays(cmd.IntValue)
+		return nil
+	case CmdSetLogRetentionDays:
+		f.registry.SetLogRetentionDays(cmd.IntValue)
+		return nil
+	case CmdSetEventTypes:
+		f.registry.SetEventTypes(cmd.StringList)
+		return nil
+	case CmdSetHeartbeatMaxFailures:
+		f.registry.SetHeartbeatMaxFailures(cmd.IntValue)
+		return nil
+	case CmdSetInstanceRemovalDelaySeconds:
+		f.registry.SetInstanceRemovalDelaySeconds(cmd.IntValue)
 		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)

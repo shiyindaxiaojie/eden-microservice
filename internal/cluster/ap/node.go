@@ -94,7 +94,7 @@ func (n *Node) fullSync() {
 	if len(payload.TopologyReports) > 0 {
 		n.Registry.Topology.Restore(payload.TopologyReports)
 	}
-	n.Registry.AppendEvent("Server Node Sync", "Cluster", target.ID, "Full sync completed")
+	n.Registry.AppendEvent(model.EventTypeRegistryNodeSync, "Cluster", target.ID, "Full sync completed")
 	logger.Info("[AP Node] Full sync completed with %s", target.ID)
 }
 

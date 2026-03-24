@@ -56,12 +56,15 @@ type SettingsService interface {
 	SetMode(mode string) error
 	SetEnvironment(env string) error
 	SetLogLevel(level string) error
+	GetLogLevel() string
 	GetMode() string
 	GetEnvironment() string
 	GetSeeds() []string
 	SetSeeds(seeds []string) error
 	SaveSeedsLocal(seeds []string)      // save locally only, no broadcast
 	SaveSettingLocal(key, value string) // save setting locally, no broadcast
+	GetSystemSettings() *model.SystemSettings
+	ApplySystemSettings(settings *model.SystemSettings) error
 	SetEventRetentionDays(days int) error
 	GetEventRetentionDays() int
 	SetLogRetentionDays(days int) error

@@ -174,6 +174,7 @@ onMounted(fetchCluster)
 
 <template>
   <div class="svc-shell">
+    <div class="svc-main glass-card">
     <!-- Toolbar -->
     <div class="svc-toolbar">
       <div class="toolbar-row">
@@ -185,9 +186,8 @@ onMounted(fetchCluster)
               :prefix-icon="Search"
               :placeholder="locale === 'zh' ? '输入节点 ID' : 'Node ID'"
               clearable
-              class="search-input"
-              style="width: 180px;"
-            />
+                class="search-input"
+              />
           </div>
         </div>
 
@@ -199,9 +199,8 @@ onMounted(fetchCluster)
               :prefix-icon="Search"
               :placeholder="locale === 'zh' ? '输入 IP 地址' : 'IP Address'"
               clearable
-              class="search-input"
-              style="width: 180px;"
-            />
+                class="search-input"
+              />
           </div>
         </div>
 
@@ -333,7 +332,11 @@ onMounted(fetchCluster)
             v-for="member in pagedMembers"
             :key="member.id"
             class="node-card"
-            :class="{ 'is-local': member.is_local }"
+            :class="{
+              'is-local': member.is_local,
+              'is-online': member.status === 'Online',
+              'is-offline': member.status !== 'Online',
+            }"
           >
             <div class="card-glow" :style="{ background: member.status === 'Online' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }" />
             
@@ -352,17 +355,21 @@ onMounted(fetchCluster)
               </div>
 
               <div class="addr-group">
-                <div v-if="member.http_addr" class="addr-box">
+                <div v-if="member.http_addr" class="addr-box http">
                   <span class="p-tag sm">HTTP</span>
                   <code>{{ member.http_addr }}</code>
                 </div>
-                <div v-if="member.grpc_addr" class="addr-box">
+                <div v-if="member.grpc_addr" class="addr-box grpc">
                   <span class="p-tag sm">GRPC</span>
                   <code>{{ member.grpc_addr }}</code>
                 </div>
-                <div v-if="member.raft_addr" class="addr-box">
+                <div v-if="member.raft_addr" class="addr-box raft">
                   <span class="p-tag sm">RAFT</span>
                   <code>{{ member.raft_addr }}</code>
+                </div>
+                <div v-if="member.quic_addr" class="addr-box quic">
+                  <span class="p-tag sm">QUIC</span>
+                  <code>{{ member.quic_addr }}</code>
                 </div>
               </div>
             </div>
@@ -398,6 +405,7 @@ onMounted(fetchCluster)
         </footer>
       </template>
     </section>
+    </div>
 
     <!-- Add Node Dialog -->
     <el-dialog
@@ -965,5 +973,270 @@ onMounted(fetchCluster)
 
 </style>
 
+<style scoped>
+.node-card {
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
 
+.node-card::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
 
+.node-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
+  background: var(--bg-secondary);
+}
+
+.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.32);
+  box-shadow: 0 16px 34px rgba(16, 185, 129, 0.12), 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.card-glow {
+  height: 5px;
+  opacity: 1;
+}
+
+.status-line {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.node-card.is-online .status-line {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.node-card.is-offline .status-line {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.addr-group {
+  gap: 12px;
+}
+
+.addr-box {
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+}
+
+.addr-box .p-tag {
+  min-width: 48px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 1;
+}
+
+.addr-box.http .p-tag {
+  color: var(--text-secondary);
+}
+
+.addr-box.grpc .p-tag {
+  color: var(--accent-green);
+}
+
+.addr-box.raft .p-tag {
+  color: var(--accent-orange);
+}
+
+.addr-box.quic .p-tag {
+  color: var(--accent-blue);
+}
+
+.addr-box code {
+  background: transparent;
+  padding: 0;
+}
+
+.card-footer {
+  border-top: 1px solid var(--border-color);
+}
+</style>
+
+<style scoped>
+.svc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+}
+
+.svc-toolbar {
+  padding: 16px 24px;
+}
+
+.field-item {
+  gap: 8px;
+}
+
+.field-label {
+  font-weight: 700;
+}
+
+.search-input {
+  width: 180px;
+  flex-shrink: 0;
+}
+
+.toolbar-sep {
+  height: 20px;
+  margin: 0 2px;
+  opacity: 1;
+}
+
+:deep(.search-input .el-input__inner) {
+  color: var(--text-primary) !important;
+  font-size: 14px;
+}
+
+:deep(.search-input .el-input__prefix .el-icon) {
+  color: var(--text-muted);
+}
+
+.svc-content {
+  padding: 16px 24px 12px;
+}
+
+.empty-panel {
+  flex: 1;
+  min-height: 200px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+}
+
+.table-wrap {
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 0 16px;
+}
+
+.card-grid {
+  gap: 16px;
+  align-content: start;
+  padding: 2px 2px 8px;
+}
+
+.mono-addr {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 0;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.colon-separator {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+:deep(.protocol-select .el-select__wrapper),
+:deep(.host-input .el-input__wrapper),
+:deep(.port-input .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 1180px) {
+  .toolbar-row {
+    gap: 8px;
+  }
+
+  .toolbar-group {
+    padding: 0;
+  }
+
+  .toolbar-group.right-align {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 768px) {
+  .svc-toolbar {
+    padding: 12px 16px;
+  }
+
+  .svc-content {
+    padding: 12px 16px 8px;
+  }
+
+  .field-item {
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    width: 100% !important;
+  }
+
+  .pill-group {
+    width: 100%;
+  }
+
+  .pill-group button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .table-wrap {
+    padding: 0 12px;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .svc-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .node-input-row {
+    flex-wrap: wrap;
+  }
+
+  .protocol-select,
+  .host-input,
+  .port-input {
+    width: 100%;
+  }
+
+  .row-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+</style>

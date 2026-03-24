@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +26,29 @@ func NewSettingsService(s *store.Registry, cp CPNode, ap APNode) SettingsService
 		store:  s,
 		cpNode: cp,
 		apNode: ap,
+	}
+}
+
+func (s *settingsService) isCPCluster() bool {
+	return s.store.GetEnvironment() == "cluster" && s.store.GetMode() == "cp" && s.cpNode != nil
+}
+
+func (s *settingsService) ensureClusterWritable() error {
+	if !s.isCPCluster() {
+		return nil
+	}
+	if s.cpNode.IsLeader() {
+		return nil
+	}
+	if leader := s.cpNode.LeaderAddr(); leader != "" {
+		return fmt.Errorf("not leader, redirect to %s", leader)
+	}
+	return fmt.Errorf("not leader")
+}
+
+func applyRuntimeLogLevel(level string) {
+	if lg, ok := logger.GetLogger().(*logger.Logger); ok {
+		lg.SetLevel(logger.ParseLevel(level))
 	}
 }
 
@@ -93,6 +117,10 @@ func (s *settingsService) ListAPIKeys() ([]*model.APIKey, error) {
 }
 
 func (s *settingsService) SetMode(mode string) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	mode = strings.ToLower(strings.TrimSpace(mode))
 	if mode != "ap" && mode != "cp" {
 		return errors.New("invalid mode")
 	}
@@ -106,7 +134,7 @@ func (s *settingsService) SetMode(mode string) error {
 		// If already in cluster mode, replicate but also continue to HTTP sync
 		_ = s.cpNode.Apply(cmd, 5*time.Second)
 	}
-	
+
 	s.store.SetMode(mode)
 
 	// If switching to CP, automatically invite existing AP seeds into the Raft cluster
@@ -141,6 +169,10 @@ func (s *settingsService) SetMode(mode string) error {
 }
 
 func (s *settingsService) SetEnvironment(env string) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	env = strings.ToLower(strings.TrimSpace(env))
 	if env != "standalone" && env != "cluster" {
 		return errors.New("invalid environment")
 	}
@@ -159,21 +191,37 @@ func (s *settingsService) SetEnvironment(env string) error {
 }
 
 func (s *settingsService) SetLogLevel(level string) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	level = model.NormalizeLogLevel(level)
 	mode := s.store.GetMode()
 	if mode == "cp" && s.cpNode != nil {
 		cmd := cp.Command{Type: cp.CmdSetLogLevel, LogLevel: level}
-		_ = s.cpNode.Apply(cmd, 5*time.Second)
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
 	}
 	s.store.SetLogLevel(level)
+	applyRuntimeLogLevel(level)
 	// Sync to peers via HTTP
 	s.syncSettingsToPeers(map[string]string{"log_level": level})
 	return nil
 }
 
 func (s *settingsService) SetEventRetentionDays(days int) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if days <= 0 {
+		return errors.New("invalid event retention days")
+	}
 	mode := s.store.GetMode()
 	if mode == "cp" && s.cpNode != nil {
-		// Need CmdSetEventRetention in CP if we want strong consistency on settings
+		cmd := cp.Command{Type: cp.CmdSetEventRetentionDays, IntValue: days}
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
 	}
 	s.store.SetEventRetentionDays(days)
 	s.syncSettingsToPeers(map[string]interface{}{"event_retention_days": days})
@@ -185,6 +233,18 @@ func (s *settingsService) GetEventRetentionDays() int {
 }
 
 func (s *settingsService) SetLogRetentionDays(days int) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if days <= 0 {
+		return errors.New("invalid log retention days")
+	}
+	if s.store.GetMode() == "cp" && s.cpNode != nil {
+		cmd := cp.Command{Type: cp.CmdSetLogRetentionDays, IntValue: days}
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
 	s.store.SetLogRetentionDays(days)
 	s.syncSettingsToPeers(map[string]interface{}{"log_retention_days": days})
 	return nil
@@ -195,8 +255,21 @@ func (s *settingsService) GetLogRetentionDays() int {
 }
 
 func (s *settingsService) SetEventTypes(types []string) error {
-	s.store.SetEventTypes(types)
-	s.syncSettingsToPeers(map[string]interface{}{"event_types": types})
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	normalized := model.NormalizeEventTypes(types)
+	if types == nil {
+		normalized = nil
+	}
+	if s.store.GetMode() == "cp" && s.cpNode != nil {
+		cmd := cp.Command{Type: cp.CmdSetEventTypes, StringList: normalized}
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	s.store.SetEventTypes(normalized)
+	s.syncSettingsToPeers(map[string]interface{}{"event_types": normalized})
 	return nil
 }
 
@@ -205,6 +278,18 @@ func (s *settingsService) GetEventTypes() []string {
 }
 
 func (s *settingsService) SetHeartbeatMaxFailures(n int) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if n <= 0 {
+		return errors.New("invalid heartbeat max failures")
+	}
+	if s.store.GetMode() == "cp" && s.cpNode != nil {
+		cmd := cp.Command{Type: cp.CmdSetHeartbeatMaxFailures, IntValue: n}
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
 	s.store.SetHeartbeatMaxFailures(n)
 	s.syncSettingsToPeers(map[string]interface{}{"heartbeat_max_failures": n})
 	return nil
@@ -215,6 +300,18 @@ func (s *settingsService) GetHeartbeatMaxFailures() int {
 }
 
 func (s *settingsService) SetInstanceRemovalDelaySeconds(n int) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if n <= 0 {
+		return errors.New("invalid instance removal delay seconds")
+	}
+	if s.store.GetMode() == "cp" && s.cpNode != nil {
+		cmd := cp.Command{Type: cp.CmdSetInstanceRemovalDelaySeconds, IntValue: n}
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
 	s.store.SetInstanceRemovalDelaySeconds(n)
 	s.syncSettingsToPeers(map[string]interface{}{"instance_removal_delay_seconds": n})
 	return nil
@@ -226,6 +323,10 @@ func (s *settingsService) GetInstanceRemovalDelaySeconds() int {
 
 func (s *settingsService) GetMode() string {
 	return s.store.GetMode()
+}
+
+func (s *settingsService) GetLogLevel() string {
+	return s.store.GetLogLevel()
 }
 
 func (s *settingsService) GetEnvironment() string {
@@ -249,27 +350,146 @@ func (s *settingsService) SaveSettingLocal(key, value string) {
 	// We might need to handle different types if we use interface{} in handlers.
 }
 
+func (s *settingsService) GetSystemSettings() *model.SystemSettings {
+	return &model.SystemSettings{
+		Mode:                        s.store.GetMode(),
+		Environment:                 s.store.GetEnvironment(),
+		LogLevel:                    s.store.GetLogLevel(),
+		EventRetentionDays:          s.store.GetEventRetentionDays(),
+		LogRetentionDays:            s.store.GetLogRetentionDays(),
+		EventTypes:                  s.store.GetEventTypes(),
+		HeartbeatMaxFailures:        s.store.GetHeartbeatMaxFailures(),
+		InstanceRemovalDelaySeconds: s.store.GetInstanceRemovalDelaySeconds(),
+	}
+}
+
+func (s *settingsService) ApplySystemSettings(settings *model.SystemSettings) error {
+	if settings == nil {
+		return errors.New("settings required")
+	}
+
+	target := *settings
+	if target.Mode == "" {
+		target.Mode = s.store.GetMode()
+	}
+	if target.Environment == "" {
+		target.Environment = s.store.GetEnvironment()
+	}
+	target.LogLevel = model.NormalizeLogLevel(target.LogLevel)
+	if target.EventRetentionDays <= 0 {
+		target.EventRetentionDays = s.store.GetEventRetentionDays()
+	}
+	if target.LogRetentionDays <= 0 {
+		target.LogRetentionDays = s.store.GetLogRetentionDays()
+	}
+	if target.EventTypes == nil {
+		target.EventTypes = s.store.GetEventTypes()
+	} else {
+		target.EventTypes = model.NormalizeEventTypes(target.EventTypes)
+	}
+	if target.HeartbeatMaxFailures <= 0 {
+		target.HeartbeatMaxFailures = s.store.GetHeartbeatMaxFailures()
+	}
+	if target.InstanceRemovalDelaySeconds <= 0 {
+		target.InstanceRemovalDelaySeconds = s.store.GetInstanceRemovalDelaySeconds()
+	}
+
+	if err := s.SetEnvironment(target.Environment); err != nil {
+		return err
+	}
+	if err := s.SetMode(target.Mode); err != nil {
+		return err
+	}
+	if err := s.SetEventRetentionDays(target.EventRetentionDays); err != nil {
+		return err
+	}
+	if err := s.SetEventTypes(target.EventTypes); err != nil {
+		return err
+	}
+	if err := s.SetLogLevel(target.LogLevel); err != nil {
+		return err
+	}
+	if err := s.SetLogRetentionDays(target.LogRetentionDays); err != nil {
+		return err
+	}
+	if err := s.SetHeartbeatMaxFailures(target.HeartbeatMaxFailures); err != nil {
+		return err
+	}
+	if err := s.SetInstanceRemovalDelaySeconds(target.InstanceRemovalDelaySeconds); err != nil {
+		return err
+	}
+	return nil
+}
+
+func coerceInt(value interface{}) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+func coerceStringSlice(value interface{}) ([]string, bool) {
+	switch v := value.(type) {
+	case []string:
+		return v, true
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			result = append(result, s)
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
 func (s *settingsService) SaveSettingLocalV2(key string, value interface{}) {
 	switch key {
 	case "mode":
-		if v, ok := value.(string); ok { s.store.SetMode(v) }
+		if v, ok := value.(string); ok {
+			s.store.SetMode(strings.ToLower(v))
+		}
 	case "environment":
-		if v, ok := value.(string); ok { s.store.SetEnvironment(v) }
+		if v, ok := value.(string); ok {
+			s.store.SetEnvironment(strings.ToLower(v))
+		}
 	case "log_level":
 		if v, ok := value.(string); ok {
-			s.store.SetLogLevel(v)
+			level := model.NormalizeLogLevel(v)
+			s.store.SetLogLevel(level)
+			applyRuntimeLogLevel(level)
 		}
 	case "event_retention_days":
-		if v, ok := value.(float64); ok { s.store.SetEventRetentionDays(int(v)) }
+		if v, ok := coerceInt(value); ok {
+			s.store.SetEventRetentionDays(v)
+		}
 	case "log_retention_days":
-		if v, ok := value.(float64); ok { s.store.SetLogRetentionDays(int(v)) }
+		if v, ok := coerceInt(value); ok {
+			s.store.SetLogRetentionDays(v)
+		}
 	case "event_types":
-		if v, ok := value.([]interface{}); ok {
-			types := make([]string, len(v))
-			for i, t := range v {
-				if ts, ok := t.(string); ok { types[i] = ts }
-			}
-			s.store.SetEventTypes(types)
+		if v, ok := coerceStringSlice(value); ok {
+			s.store.SetEventTypes(v)
+		}
+	case "heartbeat_max_failures":
+		if v, ok := coerceInt(value); ok {
+			s.store.SetHeartbeatMaxFailures(v)
+		}
+	case "instance_removal_delay_seconds":
+		if v, ok := coerceInt(value); ok {
+			s.store.SetInstanceRemovalDelaySeconds(v)
 		}
 	}
 }

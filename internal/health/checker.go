@@ -1,9 +1,11 @@
 package health
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
 )
 
@@ -39,9 +41,25 @@ func (c *Checker) Start() {
 				marked, removed := c.registry.MarkCritical(c.ttl)
 				if len(marked) > 0 {
 					logger.Debug("[HealthChecker] marked %d instances as critical", len(marked))
+					for _, inst := range marked {
+						c.registry.AppendEvent(
+							model.EventTypeServiceOffline,
+							inst.ServiceName,
+							fmt.Sprintf("%s:%d", inst.Host, inst.Port),
+							"Heartbeat timeout, instance marked offline",
+						)
+					}
 				}
 				if len(removed) > 0 {
 					logger.Info("[HealthChecker] removed %d expired instances", len(removed))
+					for _, inst := range removed {
+						c.registry.AppendEvent(
+							model.EventTypeServiceRemove,
+							inst.ServiceName,
+							fmt.Sprintf("%s:%d", inst.Host, inst.Port),
+							"Instance removed after retention window",
+						)
+					}
 				}
 			case <-c.stopCh:
 				logger.Info("[HealthChecker] stopped")

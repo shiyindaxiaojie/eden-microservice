@@ -105,6 +105,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/settings/apikey", h.Auth(adminOnly(http.HandlerFunc(h.handleSaveAPIKey))))
 	h.mux.Handle("/v1/settings/apikey/delete", h.Auth(adminOnly(http.HandlerFunc(h.handleDeleteAPIKey))))
 	h.mux.Handle("/v1/settings/mode", h.Auth(adminOrDev(http.HandlerFunc(h.handleMode))))
+	h.mux.Handle("/v1/settings/system", h.Auth(adminOrDev(http.HandlerFunc(h.handleSystemSettings))))
 	h.mux.Handle("/v1/settings/storage", h.Auth(adminOrDev(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			h.handleGetStorage(w, r)

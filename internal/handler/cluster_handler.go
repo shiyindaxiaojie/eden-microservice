@@ -180,9 +180,13 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 		hostSeeds := make(map[string][]string)
 		for _, s := range seeds {
 			cleaned := strings.TrimPrefix(strings.TrimPrefix(s, "http://"), "https://")
-			if h.normalizeAddr(s) == localAddr { continue }
+			if h.normalizeAddr(s) == localAddr {
+				continue
+			}
 			host, _, _ := net.SplitHostPort(cleaned)
-			if host == "" { host = cleaned }
+			if host == "" {
+				host = cleaned
+			}
 			hostSeeds[host] = append(hostSeeds[host], s)
 		}
 		// Group Raft members by host (excluding local)
@@ -191,7 +195,9 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 		localRaftAddr := h.config.RaftAddr
 		for id, rm := range raftMembersMap {
 			raftAddrToID[rm["address"]] = id
-			if rm["address"] == localRaftAddr { continue }
+			if rm["address"] == localRaftAddr {
+				continue
+			}
 			host, _, _ := net.SplitHostPort(rm["address"])
 			if host != "" {
 				hostRaft[host] = append(hostRaft[host], rm["address"])
@@ -304,7 +310,7 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 
 		for _, addr := range req.Addresses {
 			addr := h.normalizeAddr(addr)
-			
+
 			// 1. Fetch node info to get RaftAddr and NodeID
 			client := http.Client{Timeout: 3 * time.Second}
 			resp, err := client.Get(addr + "/v1/node/info")
@@ -351,7 +357,7 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 
 		if lastErr != nil {
 			// Note: We return 200 with error details if partial failure, or 500 if we want strict
-			// For simplicity let's return error if we couldn't add some nodes. 
+			// For simplicity let's return error if we couldn't add some nodes.
 			// But since we saved seeds, maybe just return the last error.
 			httpError(w, http.StatusInternalServerError, lastErr.Error())
 			return
@@ -409,13 +415,13 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	
+
 	mode := h.settings.GetMode()
 	env := h.settings.GetEnvironment()
 	localAddr := h.normalizeAddr(h.config.HTTPAddr)
 	isLeader := h.cluster.IsLeader()
 	leaderAddr := h.cluster.LeaderAddr()
-	
+
 	role := "Peer"
 	if env == "standalone" {
 		role = "Standalone"
@@ -436,7 +442,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 			leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
 		}
 	}
-	
+
 	nodeCount := 1
 	healthyNodes := 1 // Local node is always healthy if we are running
 	if env == "cluster" {
@@ -472,7 +478,9 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 			var wg sync.WaitGroup
 			var mu sync.Mutex
 			for _, s := range seeds {
-				if s == "" || h.normalizeAddr(s) == localAddr { continue }
+				if s == "" || h.normalizeAddr(s) == localAddr {
+					continue
+				}
 				wg.Add(1)
 				go func(addr string) {
 					defer wg.Done()
@@ -490,7 +498,9 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if nodeCount < 1 { nodeCount = 1 }
+	if nodeCount < 1 {
+		nodeCount = 1
+	}
 	nodeHealthRate := float64(healthyNodes) / float64(nodeCount) * 100
 
 	result := map[string]interface{}{
@@ -521,6 +531,7 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		EventRetention int      `json:"event_retention"`
+		LogLevel       string   `json:"log_level"`
 		LogRetention   int      `json:"log_retention"`
 		EventTypes     []string `json:"event_types"`
 		HBMaxFail      int      `json:"heartbeat_max_failures"`
@@ -532,19 +543,40 @@ func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.EventRetention > 0 {
-		h.settings.SetEventRetentionDays(req.EventRetention)
+		if err := h.settings.SetEventRetentionDays(req.EventRetention); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
+	}
+	if req.LogLevel != "" {
+		if err := h.settings.SetLogLevel(req.LogLevel); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
 	}
 	if req.LogRetention > 0 {
-		h.settings.SetLogRetentionDays(req.LogRetention)
+		if err := h.settings.SetLogRetentionDays(req.LogRetention); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
 	}
-	if len(req.EventTypes) > 0 {
-		h.settings.SetEventTypes(req.EventTypes)
+	if req.EventTypes != nil {
+		if err := h.settings.SetEventTypes(req.EventTypes); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
 	}
 	if req.HBMaxFail > 0 {
-		h.settings.SetHeartbeatMaxFailures(req.HBMaxFail)
+		if err := h.settings.SetHeartbeatMaxFailures(req.HBMaxFail); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
 	}
 	if req.RemovalDelay > 0 {
-		h.settings.SetInstanceRemovalDelaySeconds(req.RemovalDelay)
+		if err := h.settings.SetInstanceRemovalDelaySeconds(req.RemovalDelay); err != nil {
+			h.handleLeaderRedirect(w, err)
+			return
+		}
 	}
 
 	jsonOK(w, map[string]string{"status": "ok"})
@@ -552,6 +584,7 @@ func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleGetStorage(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{
+		"log_level":                      h.settings.GetLogLevel(),
 		"event_retention":                h.settings.GetEventRetentionDays(),
 		"log_retention":                  h.settings.GetLogRetentionDays(),
 		"event_types":                    h.settings.GetEventTypes(),

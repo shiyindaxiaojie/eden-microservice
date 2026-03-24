@@ -43,6 +43,10 @@ func NewRegistry(dataPath string) *Registry {
 		Topology:   NewTopologyStore(dataPath),
 		dataPath:   dataPath,
 	}
+	r.Events.SetRetentionDaysProvider(func() int {
+		return r.Config.GetEventRetentionDays()
+	})
+	r.Events.Cleanup(r.Config.GetEventRetentionDays())
 	return r
 }
 
@@ -93,9 +97,16 @@ func (r *Registry) DeleteAPIKey(k string)        { r.Auth.DeleteAPIKey(k); r.Aut
 func (r *Registry) SetMode(m string)             { r.Config.SetMode(m); r.Config.Save() }
 func (r *Registry) SetEnvironment(e string)      { r.Config.SetEnvironment(e); r.Config.Save() }
 func (r *Registry) SetSeeds(s []string)          { r.Config.SetSeeds(s); r.Config.Save() }
-func (r *Registry) SetLogLevel(l string)         { r.Config.SetLogLevel(l); r.Config.Save() }
-func (r *Registry) GetEventRetentionDays() int   { return r.Config.GetEventRetentionDays() }
-func (r *Registry) SetEventRetentionDays(d int)  { r.Config.SetEventRetentionDays(d); r.Config.Save() }
+func (r *Registry) SetLogLevel(l string) {
+	r.Config.SetLogLevel(model.NormalizeLogLevel(l))
+	r.Config.Save()
+}
+func (r *Registry) GetEventRetentionDays() int { return r.Config.GetEventRetentionDays() }
+func (r *Registry) SetEventRetentionDays(d int) {
+	r.Config.SetEventRetentionDays(d)
+	r.Config.Save()
+	r.Events.Cleanup(d)
+}
 func (r *Registry) GetLogRetentionDays() int     { return r.Config.GetLogRetentionDays() }
 func (r *Registry) SetLogRetentionDays(d int)    { r.Config.SetLogRetentionDays(d); r.Config.Save() }
 func (r *Registry) GetEventTypes() []string      { return r.Config.GetEventTypes() }
@@ -112,7 +123,7 @@ func (r *Registry) SetInstanceRemovalDelaySeconds(n int) {
 	r.Config.SetInstanceRemovalDelaySeconds(n)
 	r.Config.Save()
 }
-func (r *Registry) ListEvents() []*model.Event   { return r.Events.List() }
+func (r *Registry) ListEvents() []*model.Event { return r.Events.List() }
 func (r *Registry) MarkCritical(ttl time.Duration) ([]*model.Instance, []*model.Instance) {
 	// Dynamically calculate based on settings if needed, or pass fixed ttl
 	// For now, let's update ServiceStore.MarkCritical to take both.
@@ -129,11 +140,15 @@ func (r *Registry) ListNamespaces() []*model.Namespace       { return r.Namespac
 func (r *Registry) CreateNamespace(ns *model.Namespace) bool { return r.Namespaces.Create(ns) }
 
 func (r *Registry) AppendEvent(etype, service, instance, message string) {
-	if !r.shouldRecordEvent(etype) {
+	normalized := model.NormalizeEventTypes([]string{etype})
+	if len(normalized) == 0 {
+		return
+	}
+	if !r.shouldRecordEvent(normalized[0]) {
 		return
 	}
 	r.Events.Append(&model.Event{
-		Type:      etype,
+		Type:      normalized[0],
 		Service:   service,
 		Instance:  instance,
 		Message:   message,
@@ -144,9 +159,8 @@ func (r *Registry) AppendEvent(etype, service, instance, message string) {
 func (r *Registry) shouldRecordEvent(etype string) bool {
 	allowed := r.GetEventTypes()
 	if len(allowed) == 0 {
-		return true
+		return false
 	}
-	// Map internal types to UI labels if needed, or just compare
 	for _, t := range allowed {
 		if t == etype {
 			return true
@@ -162,12 +176,12 @@ func (r *Registry) SetInstanceStatus(ns, svc, id string, status model.HealthStat
 
 // SnapshotData represents the full state for Raft/Persistence.
 type SnapshotData struct {
-	Services        map[string][]*model.Instance                `json:"services,omitempty"`
-	ServicesByNS    map[string]map[string][]*model.Instance     `json:"services_by_namespace,omitempty"`
-	Namespaces      []*model.Namespace                          `json:"namespaces,omitempty"`
-	TopologyReports map[string]map[string]*model.TopologyReport `json:"topology_reports,omitempty"`
-	APIKeys         map[string]*model.APIKey                    `json:"api_keys"`
-	Users           map[string]*model.User                      `json:"users"`
+	Services           map[string][]*model.Instance                `json:"services,omitempty"`
+	ServicesByNS       map[string]map[string][]*model.Instance     `json:"services_by_namespace,omitempty"`
+	Namespaces         []*model.Namespace                          `json:"namespaces,omitempty"`
+	TopologyReports    map[string]map[string]*model.TopologyReport `json:"topology_reports,omitempty"`
+	APIKeys            map[string]*model.APIKey                    `json:"api_keys"`
+	Users              map[string]*model.User                      `json:"users"`
 	Mode               string                                      `json:"mode"`
 	Environment        string                                      `json:"environment"`
 	Seeds              []string                                    `json:"seeds"`
@@ -197,11 +211,11 @@ func (r *Registry) Snapshot() *SnapshotData {
 	}
 
 	snap := &SnapshotData{
-		ServicesByNS:    servicesByNS,
-		Namespaces:      r.Namespaces.List(),
-		TopologyReports: r.Topology.Snapshot(),
-		APIKeys:         r.Auth.GetAllAPIKeys(),
-		Users:           r.Auth.GetAllUsers(),
+		ServicesByNS:       servicesByNS,
+		Namespaces:         r.Namespaces.List(),
+		TopologyReports:    r.Topology.Snapshot(),
+		APIKeys:            r.Auth.GetAllAPIKeys(),
+		Users:              r.Auth.GetAllUsers(),
 		Mode:               r.Config.GetMode(),
 		Environment:        r.Config.GetEnvironment(),
 		Seeds:              r.Config.GetSeeds(),

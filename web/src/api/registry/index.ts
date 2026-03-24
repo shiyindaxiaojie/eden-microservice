@@ -93,6 +93,28 @@ export interface RegistryEvent {
   timestamp: string
 }
 
+export interface SystemSettings {
+  mode: 'ap' | 'cp'
+  environment: 'standalone' | 'cluster'
+  log_level: string
+  event_retention_days: number
+  log_retention_days: number
+  event_types: string[]
+  heartbeat_max_failures: number
+  instance_removal_delay_seconds: number
+}
+
+export interface RbacUser {
+  username: string
+  password?: string
+  nickname?: string
+  phone?: string
+  email?: string
+  remark?: string
+  role: string
+  is_builtin?: boolean
+}
+
 export const getServices = (namespace = '') => api.get<ServiceSummary[]>(`/v1/catalog/services${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
 export const getServiceInstances = (name: string, namespace = '') =>
   api.get<Instance[]>(`/v1/catalog/service/${encodeURIComponent(name)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
@@ -109,6 +131,11 @@ export const createNamespace = (data: Partial<Namespace>) => api.post('/v1/names
 export const updateNamespace = (data: Partial<Namespace>) => api.put('/v1/namespace', data)
 export const deleteNamespace = (name: string) => api.delete(`/v1/namespace?name=${name}`)
 
+export const getRbacUsers = () => api.get<RbacUser[]>('/v1/rbac/users')
+export const saveRbacUser = (data: Partial<RbacUser>) => api.post('/v1/rbac/user', data)
+export const deleteRbacUser = (username: string) =>
+  api.delete(`/v1/rbac/user/delete?username=${encodeURIComponent(username)}`)
+
 export const getClusterMembers = () => api.get<ClusterMember[]>('/v1/cluster/members')
 export const getClusterStats = () => api.get<ClusterStats>('/v1/cluster/stats')
 export const addClusterMember = (data: { addresses: string[] }) => api.post('/v1/cluster/member', data)
@@ -119,3 +146,5 @@ export const getLogFiles = () => api.get<{name: string, file: string}[]>('/v1/cl
 export const getLogs = (file = '', count = 100) => api.get<string[]>(`/v1/cluster/logs?count=${count}${file ? `&file=${file}` : ''}`)
 export const getStorage = () => api.get<any>('/v1/settings/storage')
 export const updateStorage = (data: any) => api.post('/v1/settings/storage', data)
+export const getSystemSettings = () => api.get<SystemSettings>('/v1/settings/system')
+export const updateSystemSettings = (data: SystemSettings) => api.post('/v1/settings/system', data)
