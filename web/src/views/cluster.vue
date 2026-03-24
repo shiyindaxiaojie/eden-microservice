@@ -25,7 +25,7 @@ const addForms = ref([{ protocol: 'http://', host: '', port: '' }])
 const viewMode = ref<'grid' | 'list'>('grid')
 const filterMode = ref<'all' | 'online' | 'offline'>('all')
 const currentPage = ref(1)
-const pageSize = ref(12)
+const pageSize = ref(8)
 
 const nodeStats = computed(() => ({
   total: members.value.length,
@@ -428,7 +428,8 @@ onMounted(fetchCluster)
 
               <div class="card-aside">
                 <span class="meta-chip" :class="member.status === 'Online' ? 'online' : 'offline'">
-                  {{ getMemberPrimaryHost(member) }}
+                  <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
+                  {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
                 </span>
                 <span class="meta-chip role" :class="roleChipClass(member.role)">{{ getRoleName(member.role) }}</span>
               </div>
@@ -438,10 +439,7 @@ onMounted(fetchCluster)
               <div class="node-ip-row">
                 <span class="node-ip-label">{{ locale === 'zh' ? '节点 IP' : 'Node IP' }}</span>
                 <span class="compact-label">{{ locale === 'zh' ? '状态' : 'Status' }}</span>
-                <span class="node-ip-value" :title="getMemberPrimaryHost(member)">
-                  <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
-                  {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
-                </span>
+                <span class="node-ip-value" :title="getMemberPrimaryHost(member)">{{ getMemberPrimaryHost(member) }}</span>
               </div>
 
               <div class="protocol-grid">
@@ -483,7 +481,7 @@ onMounted(fetchCluster)
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
-              :page-sizes="[12, 20, 50]"
+                :page-sizes="[8, 12, 20, 50]"
               :total="filteredMembers.length"
               layout="sizes, prev, pager, next"
               background
@@ -1217,45 +1215,44 @@ onMounted(fetchCluster)
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 292px));
+  grid-template-columns: repeat(4, minmax(0, 272px));
   justify-content: start;
-  gap: 14px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   align-content: start;
-  padding: 2px 2px 8px;
+  padding: 0 0 8px;
 }
 
 .node-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-width: 292px;
+  gap: 8px;
   min-height: 0;
-  padding: 14px;
-  border-radius: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
   background:
     radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
     var(--bg-secondary);
   border: 1px solid var(--border-color);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .node-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(59, 130, 246, 0.28);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.22);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .card-accent {
   position: absolute;
   inset: 0 auto auto 0;
-  width: 84px;
+  width: 72px;
   height: 3px;
   background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.18));
   border-radius: 0 0 999px 0;
@@ -1269,43 +1266,110 @@ onMounted(fetchCluster)
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .card-copy {
   min-width: 0;
   flex: 1;
+  padding-top: 2px;
 }
 
 .card-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin: 0;
 }
 
 .card-title {
   display: block;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .card-subtitle {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.45;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: none;
 }
 
-.role-pill {
+.card-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.meta-chip.local {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--accent-green);
+}
+
+.meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+}
+
+.meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.1);
+  color: #ef4444;
+}
+
+.meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+}
+
+.meta-chip.role.candidate {
+  border-color: rgba(251, 146, 60, 0.18);
+  background: rgba(251, 146, 60, 0.1);
+  color: var(--accent-orange);
+}
+
+.meta-chip.role.local {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.role.neutral {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+}
+
+.meta-chip .status-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
 }
 
 .card-body {
@@ -1314,77 +1378,107 @@ onMounted(fetchCluster)
   gap: 6px;
 }
 
-.compact-meta-row {
+.node-ip-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: 12px;
-  line-height: 1.45;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
-.compact-label {
+.node-ip-row > .compact-label {
+  display: none;
+}
+
+.node-ip-label {
   flex: 0 0 40px;
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-.compact-value {
+.node-ip-value {
   min-width: 0;
   color: var(--text-primary);
   font-size: 12px;
-  line-height: 1.5;
-  word-break: break-word;
+  line-height: 1.35;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.status-value {
-  display: inline-flex;
+.protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.protocol-card {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.mono-value {
+.protocol-name {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.protocol-port {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-.endpoint-name.http {
+.protocol-card.http .protocol-name {
   color: var(--text-secondary);
 }
 
-.endpoint-name.grpc {
+.protocol-card.grpc .protocol-name {
   color: var(--accent-green);
 }
 
-.endpoint-name.raft {
+.protocol-card.raft .protocol-name {
   color: var(--accent-orange);
 }
 
-.endpoint-name.quic {
+.protocol-card.quic .protocol-name {
   color: var(--accent-blue);
+}
+
+.protocol-card.mono .protocol-name {
+  color: var(--text-secondary);
 }
 
 .card-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .card-footnote {
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
+  display: none;
 }
 
 .card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .mono-addr {
@@ -1416,6 +1510,12 @@ onMounted(fetchCluster)
   box-shadow: none !important;
 }
 
+@media (max-width: 1400px) {
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 272px));
+  }
+}
+
 @media (max-width: 1180px) {
   .toolbar-row {
     gap: 8px;
@@ -1429,6 +1529,10 @@ onMounted(fetchCluster)
     width: 100%;
     margin-left: 0;
     justify-content: space-between;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1463,20 +1567,19 @@ onMounted(fetchCluster)
   }
 
   .card-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .node-card {
-    max-width: none;
+  .card-head {
+    align-items: flex-start;
   }
 
-  .compact-meta-row {
-    flex-direction: column;
+  .card-aside {
     gap: 4px;
   }
 
-  .compact-label {
-    flex-basis: auto;
+  .protocol-grid {
+    grid-template-columns: 1fr;
   }
 
   .svc-footer {
@@ -1498,6 +1601,12 @@ onMounted(fetchCluster)
     width: 100%;
     margin-left: 0;
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

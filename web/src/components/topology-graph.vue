@@ -54,26 +54,31 @@ function nodeTone(node: TopologyNode) {
 }
 
 function buildOption(): echarts.EChartsOption {
+  const upstreamCounts = new Map<string, number>()
+  const downstreamCounts = new Map<string, number>()
+
+  for (const edge of graphData.value.edges) {
+    upstreamCounts.set(edge.source, (upstreamCounts.get(edge.source) || 0) + 1)
+    downstreamCounts.set(edge.target, (downstreamCounts.get(edge.target) || 0) + 1)
+  }
+
   const nodes = graphData.value.nodes.map((node) => {
     const tone = nodeTone(node)
     const isSelected = props.selectedNode === node.id
-    const maxShow = 3
-    const shownInstances = node.instances.slice(0, maxShow)
-    const extraCount = node.instances.length - maxShow
-    const moreLabel = extraCount > 0 ? `\n{more|+${extraCount} more}` : ''
-
-    // Dynamic height: base 44 + 15 per IP line + 15 for "+N more"
-    const instLines = Math.min(node.instances.length, maxShow)
-    const nodeHeight = node.instance_count > 0
-      ? 44 + instLines * 15 + (extraCount > 0 ? 15 : 0)
-      : 50
+    const upstreamCount = upstreamCounts.get(node.id) || 0
+    const downstreamCount = downstreamCounts.get(node.id) || 0
+    const nodeWidth = Math.min(192, Math.max(152, node.name.length * 10 + 44))
+    const titleWidth = Math.max(92, nodeWidth - 50)
+    const metaWidth = nodeWidth - titleWidth
+    const summaryWidth = nodeWidth - 20
+    const summary = `Inst ${node.instance_count} · ↑${upstreamCount} ↓${downstreamCount}`
 
     return {
       id: node.id,
       name: node.name,
       value: node.name,
       symbol: 'rect',
-      symbolSize: [180, nodeHeight],
+      symbolSize: [nodeWidth, 68],
       draggable: false,
       itemStyle: {
         color: isSelected ? 'rgba(59, 130, 246, 0.08)' : '#ffffff',
@@ -85,23 +90,15 @@ function buildOption(): echarts.EChartsOption {
       },
       label: {
         show: true,
-        formatter: [
-          `{title|${node.name}}{meta|${node.healthy_count}/${node.instance_count}}`,
-          ...shownInstances.map((instance) => {
-             const statusIcon = instance.status === 'passing' ? '{upIcon|UP}' : '{downIcon|Down}'
-             return `{inst|${instance.host}:${instance.port}}${statusIcon}`
-          }),
-        ]
-          .filter(Boolean)
-          .join('\n') + moreLabel,
+        formatter: `{title|${node.name}}{meta|${node.healthy_count}/${node.instance_count}}\n{sub|${summary}}`,
         rich: {
           title: {
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: 700,
             fontFamily: 'Inter, system-ui, sans-serif',
             color: '#0f172a',
-            lineHeight: 20,
-            width: 110,
+            lineHeight: 18,
+            width: titleWidth,
             align: 'left',
           },
           meta: {
@@ -109,41 +106,16 @@ function buildOption(): echarts.EChartsOption {
             fontFamily: 'Inter, system-ui, sans-serif',
             fontWeight: 600,
             color: tone.accent,
-            lineHeight: 20,
-            width: 40,
+            lineHeight: 18,
+            width: metaWidth,
             align: 'right',
           },
-          inst: {
+          sub: {
             fontSize: 11,
             fontFamily: 'Inter, system-ui, sans-serif',
             color: '#64748b',
-            lineHeight: 18,
-            width: 120,
-            align: 'left',
-          },
-          upIcon: {
-            fontSize: 10,
-            fontWeight: 700,
-            color: '#10b981',
-            lineHeight: 18,
-            width: 30,
-            align: 'right',
-          },
-          downIcon: {
-            fontSize: 10,
-            fontWeight: 700,
-            color: '#ef4444',
-            lineHeight: 18,
-            width: 30,
-            align: 'right',
-          },
-          more: {
-            fontSize: 10,
-            fontFamily: 'Inter, system-ui, sans-serif',
-            fontWeight: 500,
-            color: '#3b82f6',
-            lineHeight: 15,
-            width: 150,
+            lineHeight: 16,
+            width: summaryWidth,
             align: 'left',
           },
         },
@@ -216,8 +188,8 @@ function buildOption(): echarts.EChartsOption {
         edgeSymbolSize: [0, 10],
         force: {
           layoutAnimation: false,
-          repulsion: 1000,
-          edgeLength: [160, 280],
+          repulsion: 880,
+          edgeLength: [140, 240],
           gravity: 0.05,
           friction: 0.6,
         },

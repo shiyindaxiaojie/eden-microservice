@@ -630,8 +630,8 @@ onBeforeUnmount(() => {
         </div>
 
         <aside class="topo-side">
-          <div v-if="selectedNodeDetail" class="side-inner">
-            <div class="side-header side-card">
+          <div v-if="selectedNodeDetail" class="side-inner side-card">
+            <div class="side-header">
               <div class="side-kicker-row">
                 <span class="side-meta">{{ text('当前服务', 'Current Service') }}</span>
                 <span
@@ -674,8 +674,8 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class="side-scroll">
-              <div class="side-group side-card">
+            <div class="side-scroll side-body">
+              <div class="side-group">
                 <div class="group-head">
                   <div class="group-title">
                     {{ text('实例列表', 'Instances') }}
@@ -697,7 +697,7 @@ onBeforeUnmount(() => {
                 <div v-else class="empty-text">{{ text('无可用实例', 'No instances') }}</div>
               </div>
 
-              <div class="side-group side-card">
+              <div class="side-group">
                 <div class="group-head">
                   <div class="group-title">
                     {{ text('上游依赖', 'Upstream') }}
@@ -730,7 +730,7 @@ onBeforeUnmount(() => {
                 <div v-else class="empty-text">{{ text('无', 'None') }}</div>
               </div>
 
-              <div class="side-group side-card">
+              <div class="side-group">
                 <div class="group-head">
                   <div class="group-title">
                     {{ text('下游依赖', 'Downstream') }}
@@ -1403,8 +1403,8 @@ onBeforeUnmount(() => {
 /* ===== Topology Panel ===== */
 .topo-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 388px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 344px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
   padding: 16px 24px 16px;
@@ -1428,7 +1428,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
 }
 
 .side-scroll {
@@ -1437,7 +1439,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   padding-right: 4px;
 }
 
@@ -1446,25 +1448,24 @@ onBeforeUnmount(() => {
 }
 
 .side-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(148, 163, 184, 0.28);
   border-radius: 999px;
 }
 
 .side-card {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
-    rgba(15, 23, 42, 0.68);
-  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: var(--bg-primary);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
 .side-header {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 20px;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .side-kicker-row {
@@ -1477,8 +1478,7 @@ onBeforeUnmount(() => {
 .side-meta {
   color: var(--text-muted);
   font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .side-health-badge {
@@ -1505,7 +1505,7 @@ onBeforeUnmount(() => {
 
 .side-title {
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
   display: flex;
@@ -1520,19 +1520,11 @@ onBeforeUnmount(() => {
 }
 
 .side-subtitle {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  display: none;
 }
 
 .side-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  display: none;
 }
 
 .summary-pill {
@@ -1590,8 +1582,21 @@ onBeforeUnmount(() => {
 .side-group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.side-body {
+  padding: 0 16px 16px;
+}
+
+.side-body .side-group:first-child {
+  border-top: 0;
+}
+
+.side-body .side-group:last-child {
+  padding-bottom: 0;
 }
 
 .group-head {
@@ -1617,8 +1622,8 @@ onBeforeUnmount(() => {
 }
 
 .count {
-  background: rgba(59, 130, 246, 0.12);
-  padding: 2px 7px;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 2px 6px;
   border-radius: 999px;
   font-size: 10px;
   color: var(--accent-blue);
@@ -1635,10 +1640,10 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.78);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .inst-copy {
@@ -1706,17 +1711,16 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.025);
-  border-radius: 14px;
+  padding: 12px 13px;
+  background: rgba(248, 250, 252, 0.82);
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: border-color 0.2s ease, background 0.2s ease;
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .dep-item:hover {
-  background: rgba(255, 255, 255, 0.045);
-  transform: translateX(2px);
+  background: rgba(248, 250, 252, 0.96);
   border-color: rgba(59, 130, 246, 0.2);
 }
 
@@ -1728,7 +1732,7 @@ onBeforeUnmount(() => {
 }
 
 .dep-name {
-  color: var(--accent-blue);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1757,7 +1761,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.88);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1771,8 +1775,8 @@ onBeforeUnmount(() => {
 .section-empty {
   padding: 16px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed rgba(255, 255, 255, 0.08);
+  background: rgba(248, 250, 252, 0.72);
+  border: 1px dashed rgba(148, 163, 184, 0.18);
 }
 
 .detail-link {
@@ -1783,10 +1787,10 @@ onBeforeUnmount(() => {
   color: var(--accent-blue);
   font-size: 12px;
   font-weight: 600;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.14);
+  padding: 4px 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   cursor: pointer;
   text-decoration: none;
   transition: opacity 0.2s;
@@ -1801,10 +1805,13 @@ onBeforeUnmount(() => {
   flex: 1;
   display: grid;
   place-items: center;
-  padding: 40px 0;
+  padding: 28px 18px;
   text-align: center;
   color: var(--text-muted);
   font-size: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.76);
 }
 
 /* Field items for toolbar */
