@@ -1,6 +1,7 @@
 package registrygrpc
 
 import (
+	"os"
 	"strings"
 
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/eden"
@@ -24,7 +25,7 @@ func NewFromEnv() (registry.Registry, error) {
 }
 
 func envOr(key, def string) string {
-	if value := strings.TrimSpace(strings.TrimSpace(getenv(key))); value != "" {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
 	return def
@@ -40,10 +41,4 @@ func splitAddrs(raw string) []string {
 		}
 	}
 	return addrs
-}
-
-func getenv(key string) string {
-	return strings.TrimSpace(strings.TrimSpace(strings.Clone(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace(strings.TrimSpace((func() string {
-		return ""
-	})()))))))))))))
 }

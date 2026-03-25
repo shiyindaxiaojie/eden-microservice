@@ -24,7 +24,7 @@ function nodeTone(node: TopologyNode) {
   if (node.instance_count === 0) {
     return {
       border: '#475569',
-      fill: 'rgba(71, 85, 105, 0.06)',
+      fill: '#ffffff',
       accent: '#64748b',
       text: '#94a3b8',
     }
@@ -32,7 +32,7 @@ function nodeTone(node: TopologyNode) {
   if (node.healthy_count === node.instance_count) {
     return {
       border: '#22c55e',
-      fill: 'rgba(34, 197, 94, 0.06)',
+      fill: '#ffffff',
       accent: '#10b981',
       text: '#0f172a',
     }
@@ -40,14 +40,14 @@ function nodeTone(node: TopologyNode) {
   if (node.healthy_count > 0) {
     return {
       border: '#f59e0b',
-      fill: 'rgba(245, 158, 11, 0.06)',
+      fill: '#ffffff',
       accent: '#d97706',
       text: '#0f172a',
     }
   }
   return {
     border: '#ef4444',
-    fill: 'rgba(239, 68, 68, 0.06)',
+    fill: '#ffffff',
     accent: '#dc2626',
     text: '#0f172a',
   }
@@ -81,12 +81,12 @@ function buildOption(): echarts.EChartsOption {
       symbolSize: [nodeWidth, 68],
       draggable: false,
       itemStyle: {
-        color: isSelected ? 'rgba(59, 130, 246, 0.08)' : '#ffffff',
+        color: isSelected ? 'rgba(59, 130, 246, 0.08)' : tone.fill,
         borderColor: isSelected ? '#3b82f6' : tone.border,
-        borderWidth: isSelected ? 2 : 1,
-        shadowColor: isSelected ? 'rgba(59, 130, 246, 0.18)' : 'rgba(0, 0, 0, 0.06)',
-        shadowBlur: isSelected ? 20 : 8,
-        shadowOffsetY: 2,
+        borderWidth: isSelected ? 2 : 1.25,
+        shadowColor: isSelected ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
+        shadowBlur: isSelected ? 8 : 0,
+        shadowOffsetY: 0,
       },
       label: {
         show: true,
@@ -127,7 +127,7 @@ function buildOption(): echarts.EChartsOption {
     source: edge.source,
     target: edge.target,
     lineStyle: {
-      color: '#cbd5e1',
+      color: '#d7e0ee',
       curveness: 0.2,
       width: 1,
     },
@@ -280,9 +280,9 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   background:
-    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.08) 1px, transparent 0),
-    linear-gradient(180deg, #fafbfd 0%, #f1f5f9 100%);
-  background-size: 20px 20px, auto;
+    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.12) 1px, transparent 0),
+    #ffffff;
+  background-size: 20px 20px;
   border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 10px;
   overflow: hidden;
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.15);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
 }
 
 .board-toolbar button {

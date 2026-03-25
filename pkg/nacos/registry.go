@@ -1,7 +1,10 @@
 package nacos
 
 import (
-	"fmt"
+	"net"
+	"strconv"
+	"strings"
+
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/clients/naming_client"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/common/constant"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/model"
@@ -18,10 +21,33 @@ func NewRegistry(cfg *registry.Config) (registry.Registry, error) {
 	// Map registry.Config to Nacos ServerConfig
 	serverConfigs := make([]constant.ServerConfig, 0, len(cfg.Addresses))
 	for _, addr := range cfg.Addresses {
-		// Basic parsing
 		host := "127.0.0.1"
 		port := 8848
-		fmt.Sscanf(addr, "%s:%d", &host, &port)
+
+		addr = strings.TrimSpace(addr)
+		if addr != "" {
+			if strings.Contains(addr, "://") {
+				addr = strings.TrimPrefix(addr, "http://")
+				addr = strings.TrimPrefix(addr, "https://")
+			}
+
+			if h, p, err := net.SplitHostPort(addr); err == nil {
+				host = h
+				if value, convErr := strconv.Atoi(p); convErr == nil {
+					port = value
+				}
+			} else if h, p, found := strings.Cut(addr, ":"); found {
+				if h != "" {
+					host = h
+				}
+				if value, convErr := strconv.Atoi(p); convErr == nil {
+					port = value
+				}
+			} else if addr != "" {
+				host = addr
+			}
+		}
+
 		serverConfigs = append(serverConfigs, constant.ServerConfig{
 			IpAddr: host,
 			Port:   uint64(port),

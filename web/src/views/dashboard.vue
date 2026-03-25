@@ -18,8 +18,8 @@ interface LogFileOption {
 interface ParsedLogLine {
   raw: string
   parsed: boolean
-  timestamp?: string
-  level?: string
+  timestamp: string
+  level: string
   levelClass: string
   thread?: string
   scope?: string
@@ -334,11 +334,13 @@ function parseLogLine(line: string): ParsedLogLine {
     return {
       raw: line,
       parsed: false,
+      timestamp: '',
+      level: '',
       levelClass: 'plain',
     }
   }
 
-  const [, timestamp, level, thread, scope, message] = match
+  const [, timestamp = '', level = '', thread, scope, message] = match
   return {
     raw: line,
     parsed: true,

@@ -1455,8 +1455,8 @@ onBeforeUnmount(() => {
 .side-card {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px;
-  background: var(--bg-primary);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .side-header {
@@ -1641,7 +1641,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  background: rgba(248, 250, 252, 0.78);
+  background: #ffffff;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.14);
 }
@@ -1712,7 +1712,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 13px;
-  background: rgba(248, 250, 252, 0.82);
+  background: #ffffff;
   border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
@@ -1720,7 +1720,7 @@ onBeforeUnmount(() => {
 }
 
 .dep-item:hover {
-  background: rgba(248, 250, 252, 0.96);
+  background: #f8fbff;
   border-color: rgba(59, 130, 246, 0.2);
 }
 
@@ -1775,7 +1775,7 @@ onBeforeUnmount(() => {
 .section-empty {
   padding: 16px 14px;
   border-radius: 12px;
-  background: rgba(248, 250, 252, 0.72);
+  background: #ffffff;
   border: 1px dashed rgba(148, 163, 184, 0.18);
 }
 
@@ -1811,7 +1811,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   border: 1px dashed rgba(148, 163, 184, 0.18);
   border-radius: 14px;
-  background: rgba(248, 250, 252, 0.76);
+  background: #ffffff;
 }
 
 /* Field items for toolbar */
