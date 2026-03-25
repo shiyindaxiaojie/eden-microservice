@@ -753,6 +753,314 @@ func (x *WatchResponse) GetInstances() []*ServiceInstance {
 	return nil
 }
 
+type GetMembersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMembersRequest) Reset() {
+	*x = GetMembersRequest{}
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMembersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMembersRequest) ProtoMessage() {}
+
+func (x *GetMembersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMembersRequest.ProtoReflect.Descriptor instead.
+func (*GetMembersRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_registry_v1_registry_proto_rawDescGZIP(), []int{13}
+}
+
+type ClusterMember struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Role          string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	IsLocal       bool                   `protobuf:"varint,5,opt,name=is_local,json=isLocal,proto3" json:"is_local,omitempty"`
+	HttpAddr      string                 `protobuf:"bytes,6,opt,name=http_addr,json=httpAddr,proto3" json:"http_addr,omitempty"`
+	GrpcAddr      string                 `protobuf:"bytes,7,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
+	QuicAddr      string                 `protobuf:"bytes,8,opt,name=quic_addr,json=quicAddr,proto3" json:"quic_addr,omitempty"`
+	RaftAddr      string                 `protobuf:"bytes,9,opt,name=raft_addr,json=raftAddr,proto3" json:"raft_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClusterMember) Reset() {
+	*x = ClusterMember{}
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClusterMember) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterMember) ProtoMessage() {}
+
+func (x *ClusterMember) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterMember.ProtoReflect.Descriptor instead.
+func (*ClusterMember) Descriptor() ([]byte, []int) {
+	return file_api_proto_registry_v1_registry_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ClusterMember) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetIsLocal() bool {
+	if x != nil {
+		return x.IsLocal
+	}
+	return false
+}
+
+func (x *ClusterMember) GetHttpAddr() string {
+	if x != nil {
+		return x.HttpAddr
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetGrpcAddr() string {
+	if x != nil {
+		return x.GrpcAddr
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetQuicAddr() string {
+	if x != nil {
+		return x.QuicAddr
+	}
+	return ""
+}
+
+func (x *ClusterMember) GetRaftAddr() string {
+	if x != nil {
+		return x.RaftAddr
+	}
+	return ""
+}
+
+type GetMembersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Members       []*ClusterMember       `protobuf:"bytes,1,rep,name=members,proto3" json:"members,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMembersResponse) Reset() {
+	*x = GetMembersResponse{}
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMembersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMembersResponse) ProtoMessage() {}
+
+func (x *GetMembersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMembersResponse.ProtoReflect.Descriptor instead.
+func (*GetMembersResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_registry_v1_registry_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetMembersResponse) GetMembers() []*ClusterMember {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+type ReportTopologyRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Namespace       string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	ConsumerService string                 `protobuf:"bytes,2,opt,name=consumer_service,json=consumerService,proto3" json:"consumer_service,omitempty"`
+	Providers       []string               `protobuf:"bytes,3,rep,name=providers,proto3" json:"providers,omitempty"`
+	Checksum        string                 `protobuf:"bytes,4,opt,name=checksum,proto3" json:"checksum,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ReportTopologyRequest) Reset() {
+	*x = ReportTopologyRequest{}
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportTopologyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportTopologyRequest) ProtoMessage() {}
+
+func (x *ReportTopologyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportTopologyRequest.ProtoReflect.Descriptor instead.
+func (*ReportTopologyRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_registry_v1_registry_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ReportTopologyRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *ReportTopologyRequest) GetConsumerService() string {
+	if x != nil {
+		return x.ConsumerService
+	}
+	return ""
+}
+
+func (x *ReportTopologyRequest) GetProviders() []string {
+	if x != nil {
+		return x.Providers
+	}
+	return nil
+}
+
+func (x *ReportTopologyRequest) GetChecksum() string {
+	if x != nil {
+		return x.Checksum
+	}
+	return ""
+}
+
+type ReportTopologyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Changed       bool                   `protobuf:"varint,2,opt,name=changed,proto3" json:"changed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportTopologyResponse) Reset() {
+	*x = ReportTopologyResponse{}
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportTopologyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportTopologyResponse) ProtoMessage() {}
+
+func (x *ReportTopologyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_registry_v1_registry_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportTopologyResponse.ProtoReflect.Descriptor instead.
+func (*ReportTopologyResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_registry_v1_registry_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ReportTopologyResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ReportTopologyResponse) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
 var File_api_proto_registry_v1_registry_proto protoreflect.FileDescriptor
 
 const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
@@ -813,7 +1121,28 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"h\n" +
 	"\rWatchResponse\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12?\n" +
-	"\tinstances\x18\x02 \x03(\v2!.eden.registry.v1.ServiceInstanceR\tinstances2\xa0\x04\n" +
+	"\tinstances\x18\x02 \x03(\v2!.eden.registry.v1.ServiceInstanceR\tinstances\"\x13\n" +
+	"\x11GetMembersRequest\"\xf4\x01\n" +
+	"\rClusterMember\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x12\x19\n" +
+	"\bis_local\x18\x05 \x01(\bR\aisLocal\x12\x1b\n" +
+	"\thttp_addr\x18\x06 \x01(\tR\bhttpAddr\x12\x1b\n" +
+	"\tgrpc_addr\x18\a \x01(\tR\bgrpcAddr\x12\x1b\n" +
+	"\tquic_addr\x18\b \x01(\tR\bquicAddr\x12\x1b\n" +
+	"\traft_addr\x18\t \x01(\tR\braftAddr\"O\n" +
+	"\x12GetMembersResponse\x129\n" +
+	"\amembers\x18\x01 \x03(\v2\x1f.eden.registry.v1.ClusterMemberR\amembers\"\x9a\x01\n" +
+	"\x15ReportTopologyRequest\x12\x1c\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12)\n" +
+	"\x10consumer_service\x18\x02 \x01(\tR\x0fconsumerService\x12\x1c\n" +
+	"\tproviders\x18\x03 \x03(\tR\tproviders\x12\x1a\n" +
+	"\bchecksum\x18\x04 \x01(\tR\bchecksum\"L\n" +
+	"\x16ReportTopologyResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\achanged\x18\x02 \x01(\bR\achanged2\xde\x05\n" +
 	"\x0fRegistryService\x12Q\n" +
 	"\bRegister\x12!.eden.registry.v1.RegisterRequest\x1a\".eden.registry.v1.RegisterResponse\x12W\n" +
 	"\n" +
@@ -821,7 +1150,10 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\x11SetInstanceStatus\x12*.eden.registry.v1.SetInstanceStatusRequest\x1a+.eden.registry.v1.SetInstanceStatusResponse\x12T\n" +
 	"\tHeartbeat\x12\".eden.registry.v1.HeartbeatRequest\x1a#.eden.registry.v1.HeartbeatResponse\x12Q\n" +
 	"\bDiscover\x12!.eden.registry.v1.DiscoverRequest\x1a\".eden.registry.v1.DiscoverResponse\x12J\n" +
-	"\x05Watch\x12\x1e.eden.registry.v1.WatchRequest\x1a\x1f.eden.registry.v1.WatchResponse0\x01BNZLgithub.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1;registryv1b\x06proto3"
+	"\x05Watch\x12\x1e.eden.registry.v1.WatchRequest\x1a\x1f.eden.registry.v1.WatchResponse0\x01\x12W\n" +
+	"\n" +
+	"GetMembers\x12#.eden.registry.v1.GetMembersRequest\x1a$.eden.registry.v1.GetMembersResponse\x12c\n" +
+	"\x0eReportTopology\x12'.eden.registry.v1.ReportTopologyRequest\x1a(.eden.registry.v1.ReportTopologyResponseBNZLgithub.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1;registryv1b\x06proto3"
 
 var (
 	file_api_proto_registry_v1_registry_proto_rawDescOnce sync.Once
@@ -835,7 +1167,7 @@ func file_api_proto_registry_v1_registry_proto_rawDescGZIP() []byte {
 	return file_api_proto_registry_v1_registry_proto_rawDescData
 }
 
-var file_api_proto_registry_v1_registry_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_api_proto_registry_v1_registry_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_api_proto_registry_v1_registry_proto_goTypes = []any{
 	(*ServiceInstance)(nil),           // 0: eden.registry.v1.ServiceInstance
 	(*RegisterRequest)(nil),           // 1: eden.registry.v1.RegisterRequest
@@ -850,30 +1182,40 @@ var file_api_proto_registry_v1_registry_proto_goTypes = []any{
 	(*DiscoverResponse)(nil),          // 10: eden.registry.v1.DiscoverResponse
 	(*WatchRequest)(nil),              // 11: eden.registry.v1.WatchRequest
 	(*WatchResponse)(nil),             // 12: eden.registry.v1.WatchResponse
-	nil,                               // 13: eden.registry.v1.ServiceInstance.MetadataEntry
+	(*GetMembersRequest)(nil),         // 13: eden.registry.v1.GetMembersRequest
+	(*ClusterMember)(nil),             // 14: eden.registry.v1.ClusterMember
+	(*GetMembersResponse)(nil),        // 15: eden.registry.v1.GetMembersResponse
+	(*ReportTopologyRequest)(nil),     // 16: eden.registry.v1.ReportTopologyRequest
+	(*ReportTopologyResponse)(nil),    // 17: eden.registry.v1.ReportTopologyResponse
+	nil,                               // 18: eden.registry.v1.ServiceInstance.MetadataEntry
 }
 var file_api_proto_registry_v1_registry_proto_depIdxs = []int32{
-	13, // 0: eden.registry.v1.ServiceInstance.metadata:type_name -> eden.registry.v1.ServiceInstance.MetadataEntry
+	18, // 0: eden.registry.v1.ServiceInstance.metadata:type_name -> eden.registry.v1.ServiceInstance.MetadataEntry
 	0,  // 1: eden.registry.v1.RegisterRequest.instance:type_name -> eden.registry.v1.ServiceInstance
 	0,  // 2: eden.registry.v1.DiscoverResponse.instances:type_name -> eden.registry.v1.ServiceInstance
 	0,  // 3: eden.registry.v1.WatchResponse.instances:type_name -> eden.registry.v1.ServiceInstance
-	1,  // 4: eden.registry.v1.RegistryService.Register:input_type -> eden.registry.v1.RegisterRequest
-	3,  // 5: eden.registry.v1.RegistryService.Deregister:input_type -> eden.registry.v1.DeregisterRequest
-	5,  // 6: eden.registry.v1.RegistryService.SetInstanceStatus:input_type -> eden.registry.v1.SetInstanceStatusRequest
-	7,  // 7: eden.registry.v1.RegistryService.Heartbeat:input_type -> eden.registry.v1.HeartbeatRequest
-	9,  // 8: eden.registry.v1.RegistryService.Discover:input_type -> eden.registry.v1.DiscoverRequest
-	11, // 9: eden.registry.v1.RegistryService.Watch:input_type -> eden.registry.v1.WatchRequest
-	2,  // 10: eden.registry.v1.RegistryService.Register:output_type -> eden.registry.v1.RegisterResponse
-	4,  // 11: eden.registry.v1.RegistryService.Deregister:output_type -> eden.registry.v1.DeregisterResponse
-	6,  // 12: eden.registry.v1.RegistryService.SetInstanceStatus:output_type -> eden.registry.v1.SetInstanceStatusResponse
-	8,  // 13: eden.registry.v1.RegistryService.Heartbeat:output_type -> eden.registry.v1.HeartbeatResponse
-	10, // 14: eden.registry.v1.RegistryService.Discover:output_type -> eden.registry.v1.DiscoverResponse
-	12, // 15: eden.registry.v1.RegistryService.Watch:output_type -> eden.registry.v1.WatchResponse
-	10, // [10:16] is the sub-list for method output_type
-	4,  // [4:10] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	14, // 4: eden.registry.v1.GetMembersResponse.members:type_name -> eden.registry.v1.ClusterMember
+	1,  // 5: eden.registry.v1.RegistryService.Register:input_type -> eden.registry.v1.RegisterRequest
+	3,  // 6: eden.registry.v1.RegistryService.Deregister:input_type -> eden.registry.v1.DeregisterRequest
+	5,  // 7: eden.registry.v1.RegistryService.SetInstanceStatus:input_type -> eden.registry.v1.SetInstanceStatusRequest
+	7,  // 8: eden.registry.v1.RegistryService.Heartbeat:input_type -> eden.registry.v1.HeartbeatRequest
+	9,  // 9: eden.registry.v1.RegistryService.Discover:input_type -> eden.registry.v1.DiscoverRequest
+	11, // 10: eden.registry.v1.RegistryService.Watch:input_type -> eden.registry.v1.WatchRequest
+	13, // 11: eden.registry.v1.RegistryService.GetMembers:input_type -> eden.registry.v1.GetMembersRequest
+	16, // 12: eden.registry.v1.RegistryService.ReportTopology:input_type -> eden.registry.v1.ReportTopologyRequest
+	2,  // 13: eden.registry.v1.RegistryService.Register:output_type -> eden.registry.v1.RegisterResponse
+	4,  // 14: eden.registry.v1.RegistryService.Deregister:output_type -> eden.registry.v1.DeregisterResponse
+	6,  // 15: eden.registry.v1.RegistryService.SetInstanceStatus:output_type -> eden.registry.v1.SetInstanceStatusResponse
+	8,  // 16: eden.registry.v1.RegistryService.Heartbeat:output_type -> eden.registry.v1.HeartbeatResponse
+	10, // 17: eden.registry.v1.RegistryService.Discover:output_type -> eden.registry.v1.DiscoverResponse
+	12, // 18: eden.registry.v1.RegistryService.Watch:output_type -> eden.registry.v1.WatchResponse
+	15, // 19: eden.registry.v1.RegistryService.GetMembers:output_type -> eden.registry.v1.GetMembersResponse
+	17, // 20: eden.registry.v1.RegistryService.ReportTopology:output_type -> eden.registry.v1.ReportTopologyResponse
+	13, // [13:21] is the sub-list for method output_type
+	5,  // [5:13] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_registry_v1_registry_proto_init() }
@@ -887,7 +1229,7 @@ func file_api_proto_registry_v1_registry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_registry_v1_registry_proto_rawDesc), len(file_api_proto_registry_v1_registry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

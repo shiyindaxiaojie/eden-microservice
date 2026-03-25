@@ -12,11 +12,17 @@ import (
 func NewRegistry(cfg *registry.Config) (registry.Registry, error) {
 	switch cfg.Type {
 	case "eden":
+		transport := cfg.Transport
+		if transport == "" {
+			transport = "grpc"
+		}
 		return eden.NewWithConfig(&eden.Config{
-			Addresses:  cfg.Addresses,
-			APIKey:     cfg.APIKey,
-			Datacenter: cfg.Datacenter,
-			Transport:  "grpc", // default to grpc for eden
+			Addresses:     cfg.Addresses,
+			APIKey:        cfg.APIKey,
+			Datacenter:    cfg.Datacenter,
+			Namespace:     cfg.Namespace,
+			Transport:     transport,
+			DiscoveryMode: cfg.DiscoveryMode,
 		})
 	case "consul":
 		return consul.NewRegistry(cfg)

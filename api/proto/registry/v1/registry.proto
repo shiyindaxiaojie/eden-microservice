@@ -18,6 +18,10 @@ service RegistryService {
   rpc Discover(DiscoverRequest) returns (DiscoverResponse);
   // Watch for changes in service instance list (server-side streaming).
   rpc Watch(WatchRequest) returns (stream WatchResponse);
+  // Get cluster members and their transport endpoints for client-side discovery.
+  rpc GetMembers(GetMembersRequest) returns (GetMembersResponse);
+  // Report consumer-provider topology.
+  rpc ReportTopology(ReportTopologyRequest) returns (ReportTopologyResponse);
 }
 
 message ServiceInstance {
@@ -90,4 +94,34 @@ message WatchRequest {
 message WatchResponse {
   string action = 1; // "update", "offline", "online"
   repeated ServiceInstance instances = 2;
+}
+
+message GetMembersRequest {}
+
+message ClusterMember {
+  string id = 1;
+  string address = 2;
+  string status = 3;
+  string role = 4;
+  bool is_local = 5;
+  string http_addr = 6;
+  string grpc_addr = 7;
+  string quic_addr = 8;
+  string raft_addr = 9;
+}
+
+message GetMembersResponse {
+  repeated ClusterMember members = 1;
+}
+
+message ReportTopologyRequest {
+  string namespace = 1;
+  string consumer_service = 2;
+  repeated string providers = 3;
+  string checksum = 4;
+}
+
+message ReportTopologyResponse {
+  bool success = 1;
+  bool changed = 2;
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Connection, Delete, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   addClusterMember,
   getClusterMembers,
@@ -216,6 +216,21 @@ function getMemberPrimaryHost(member: ClusterMember) {
   return locale.value === 'zh' ? '未配置' : 'Not configured'
 }
 
+function getMemberDisplayAddress(member: ClusterMember) {
+  const addresses = [member.address, member.http_addr, member.grpc_addr, member.raft_addr, member.quic_addr].filter(
+    (item): item is string => !!item,
+  )
+
+  for (const address of addresses) {
+    const normalized = stripProtocolPrefix(address)
+    if (normalized) {
+      return normalized
+    }
+  }
+
+  return getMemberPrimaryHost(member)
+}
+
 function getMemberPortItems(member: ClusterMember): MemberPortItem[] {
   const items = [
     member.http_addr ? { key: 'http', label: 'HTTP', ...splitEndpoint(member.http_addr), className: 'http' } : null,
@@ -411,35 +426,39 @@ onMounted(fetchCluster)
             v-for="member in pagedMembers"
             :key="member.id"
             class="node-card"
+            :title="getMemberDisplayAddress(member)"
             :class="{
               'is-local': member.is_local,
+              'is-offline': member.status !== 'Online',
             }"
           >
             <div class="card-accent"></div>
 
             <div class="card-head">
-              <div class="card-copy">
-                <div class="card-title-row">
-                  <strong class="card-title">{{ member.id }}</strong>
-                  <span v-if="member.is_local" class="meta-chip local">{{ t.cluster.currentNode }}</span>
+              <div class="card-identity">
+                <div class="card-symbol">
+                  <el-icon><Connection /></el-icon>
                 </div>
-                <p class="card-subtitle">{{ member.address || (locale === 'zh' ? '未配置地址' : 'No address') }}</p>
-              </div>
-
-              <div class="card-aside">
-                <span class="meta-chip" :class="member.status === 'Online' ? 'online' : 'offline'">
-                  <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
-                  {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
-                </span>
-                <span class="meta-chip role" :class="roleChipClass(member.role)">{{ getRoleName(member.role) }}</span>
+                <div class="card-copy">
+                  <div class="card-title-row">
+                    <strong class="card-title">{{ member.id }}</strong>
+                    <span v-if="member.is_local" class="card-current-mark">{{ locale === 'zh' ? '本机节点' : 'Local node' }}</span>
+                  </div>
+                  <p class="card-hostline">{{ getMemberPrimaryHost(member) }}</p>
+                </div>
               </div>
             </div>
 
             <div class="card-body">
-              <div class="node-ip-row">
-                <span class="node-ip-label">{{ locale === 'zh' ? '节点 IP' : 'Node IP' }}</span>
+              <div class="compact-meta-row">
                 <span class="compact-label">{{ locale === 'zh' ? '状态' : 'Status' }}</span>
-                <span class="node-ip-value" :title="getMemberPrimaryHost(member)">{{ getMemberPrimaryHost(member) }}</span>
+                <div class="node-meta-pills">
+                  <span class="meta-chip" :class="member.status === 'Online' ? 'online' : 'offline'">
+                    <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
+                    {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
+                  </span>
+                  <span class="meta-chip role" :class="roleChipClass(member.role)">{{ getRoleName(member.role) }}</span>
+                </div>
               </div>
 
               <div class="protocol-grid">
@@ -1059,6 +1078,1423 @@ onMounted(fetchCluster)
 </style>
 
 <style scoped>
+.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(336px, 360px));
+  justify-content: start;
+  gap: 16px;
+}
+
+.node-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.node-card:hover {
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+.node-card.is-local:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
+}
+
+.node-card.is-offline {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.card-accent {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 84px;
+  height: 3px;
+  background: rgba(59, 130, 246, 0.35);
+  border-radius: 0 0 999px 0;
+}
+
+.node-card.is-local .card-accent {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+.node-card.is-offline .card-accent {
+  background: rgba(148, 163, 184, 0.34);
+}
+
+.card-head {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-bottom: 0;
+}
+
+.card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card-symbol {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-size: 18px;
+}
+
+.node-card.is-local .card-symbol {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.14);
+  color: var(--accent-green);
+}
+
+.node-card.is-offline .card-symbol {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.14);
+  color: var(--text-muted);
+}
+
+.card-copy {
+  min-width: 0;
+  flex: 1;
+  padding-top: 0;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.card-title {
+  display: block;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+.card-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.card-aside {
+  display: none;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.meta-chip.local {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+}
+
+.meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.18);
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--accent-red);
+}
+
+.meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+}
+
+.meta-chip.role.candidate {
+  border-color: rgba(251, 146, 60, 0.18);
+  background: rgba(251, 146, 60, 0.1);
+  color: var(--accent-orange);
+}
+
+.meta-chip.role.local {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.role.neutral {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+}
+
+.meta-chip .status-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compact-meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.compact-label {
+  flex: 0 0 44px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.compact-value {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.mono-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.node-meta-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.node-ip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.node-ip-row > .compact-label {
+  display: none;
+}
+
+.node-ip-label {
+  flex: 0 0 44px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.node-ip-value {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.protocol-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: none;
+}
+
+.protocol-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.protocol-port {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.card-footnote {
+  display: none;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style scoped>
+.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(336px, 360px));
+  justify-content: start;
+  gap: 16px;
+}
+
+.node-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.node-card:hover {
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+.node-card.is-local:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
+}
+
+.node-card.is-offline {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.card-accent {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 84px;
+  height: 3px;
+  background: rgba(59, 130, 246, 0.35);
+  border-radius: 0 0 999px 0;
+}
+
+.node-card.is-local .card-accent {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+.node-card.is-offline .card-accent {
+  background: rgba(148, 163, 184, 0.34);
+}
+
+.card-head {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-bottom: 0;
+}
+
+.card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card-symbol {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-size: 18px;
+}
+
+.node-card.is-local .card-symbol {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.14);
+  color: var(--accent-green);
+}
+
+.node-card.is-offline .card-symbol {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.14);
+  color: var(--text-muted);
+}
+
+.card-copy {
+  min-width: 0;
+  flex: 1;
+  padding-top: 0;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.card-title {
+  display: block;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+.card-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.card-aside {
+  display: none;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.meta-chip.local {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+}
+
+.meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.18);
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--accent-red);
+}
+
+.meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+}
+
+.meta-chip.role.candidate {
+  border-color: rgba(251, 146, 60, 0.18);
+  background: rgba(251, 146, 60, 0.1);
+  color: var(--accent-orange);
+}
+
+.meta-chip.role.local {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.meta-chip.role.neutral {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+}
+
+.meta-chip .status-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compact-meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.compact-label {
+  flex: 0 0 44px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.compact-value {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.mono-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.node-meta-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.node-ip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.node-ip-row > .compact-label {
+  display: none;
+}
+
+.node-ip-label {
+  flex: 0 0 44px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.node-ip-value {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.protocol-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: none;
+}
+
+.protocol-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.protocol-port {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.card-footnote {
+  display: none;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style scoped>
+.card-grid.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(336px, 360px));
+  justify-content: start;
+  gap: 16px;
+}
+
+.node-card.node-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.node-card.node-card:hover {
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.node-card.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+.node-card.node-card.is-local:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
+}
+
+.node-card.node-card.is-offline {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.node-card.node-card .card-accent {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 84px;
+  height: 3px;
+  background: rgba(59, 130, 246, 0.35);
+  border-radius: 0 0 999px 0;
+}
+
+.node-card.node-card.is-local .card-accent {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+.node-card.node-card.is-offline .card-accent {
+  background: rgba(148, 163, 184, 0.34);
+}
+
+.node-card.node-card .card-head {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-bottom: 0;
+  padding-right: 148px;
+}
+
+.node-card.node-card .card-copy {
+  min-width: 0;
+  flex: 1;
+  padding-top: 0;
+}
+
+.node-card.node-card .card-current-mark {
+  position: relative;
+  padding-left: 10px;
+  color: var(--accent-green);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.node-card.node-card .card-current-mark::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.node-card.node-card .card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.node-card.node-card .card-title {
+  display: block;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+.node-card.node-card .card-subtitle {
+  display: none;
+}
+
+.node-card.node-card .card-aside {
+  display: none;
+}
+
+.node-card.node-card .card-hostline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.node-card.node-card .meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.node-card.node-card .meta-chip .status-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.node-card.node-card .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.node-card.node-card .compact-meta-row:first-child {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+}
+
+.node-card.node-card .compact-meta-row:first-child .compact-label {
+  display: none;
+}
+
+.node-card.node-card .compact-meta-row:first-child .node-meta-pills {
+  justify-content: flex-end;
+}
+
+.node-card.node-card .node-ip-row {
+  display: none;
+}
+
+.node-card.node-card .node-ip-row > .compact-label {
+  display: none;
+}
+
+.node-card.node-card .node-ip-label {
+  flex: 0 0 44px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.node-card.node-card .node-ip-value {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.node-card.node-card .protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.node-card.node-card .protocol-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: none;
+}
+
+.node-card.node-card .protocol-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.node-card.node-card .protocol-port {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.node-card.node-card .card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.node-card.node-card .card-footnote {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .card-grid.card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid.card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .node-card.node-card .card-head {
+    padding-right: 0;
+  }
+
+  .node-card.node-card .compact-meta-row:first-child {
+    position: static;
+  }
+
+  .node-card.node-card .compact-meta-row:first-child .compact-label {
+    display: block;
+  }
+
+  .node-card.node-card .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid.card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(286px, 320px));
+  gap: 12px;
+  padding: 2px 0 10px;
+}
+
+.node-card {
+  gap: 10px;
+  padding: 14px 15px 12px;
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: none;
+}
+
+.node-card:hover {
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.03);
+}
+
+.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.24);
+  box-shadow: none;
+}
+
+.card-accent {
+  width: 88px;
+  height: 4px;
+  background: rgba(59, 130, 246, 0.38);
+}
+
+.node-card.is-local .card-accent {
+  background: rgba(16, 185, 129, 0.42);
+}
+
+.card-head {
+  margin-bottom: 0;
+  align-items: flex-start;
+}
+
+.card-copy {
+  padding-top: 4px;
+}
+
+.card-title-row {
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-family: 'Avenir Next', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+.card-aside {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.meta-chip {
+  padding: 5px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.1);
+  font-size: 11px;
+}
+
+.meta-chip.local {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.meta-chip.role.candidate {
+  border-color: rgba(251, 146, 60, 0.22);
+  background: rgba(251, 146, 60, 0.12);
+}
+
+.meta-chip.role.local {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.meta-chip.role.neutral {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.meta-chip .status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.card-body {
+  flex: initial;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.node-ip-row {
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 13px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.node-ip-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.node-ip-value {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.protocol-grid {
+  gap: 8px;
+}
+
+.protocol-card {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: none;
+}
+
+.protocol-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.protocol-port {
+  font-size: 12px;
+}
+
+.card-footer {
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+  margin-top: 0;
+  border-top: 0;
+  min-height: 0;
+}
+
+.card-footnote {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .card-head {
+    gap: 8px;
+  }
+
+  .card-aside {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style scoped>
+.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(286px, 320px));
+  gap: 14px;
+  padding: 2px 0 10px;
+}
+
+.node-card {
+  gap: 10px;
+  padding: 14px 15px 12px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 36%),
+    radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--bg-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.node-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.26);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.1);
+}
+
+.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.24);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.09);
+}
+
+.card-accent {
+  width: 88px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.22));
+}
+
+.node-card.is-local .card-accent {
+  background: linear-gradient(90deg, var(--accent-green), rgba(16, 185, 129, 0.22));
+}
+
+.card-head {
+  margin-bottom: 0;
+}
+
+.card-copy {
+  padding-top: 4px;
+}
+
+.card-title-row {
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-family: 'Avenir Next', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+.card-aside {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.meta-chip {
+  padding: 5px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+}
+
+.meta-chip.local {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.meta-chip.role.candidate {
+  border-color: rgba(251, 146, 60, 0.22);
+  background: rgba(251, 146, 60, 0.12);
+}
+
+.meta-chip.role.local {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.meta-chip.role.neutral {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.meta-chip .status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.card-body {
+  flex: initial;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.node-ip-row {
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.node-ip-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.node-ip-value {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.protocol-grid {
+  gap: 8px;
+}
+
+.protocol-card {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.protocol-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.protocol-port {
+  font-size: 12px;
+}
+
+.card-footer {
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+  margin-top: 0;
+  border-top: 0;
+  min-height: 0;
+}
+
+.card-footnote {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .card-head {
+    gap: 8px;
+  }
+
+  .card-aside {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style scoped>
 .node-card {
   border-radius: 16px;
   background: var(--bg-secondary);
@@ -1606,6 +3042,216 @@ onMounted(fetchCluster)
 
 @media (max-width: 640px) {
   .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style scoped>
+.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(286px, 320px));
+  gap: 14px;
+  padding: 2px 0 10px;
+}
+
+.node-card {
+  gap: 10px;
+  padding: 14px 15px 12px;
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: none;
+}
+
+.node-card:hover {
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.03);
+}
+
+.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.24);
+  box-shadow: none;
+}
+
+.card-accent {
+  width: 88px;
+  height: 4px;
+  background: rgba(59, 130, 246, 0.38);
+}
+
+.node-card.is-local .card-accent {
+  background: rgba(16, 185, 129, 0.42);
+}
+
+.card-head {
+  margin-bottom: 0;
+  align-items: flex-start;
+}
+
+.card-copy {
+  padding-top: 4px;
+}
+
+.card-title-row {
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-family: 'Avenir Next', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+.card-aside {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.meta-chip {
+  padding: 5px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.1);
+  font-size: 11px;
+}
+
+.meta-chip.local {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.meta-chip.role.candidate {
+  border-color: rgba(251, 146, 60, 0.22);
+  background: rgba(251, 146, 60, 0.12);
+}
+
+.meta-chip.role.local {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.meta-chip.role.neutral {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.meta-chip .status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.card-body {
+  flex: initial;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.node-ip-row {
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 13px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.node-ip-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.node-ip-value {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.protocol-grid {
+  gap: 8px;
+}
+
+.protocol-card {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: none;
+}
+
+.protocol-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.protocol-port {
+  font-size: 12px;
+}
+
+.card-footer {
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+  margin-top: 0;
+  border-top: 0;
+  min-height: 0;
+}
+
+.card-footnote {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .card-head {
+    gap: 8px;
+  }
+
+  .card-aside {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-grid {
     grid-template-columns: 1fr;
   }
 }

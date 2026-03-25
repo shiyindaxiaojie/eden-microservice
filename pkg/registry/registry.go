@@ -37,9 +37,11 @@ type Registry interface {
 
 // Config is the common configuration for all registry implementations.
 type Config struct {
-	Type       string   `yaml:"type" json:"type"`             // "eden", "consul", "nacos"
-	Addresses  []string `yaml:"addresses" json:"addresses"`   // registry server addresses
-	APIKey     string   `yaml:"api_key" json:"api_key"`       // authentication key
-	Namespace  string   `yaml:"namespace" json:"namespace"`   // nacos namespace
-	Datacenter string   `yaml:"datacenter" json:"datacenter"` // consul datacenter
+	Type          string   `yaml:"type" json:"type"`                     // "eden", "consul", "nacos"
+	Addresses     []string `yaml:"addresses" json:"addresses"`           // registry server addresses
+	APIKey        string   `yaml:"api_key" json:"api_key"`               // authentication key
+	Namespace     string   `yaml:"namespace" json:"namespace"`           // nacos namespace
+	Datacenter    string   `yaml:"datacenter" json:"datacenter"`         // consul datacenter
+	Transport     string   `yaml:"transport" json:"transport"`           // eden only: "grpc", "quic", "http"
+	DiscoveryMode string   `yaml:"discovery_mode" json:"discovery_mode"` // eden only: "auto" or "static"
 }

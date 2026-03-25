@@ -59,14 +59,6 @@ const namespaceType = (row: NamespaceRow): Exclude<FilterMode, 'all'> =>
 const namespaceTypeLabel = (row: NamespaceRow) =>
   namespaceType(row) === 'system' ? text('系统', 'System') : text('自定义', 'Custom')
 
-const namespaceTypeHint = (row: NamespaceRow) =>
-  namespaceType(row) === 'system'
-    ? text('内置保留空间，适合平台默认服务。', 'Built-in reserved namespace for platform defaults.')
-    : text('业务隔离空间，适合按团队或场景拆分。', 'Business isolation namespace for team or scenario separation.')
-
-const namespaceFootnote = (row: NamespaceRow) =>
-  namespaceType(row) === 'system' ? text('系统命名空间', 'System namespace') : text('业务命名空间', 'Custom namespace')
-
 const totalCount = computed(() => rows.value.length)
 const systemCount = computed(() => rows.value.filter((row) => namespaceType(row) === 'system').length)
 const customCount = computed(() => rows.value.filter((row) => namespaceType(row) === 'custom').length)
@@ -394,14 +386,9 @@ onMounted(() => {
                   <span class="compact-label">{{ text('更新', 'Updated') }}</span>
                   <span class="compact-value">{{ displayUpdatedAt(row) }}</span>
                 </div>
-                <div class="compact-meta-row">
-                  <span class="compact-label">{{ text('说明', 'Note') }}</span>
-                  <span class="compact-value clamp-two">{{ namespaceTypeHint(row) }}</span>
-                </div>
               </div>
 
               <div class="card-footer">
-                <span class="card-footnote">{{ namespaceFootnote(row) }}</span>
                 <div class="card-actions">
                   <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
                   <el-button
@@ -739,20 +726,17 @@ onMounted(() => {
   gap: 10px;
   padding: 14px;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
-    var(--bg-secondary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .info-card:hover {
-  transform: translateY(-2px);
   border-color: rgba(59, 130, 246, 0.32);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
 }
 
 .card-accent {
@@ -760,7 +744,7 @@ onMounted(() => {
   inset: 0 auto auto 0;
   width: 84px;
   height: 3px;
-  background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.18));
+  background: rgba(59, 130, 246, 0.35);
   border-radius: 0 0 999px 0;
 }
 
@@ -769,7 +753,7 @@ onMounted(() => {
 }
 
 .system-card .card-accent {
-  background: linear-gradient(90deg, var(--accent-orange), rgba(245, 158, 11, 0.18));
+  background: rgba(245, 158, 11, 0.4);
 }
 
 .card-head {
@@ -870,16 +854,10 @@ onMounted(() => {
 .card-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--border-color);
-}
-
-.card-footnote {
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 .card-actions {

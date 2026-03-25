@@ -1,6 +1,8 @@
 package consul
 
 import (
+	"time"
+
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/consul/api"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
@@ -66,7 +68,12 @@ func (r *consulRegistry) Subscribe(serviceName string, callback func([]*registry
 	// Simple polling for now
 	go func() {
 		lastInstances := []*registry.ServiceInstance{}
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+
 		for {
+			<-ticker.C
+
 			instances, err := r.Discovery(serviceName)
 			if err == nil {
 				// Simple check
@@ -75,9 +82,6 @@ func (r *consulRegistry) Subscribe(serviceName string, callback func([]*registry
 					callback(instances)
 				}
 			}
-			// Sleep
-			// In a real product, we would use consul's blocking queries (WaitIndex)
-			// But since pkg/consul/api/api.go is simplified, we just poll.
 		}
 	}()
 	return nil

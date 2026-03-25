@@ -25,6 +25,8 @@ const (
 	RegistryService_Heartbeat_FullMethodName         = "/eden.registry.v1.RegistryService/Heartbeat"
 	RegistryService_Discover_FullMethodName          = "/eden.registry.v1.RegistryService/Discover"
 	RegistryService_Watch_FullMethodName             = "/eden.registry.v1.RegistryService/Watch"
+	RegistryService_GetMembers_FullMethodName        = "/eden.registry.v1.RegistryService/GetMembers"
+	RegistryService_ReportTopology_FullMethodName    = "/eden.registry.v1.RegistryService/ReportTopology"
 )
 
 // RegistryServiceClient is the client API for RegistryService service.
@@ -45,6 +47,10 @@ type RegistryServiceClient interface {
 	Discover(ctx context.Context, in *DiscoverRequest, opts ...grpc.CallOption) (*DiscoverResponse, error)
 	// Watch for changes in service instance list (server-side streaming).
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchResponse], error)
+	// Get cluster members and their transport endpoints for client-side discovery.
+	GetMembers(ctx context.Context, in *GetMembersRequest, opts ...grpc.CallOption) (*GetMembersResponse, error)
+	// Report consumer-provider topology.
+	ReportTopology(ctx context.Context, in *ReportTopologyRequest, opts ...grpc.CallOption) (*ReportTopologyResponse, error)
 }
 
 type registryServiceClient struct {
@@ -124,6 +130,26 @@ func (c *registryServiceClient) Watch(ctx context.Context, in *WatchRequest, opt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RegistryService_WatchClient = grpc.ServerStreamingClient[WatchResponse]
 
+func (c *registryServiceClient) GetMembers(ctx context.Context, in *GetMembersRequest, opts ...grpc.CallOption) (*GetMembersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMembersResponse)
+	err := c.cc.Invoke(ctx, RegistryService_GetMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registryServiceClient) ReportTopology(ctx context.Context, in *ReportTopologyRequest, opts ...grpc.CallOption) (*ReportTopologyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportTopologyResponse)
+	err := c.cc.Invoke(ctx, RegistryService_ReportTopology_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RegistryServiceServer is the server API for RegistryService service.
 // All implementations must embed UnimplementedRegistryServiceServer
 // for forward compatibility.
@@ -142,6 +168,10 @@ type RegistryServiceServer interface {
 	Discover(context.Context, *DiscoverRequest) (*DiscoverResponse, error)
 	// Watch for changes in service instance list (server-side streaming).
 	Watch(*WatchRequest, grpc.ServerStreamingServer[WatchResponse]) error
+	// Get cluster members and their transport endpoints for client-side discovery.
+	GetMembers(context.Context, *GetMembersRequest) (*GetMembersResponse, error)
+	// Report consumer-provider topology.
+	ReportTopology(context.Context, *ReportTopologyRequest) (*ReportTopologyResponse, error)
 	mustEmbedUnimplementedRegistryServiceServer()
 }
 
@@ -169,6 +199,12 @@ func (UnimplementedRegistryServiceServer) Discover(context.Context, *DiscoverReq
 }
 func (UnimplementedRegistryServiceServer) Watch(*WatchRequest, grpc.ServerStreamingServer[WatchResponse]) error {
 	return status.Error(codes.Unimplemented, "method Watch not implemented")
+}
+func (UnimplementedRegistryServiceServer) GetMembers(context.Context, *GetMembersRequest) (*GetMembersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMembers not implemented")
+}
+func (UnimplementedRegistryServiceServer) ReportTopology(context.Context, *ReportTopologyRequest) (*ReportTopologyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportTopology not implemented")
 }
 func (UnimplementedRegistryServiceServer) mustEmbedUnimplementedRegistryServiceServer() {}
 func (UnimplementedRegistryServiceServer) testEmbeddedByValue()                         {}
@@ -292,6 +328,42 @@ func _RegistryService_Watch_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RegistryService_WatchServer = grpc.ServerStreamingServer[WatchResponse]
 
+func _RegistryService_GetMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMembersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegistryServiceServer).GetMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RegistryService_GetMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegistryServiceServer).GetMembers(ctx, req.(*GetMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RegistryService_ReportTopology_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportTopologyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegistryServiceServer).ReportTopology(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RegistryService_ReportTopology_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegistryServiceServer).ReportTopology(ctx, req.(*ReportTopologyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RegistryService_ServiceDesc is the grpc.ServiceDesc for RegistryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -318,6 +390,14 @@ var RegistryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Discover",
 			Handler:    _RegistryService_Discover_Handler,
+		},
+		{
+			MethodName: "GetMembers",
+			Handler:    _RegistryService_GetMembers_Handler,
+		},
+		{
+			MethodName: "ReportTopology",
+			Handler:    _RegistryService_ReportTopology_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

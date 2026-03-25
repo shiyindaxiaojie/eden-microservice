@@ -197,8 +197,9 @@ func (a *Agent) ServiceDeregister(serviceID string) error {
 		body := map[string]string{
 			"service_name": svc.Name,
 			"instance_id":  serviceID,
+			"status":       "offline",
 		}
-		err := a.client.doPost("/v1/catalog/deregister", body)
+		err := a.client.doPost("/v1/catalog/instance/status", body)
 		if err == nil {
 			return nil
 		}

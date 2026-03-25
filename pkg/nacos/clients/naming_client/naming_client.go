@@ -77,8 +77,9 @@ func (c *NamingClient) DeregisterInstance(param vo.DeregisterInstanceParam) (boo
 	body := map[string]string{
 		"service_name": param.ServiceName,
 		"instance_id":  instanceID,
+		"status":       "offline",
 	}
-	err := c.doPost("/v1/catalog/deregister", body)
+	err := c.doPost("/v1/catalog/instance/status", body)
 	return err == nil, err
 }
 

@@ -42,6 +42,30 @@ type RegistryNode struct {
 	lastFailure time.Time
 }
 
+func (n *RegistryNode) endpointForTransport(transport string) string {
+	switch transport {
+	case "http":
+		if n.HTTPAddr != "" {
+			return n.HTTPAddr
+		}
+	case "quic":
+		if n.QUICAddr != "" {
+			return n.QUICAddr
+		}
+		if n.GRPCAddr != "" {
+			return n.GRPCAddr
+		}
+	default:
+		if n.GRPCAddr != "" {
+			return n.GRPCAddr
+		}
+		if n.QUICAddr != "" {
+			return n.QUICAddr
+		}
+	}
+	return n.HTTPAddr
+}
+
 // getClient returns a cached gRPC client, creating the connection if needed.
 func (n *RegistryNode) getClient(transport string) (pb.RegistryServiceClient, error) {
 	n.mu.Lock()
@@ -51,17 +75,18 @@ func (n *RegistryNode) getClient(transport string) (pb.RegistryServiceClient, er
 		return n.client, nil
 	}
 
-	addr := n.GRPCAddr
-	if addr == "" {
-		return nil, fmt.Errorf("no gRPC address for node %s", n.ID)
-	}
-
 	var conn *grpc.ClientConn
 	var err error
-	if transport == "quic" && n.QUICAddr != "" {
+	if transport == "quic" {
+		if n.QUICAddr == "" {
+			return nil, fmt.Errorf("no QUIC address for node %s", n.ID)
+		}
 		conn, err = dialQUIC(n.QUICAddr)
 	} else {
-		conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if n.GRPCAddr == "" {
+			return nil, fmt.Errorf("no gRPC address for node %s", n.ID)
+		}
+		conn, err = grpc.Dial(n.GRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	if err != nil {
 		return nil, err
@@ -110,6 +135,7 @@ type Client struct {
 	namespace  string
 	client     *http.Client
 	transport  string // "http", "grpc" (default), "quic"
+	discovery  string // "auto" (default) or "static"
 
 	// Cache
 	cache *LocalCache
@@ -117,6 +143,7 @@ type Client struct {
 	// Cluster state
 	allNodes         []*RegistryNode
 	lastTopology     string
+	httpControlPlane bool
 	mu               sync.RWMutex
 	stopCh           chan struct{}
 	wg               sync.WaitGroup
@@ -128,66 +155,139 @@ type Client struct {
 
 // Config represents the Eden client configuration.
 type Config struct {
-	Addresses  []string
-	APIKey     string
-	Datacenter string
-	Namespace  string
-	CacheDir   string
-	Transport  string // "http", "grpc" (default), "quic"
+	Addresses     []string
+	APIKey        string
+	Datacenter    string
+	Namespace     string
+	CacheDir      string
+	Transport     string // "http", "grpc" (default), "quic"
+	DiscoveryMode string // "auto" (default) or "static"
+}
+
+type clusterMemberSnapshot struct {
+	ID       string `json:"id"`
+	Address  string `json:"address"`
+	Status   string `json:"status"`
+	Role     string `json:"role"`
+	IsLocal  bool   `json:"is_local"`
+	HTTPAddr string `json:"http_addr"`
+	GRPCAddr string `json:"grpc_addr"`
+	QUICAddr string `json:"quic_addr"`
+	RaftAddr string `json:"raft_addr"`
 }
 
 // New creates a new Eden registry client with default settings.
 func New(addresses []string, apiKey, datacenter string) (*Client, error) {
 	return NewWithConfig(&Config{
-		Addresses:  addresses,
-		APIKey:     apiKey,
-		Datacenter: datacenter,
-		Namespace:  "",
-		CacheDir:   "",
-		Transport:  "grpc",
+		Addresses:     addresses,
+		APIKey:        apiKey,
+		Datacenter:    datacenter,
+		Namespace:     "",
+		CacheDir:      "",
+		Transport:     "grpc",
+		DiscoveryMode: "auto",
 	})
 }
 
 // NewWithConfig creates a new Eden registry client with the given config.
 func NewWithConfig(cfg *Config) (*Client, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("eden: config required")
+	}
 	if len(cfg.Addresses) == 0 {
 		return nil, fmt.Errorf("eden: at least one address required")
 	}
 
+	transport := strings.ToLower(strings.TrimSpace(cfg.Transport))
+	if transport == "" {
+		transport = "grpc"
+	}
+	if transport != "http" && transport != "grpc" && transport != "quic" {
+		return nil, fmt.Errorf("eden: unsupported transport %q", cfg.Transport)
+	}
+
+	discovery := strings.ToLower(strings.TrimSpace(cfg.DiscoveryMode))
+	if discovery == "" {
+		discovery = "auto"
+	}
+	if discovery != "auto" && discovery != "static" {
+		return nil, fmt.Errorf("eden: unsupported discovery mode %q", cfg.DiscoveryMode)
+	}
+
 	initialNodes := make([]*RegistryNode, 0, len(cfg.Addresses))
+	httpControlPlane := transport == "http"
 	for _, addr := range cfg.Addresses {
-		node := &RegistryNode{
-			HTTPAddr: addr,
-			healthy:  true,
+		addr = strings.TrimSpace(addr)
+		if addr == "" {
+			continue
 		}
-		if !strings.HasPrefix(addr, "http") {
-			node.GRPCAddr = addr
+
+		isHTTPAddr := strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://")
+		node := &RegistryNode{ID: addr, healthy: true}
+
+		switch transport {
+		case "http":
+			node.HTTPAddr = addr
+		case "grpc":
+			if discovery == "static" {
+				if isHTTPAddr {
+					return nil, fmt.Errorf("eden: grpc static mode requires direct gRPC addresses, got %s", addr)
+				}
+				node.GRPCAddr = addr
+			} else if isHTTPAddr {
+				node.HTTPAddr = addr
+				httpControlPlane = true
+			} else {
+				node.GRPCAddr = addr
+			}
+		case "quic":
+			if discovery == "static" {
+				if isHTTPAddr {
+					return nil, fmt.Errorf("eden: quic static mode requires direct QUIC addresses, got %s", addr)
+				}
+				node.QUICAddr = addr
+			} else if isHTTPAddr {
+				node.HTTPAddr = addr
+				httpControlPlane = true
+			} else {
+				node.QUICAddr = addr
+			}
 		}
+
 		initialNodes = append(initialNodes, node)
+	}
+	if len(initialNodes) == 0 {
+		return nil, fmt.Errorf("eden: at least one non-empty address required")
 	}
 
 	c := &Client{
-		addresses:     cfg.Addresses,
-		allNodes:      initialNodes,
-		apiKey:        cfg.APIKey,
-		datacenter:    cfg.Datacenter,
-		namespace:     cfg.Namespace,
-		transport:     cfg.Transport,
-		cache:         NewLocalCache(cfg.CacheDir),
-		client:        &http.Client{Timeout: 5 * time.Second},
-		stopCh:        make(chan struct{}),
-		subscriptions: make(map[string]struct{}),
+		addresses:        cfg.Addresses,
+		allNodes:         initialNodes,
+		apiKey:           cfg.APIKey,
+		datacenter:       cfg.Datacenter,
+		namespace:        cfg.Namespace,
+		transport:        transport,
+		discovery:        discovery,
+		cache:            NewLocalCache(cfg.CacheDir),
+		client:           &http.Client{Timeout: 5 * time.Second},
+		httpControlPlane: httpControlPlane,
+		stopCh:           make(chan struct{}),
+		subscriptions:    make(map[string]struct{}),
 	}
 
-	// Synchronous initial node discovery to resolve gRPC addresses.
-	// If it fails, and we have cache, we'll rely on cache.
-	c.syncNodes()
+	// When HTTP control-plane addresses are available, resolve transport endpoints
+	// and keep membership refreshed in the background. Otherwise the client stays
+	// in static direct-endpoint mode and performs no HTTP requests.
+	if c.discovery == "auto" {
+		c.syncNodes()
+	}
 
-	logger.Info("[Registry Init] Client init, transport: %s, seeds: %v, namespace: %s, cacheDir: %s",
-		cfg.Transport, cfg.Addresses, cfg.Namespace, cfg.CacheDir)
+	logger.Info("[Registry Init] Client init, transport: %s, discovery: %s, httpControlPlane: %v, seeds: %v, namespace: %s, cacheDir: %s",
+		transport, discovery, c.httpControlPlane, cfg.Addresses, cfg.Namespace, cfg.CacheDir)
 
-	// Start background node discovery
-	c.startNodeDiscovery()
+	if c.discovery == "auto" {
+		c.startNodeDiscovery()
+	}
 	c.startCacheRefresh()
 
 	return c, nil
@@ -195,6 +295,9 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 
 // startNodeDiscovery runs background node sync every 30 seconds.
 func (c *Client) startNodeDiscovery() {
+	if c.discovery == "static" {
+		return
+	}
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
@@ -231,15 +334,51 @@ func (c *Client) startNodeDiscovery() {
 
 // syncNodes fetches the cluster member list and updates node state.
 func (c *Client) syncNodes() {
-	var members []map[string]interface{}
+	if c.discovery == "static" {
+		return
+	}
+	var members []clusterMemberSnapshot
 
 	err := c.tryAny("SyncNodes", func(node *RegistryNode) error {
-		addr := node.HTTPAddr
-		if addr == "" {
-			addr = node.GRPCAddr
+		var grpcErr error
+		if c.transport == "grpc" || c.transport == "quic" {
+			client, err := node.getClient(c.transport)
+			if err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+
+				resp, err := client.GetMembers(ctx, &pb.GetMembersRequest{})
+				if err == nil {
+					members = make([]clusterMemberSnapshot, 0, len(resp.Members))
+					for _, member := range resp.Members {
+						members = append(members, clusterMemberSnapshot{
+							ID:       member.Id,
+							Address:  member.Address,
+							Status:   member.Status,
+							Role:     member.Role,
+							IsLocal:  member.IsLocal,
+							HTTPAddr: member.HttpAddr,
+							GRPCAddr: member.GrpcAddr,
+							QUICAddr: member.QuicAddr,
+							RaftAddr: member.RaftAddr,
+						})
+					}
+					return nil
+				}
+				grpcErr = err
+			} else {
+				grpcErr = err
+			}
 		}
 
-		url := addr
+		if node.HTTPAddr == "" {
+			if grpcErr != nil {
+				return grpcErr
+			}
+			return fmt.Errorf("no control-plane endpoint for node %s", node.ID)
+		}
+
+		url := node.HTTPAddr
 		if !strings.HasPrefix(url, "http") {
 			url = "http://" + url
 		}
@@ -255,10 +394,16 @@ func (c *Client) syncNodes() {
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
 		if err != nil {
+			if grpcErr != nil {
+				return fmt.Errorf("grpc discovery failed: %v; http discovery failed: %w", grpcErr, err)
+			}
 			return err
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
+			if grpcErr != nil {
+				return fmt.Errorf("grpc discovery failed: %v; http discovery status %d", grpcErr, resp.StatusCode)
+			}
 			return fmt.Errorf("status %d", resp.StatusCode)
 		}
 		return json.NewDecoder(resp.Body).Decode(&members)
@@ -270,36 +415,49 @@ func (c *Client) syncNodes() {
 
 	newNodes := make([]*RegistryNode, 0, len(members))
 	c.mu.RLock()
-	existingMap := make(map[string]*RegistryNode, len(c.allNodes))
-	for _, n := range c.allNodes {
-		key := n.HTTPAddr
-		if key == "" {
-			key = n.GRPCAddr
+	existingNodes := make([]*RegistryNode, len(c.allNodes))
+	copy(existingNodes, c.allNodes)
+	addressMap := make(map[string]*RegistryNode, len(existingNodes)*3)
+	for _, n := range existingNodes {
+		for _, key := range []string{n.HTTPAddr, n.GRPCAddr, n.QUICAddr} {
+			if key != "" {
+				addressMap[key] = n
+			}
 		}
-		existingMap[key] = n
 	}
 	c.mu.RUnlock()
+	reused := make(map[*RegistryNode]bool, len(existingNodes))
 
 	for _, m := range members {
-		status, _ := m["status"].(string)
-		httpAddr := fmt.Sprintf("%v", m["http_addr"])
-		grpcAddr := fmt.Sprintf("%v", m["grpc_addr"])
-		quicAddr := fmt.Sprintf("%v", m["quic_addr"])
-		nodeID := fmt.Sprintf("%v", m["id"])
+		httpAddr := cleanMemberAddr(m.HTTPAddr)
+		grpcAddr := cleanMemberAddr(m.GRPCAddr)
+		quicAddr := cleanMemberAddr(m.QUICAddr)
+		status := cleanMemberAddr(m.Status)
 
-		// Reuse existing node to preserve connection pool
-		if existing, ok := existingMap[httpAddr]; ok {
+		var existing *RegistryNode
+		for _, key := range []string{httpAddr, grpcAddr, quicAddr} {
+			if key == "" {
+				continue
+			}
+			if candidate, ok := addressMap[key]; ok {
+				existing = candidate
+				break
+			}
+		}
+
+		if existing != nil {
 			existing.mu.Lock()
-			existing.ID = nodeID
+			existing.ID = cleanMemberAddr(m.ID)
+			existing.HTTPAddr = httpAddr
 			existing.GRPCAddr = grpcAddr
 			existing.QUICAddr = quicAddr
 			existing.healthy = (status == "Online")
 			existing.mu.Unlock()
 			newNodes = append(newNodes, existing)
-			delete(existingMap, httpAddr)
+			reused[existing] = true
 		} else {
 			newNodes = append(newNodes, &RegistryNode{
-				ID:       nodeID,
+				ID:       cleanMemberAddr(m.ID),
 				HTTPAddr: httpAddr,
 				GRPCAddr: grpcAddr,
 				QUICAddr: quicAddr,
@@ -308,9 +466,10 @@ func (c *Client) syncNodes() {
 		}
 	}
 
-	// Close connections for removed nodes
-	for _, old := range existingMap {
-		old.closeConn()
+	for _, old := range existingNodes {
+		if !reused[old] {
+			old.closeConn()
+		}
 	}
 
 	if len(newNodes) > 0 {
@@ -346,7 +505,7 @@ func (c *Client) tryAny(opName string, fn func(node *RegistryNode) error) error 
 
 	var lastErr error
 	for _, node := range nodes {
-		logger.Debug("[Registry Nodes] Executing '%s' via node %s (%s)", opName, node.ID, node.HTTPAddr)
+		logger.Debug("[Registry Nodes] Executing '%s' via node %s (%s)", opName, node.ID, node.endpointForTransport(c.transport))
 		if err := fn(node); err == nil {
 			return nil
 		} else {
@@ -383,10 +542,7 @@ func (c *Client) executeWithFailover(opName string, fn func(node *RegistryNode) 
 
 	var lastErr error
 	for _, node := range nodes {
-		addr := node.GRPCAddr
-		if c.transport == "http" || addr == "" {
-			addr = node.HTTPAddr
-		}
+		addr := node.endpointForTransport(c.transport)
 		logger.Info("[Registry %s] Executing via node %s (%s)", opName, node.ID, addr)
 
 		if err := fn(node); err == nil {
@@ -874,6 +1030,38 @@ func (c *Client) reportTopology() {
 	}
 
 	err := c.executeWithFailover("TopologyReport", func(node *RegistryNode) error {
+		var grpcErr error
+		if c.transport == "grpc" || c.transport == "quic" {
+			client, err := node.getClient(c.transport)
+			if err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+
+				resp, err := client.ReportTopology(ctx, &pb.ReportTopologyRequest{
+					Namespace:       c.namespace,
+					ConsumerService: consumerService,
+					Providers:       providers,
+					Checksum:        checksum,
+				})
+				if err == nil {
+					if !resp.Success {
+						return fmt.Errorf("topology report rejected")
+					}
+					return nil
+				}
+				grpcErr = err
+			} else {
+				grpcErr = err
+			}
+		}
+
+		if node.HTTPAddr == "" {
+			if grpcErr != nil {
+				return grpcErr
+			}
+			return fmt.Errorf("no topology-report endpoint for node %s", node.ID)
+		}
+
 		body := map[string]interface{}{
 			"namespace":        c.namespace,
 			"consumer_service": consumerService,
@@ -891,10 +1079,16 @@ func (c *Client) reportTopology() {
 		c.setHeaders(req)
 		resp, err := c.client.Do(req)
 		if err != nil {
+			if grpcErr != nil {
+				return fmt.Errorf("grpc topology report failed: %v; http topology report failed: %w", grpcErr, err)
+			}
 			return err
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
+			if grpcErr != nil {
+				return fmt.Errorf("grpc topology report failed: %v; http topology report status %d", grpcErr, resp.StatusCode)
+			}
 			return fmt.Errorf("status %d", resp.StatusCode)
 		}
 		return nil
@@ -1036,4 +1230,12 @@ func (c *quicStreamConn) RemoteAddr() net.Addr { return c.conn.RemoteAddr() }
 func instancesHash(instances []*registry.ServiceInstance) string {
 	data, _ := json.Marshal(instances)
 	return string(data)
+}
+
+func cleanMemberAddr(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" || v == "<nil>" {
+		return ""
+	}
+	return v
 }

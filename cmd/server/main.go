@@ -235,7 +235,7 @@ func main() {
 
 	// Start gRPC API
 	grpcServer := grpc.NewServer()
-	regServer := egrpc.NewRegistryServer(catSvc)
+	regServer := egrpc.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
 	clusterServer := egrpc.NewClusterServer(registry, apNode)
 	pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
 	pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)

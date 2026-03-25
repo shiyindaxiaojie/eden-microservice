@@ -2,9 +2,11 @@ package grpc
 
 import (
 	"context"
+	"sync"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
 	"google.golang.org/grpc/metadata"
@@ -13,13 +15,20 @@ import (
 // RegistryServer implements the RegistryService gRPC interface.
 type RegistryServer struct {
 	pb.UnimplementedRegistryServiceServer
-	catalog service.CatalogService
+	config    *config.Config
+	catalog   service.CatalogService
+	settings  service.SettingsService
+	cluster   service.ClusterService
+	nodeCache sync.Map // map[string]config.Config
 }
 
 // NewRegistryServer creates a new gRPC registry server.
-func NewRegistryServer(catalog service.CatalogService) *RegistryServer {
+func NewRegistryServer(cfg *config.Config, catalog service.CatalogService, settings service.SettingsService, cluster service.ClusterService) *RegistryServer {
 	return &RegistryServer{
-		catalog: catalog,
+		config:   cfg,
+		catalog:  catalog,
+		settings: settings,
+		cluster:  cluster,
 	}
 }
 
@@ -94,7 +103,6 @@ func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_W
 	s.catalog.Subscribe(req.Namespace, req.ServiceName, consumerService, ch)
 	defer s.catalog.Unsubscribe(req.Namespace, req.ServiceName, ch)
 
-	// Send initial state
 	initial, _ := s.catalog.GetService(req.Namespace, req.ServiceName, false)
 	if err := stream.Send(&pb.WatchResponse{Action: "update", Instances: toProtoInstances(initial)}); err != nil {
 		return err
@@ -110,6 +118,37 @@ func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_W
 			}
 		}
 	}
+}
+
+func (s *RegistryServer) GetMembers(ctx context.Context, req *pb.GetMembersRequest) (*pb.GetMembersResponse, error) {
+	members, err := service.BuildClusterMemberViews(s.config, s.settings, s.cluster, &s.nodeCache)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.GetMembersResponse{Members: make([]*pb.ClusterMember, 0, len(members))}
+	for _, member := range members {
+		resp.Members = append(resp.Members, &pb.ClusterMember{
+			Id:       member.ID,
+			Address:  member.Address,
+			Status:   member.Status,
+			Role:     member.Role,
+			IsLocal:  member.IsLocal,
+			HttpAddr: member.HTTPAddr,
+			GrpcAddr: member.GRPCAddr,
+			QuicAddr: member.QUICAddr,
+			RaftAddr: member.RaftAddr,
+		})
+	}
+	return resp, nil
+}
+
+func (s *RegistryServer) ReportTopology(ctx context.Context, req *pb.ReportTopologyRequest) (*pb.ReportTopologyResponse, error) {
+	changed := s.catalog.ReportTopology(req.Namespace, req.ConsumerService, req.Providers, req.Checksum)
+	return &pb.ReportTopologyResponse{
+		Success: true,
+		Changed: changed,
+	}, nil
 }
 
 func consumerServiceFromContext(ctx context.Context) string {

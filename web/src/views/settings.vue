@@ -894,25 +894,25 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   background: var(--bg-card);
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .mode-card-v7:hover {
   border-color: var(--accent-blue);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
 }
 
 .mode-card-v7.active {
   border-color: var(--accent-blue);
   background: rgba(59, 130, 246, 0.02);
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
 }
 
 .card-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 70%);
+  background: none;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -1296,12 +1296,13 @@ onMounted(() => {
 
 .key-card {
   padding: 24px;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .key-card:hover {
   border-color: var(--accent-blue);
-  transform: translateY(-2px);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
 }
 
 .key-card.is-expired {
