@@ -39,6 +39,49 @@ function escapeRichText(value: string) {
   return value.replace(/[{}|]/g, ' ').replace(/\n/g, ' ')
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function average(values: number[]) {
+  if (!values.length) return 0
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function spreadPositions(values: number[], minGap: number, minX: number, maxX: number) {
+  if (values.length <= 1) {
+    return values.map((value) => clamp(value, minX, maxX))
+  }
+
+  const sorted = values.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value)
+  sorted[0]!.value = clamp(sorted[0]!.value, minX, maxX)
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    sorted[index]!.value = Math.max(sorted[index]!.value, sorted[index - 1]!.value + minGap)
+  }
+
+  const overflow = sorted[sorted.length - 1]!.value - maxX
+  if (overflow > 0) {
+    sorted[sorted.length - 1]!.value -= overflow
+    for (let index = sorted.length - 2; index >= 0; index -= 1) {
+      sorted[index]!.value = Math.min(sorted[index]!.value, sorted[index + 1]!.value - minGap)
+    }
+  }
+
+  if (sorted[0]!.value < minX) {
+    const shift = minX - sorted[0]!.value
+    for (const item of sorted) {
+      item.value += shift
+    }
+  }
+
+  const result = new Array<number>(values.length)
+  for (const item of sorted) {
+    result[item.index] = clamp(item.value, minX, maxX)
+  }
+  return result
+}
+
 function nodeTone(node: TopologyNode) {
   if (node.instance_count === 0) {
     return {
@@ -46,7 +89,7 @@ function nodeTone(node: TopologyNode) {
       fillTop: '#ffffff',
       fillBottom: '#f8fafc',
       accent: '#64748b',
-      text: '#94a3b8',
+      title: '#94a3b8',
       subtext: '#94a3b8',
       badgeBg: 'rgba(148, 163, 184, 0.12)',
       chipBg: 'rgba(255, 255, 255, 0.86)',
@@ -61,10 +104,10 @@ function nodeTone(node: TopologyNode) {
       fillTop: '#ffffff',
       fillBottom: '#f0fdf4',
       accent: '#16a34a',
-      text: '#0f172a',
+      title: '#0f172a',
       subtext: '#64748b',
       badgeBg: 'rgba(34, 197, 94, 0.14)',
-      chipBg: 'rgba(255, 255, 255, 0.94)',
+      chipBg: 'rgba(255, 255, 255, 0.95)',
       chipBorder: 'rgba(134, 239, 172, 0.55)',
       glow: 'rgba(34, 197, 94, 0.14)',
     }
@@ -76,10 +119,10 @@ function nodeTone(node: TopologyNode) {
       fillTop: '#ffffff',
       fillBottom: '#fffbeb',
       accent: '#d97706',
-      text: '#0f172a',
+      title: '#0f172a',
       subtext: '#64748b',
-      badgeBg: 'rgba(245, 158, 11, 0.16)',
-      chipBg: 'rgba(255, 255, 255, 0.94)',
+      badgeBg: 'rgba(245, 158, 11, 0.15)',
+      chipBg: 'rgba(255, 255, 255, 0.95)',
       chipBorder: 'rgba(253, 230, 138, 0.6)',
       glow: 'rgba(245, 158, 11, 0.16)',
     }
@@ -90,56 +133,155 @@ function nodeTone(node: TopologyNode) {
     fillTop: '#ffffff',
     fillBottom: '#fef2f2',
     accent: '#dc2626',
-    text: '#0f172a',
+    title: '#0f172a',
     subtext: '#64748b',
     badgeBg: 'rgba(239, 68, 68, 0.14)',
-    chipBg: 'rgba(255, 255, 255, 0.94)',
+    chipBg: 'rgba(255, 255, 255, 0.95)',
     chipBorder: 'rgba(252, 165, 165, 0.58)',
     glow: 'rgba(239, 68, 68, 0.16)',
   }
 }
 
+function computeLevels() {
+  const nodes = graphData.value.nodes
+  const outgoing = new Map<string, string[]>()
+  const incoming = new Map<string, string[]>()
+
+  for (const node of nodes) {
+    outgoing.set(node.id, [])
+    incoming.set(node.id, [])
+  }
+
+  for (const edge of graphData.value.edges) {
+    if (!outgoing.has(edge.source) || !incoming.has(edge.target)) continue
+    outgoing.get(edge.source)!.push(edge.target)
+    incoming.get(edge.target)!.push(edge.source)
+  }
+
+  const memo = new Map<string, number>()
+  const stack = new Set<string>()
+
+  const depthOf = (id: string): number => {
+    if (memo.has(id)) return memo.get(id)!
+    if (stack.has(id)) return 0
+
+    stack.add(id)
+    const next = outgoing.get(id) || []
+    const depth = next.length ? 1 + Math.max(...next.map((item) => depthOf(item))) : 0
+    stack.delete(id)
+    memo.set(id, depth)
+    return depth
+  }
+
+  for (const node of nodes) {
+    depthOf(node.id)
+  }
+
+  return { outgoing, incoming, levels: memo }
+}
+
+function computeLayout(width: number, height: number) {
+  const { outgoing, incoming, levels } = computeLevels()
+  const layerMap = new Map<number, string[]>()
+  const nodeMap = new Map(graphData.value.nodes.map((node) => [node.id, node] as const))
+  const maxLevel = Math.max(0, ...Array.from(levels.values()))
+
+  for (const node of graphData.value.nodes) {
+    const level = levels.get(node.id) ?? 0
+    if (!layerMap.has(level)) {
+      layerMap.set(level, [])
+    }
+    layerMap.get(level)!.push(node.id)
+  }
+
+  const centerX = width / 2
+  const topPadding = 110
+  const bottomPadding = 110
+  const minX = 170
+  const maxX = Math.max(minX, width - 170)
+  const usableHeight = Math.max(240, height - topPadding - bottomPadding)
+  const rowGap = maxLevel > 0 ? usableHeight / maxLevel : 0
+  const positions = new Map<string, { x: number; y: number }>()
+
+  for (let level = 0; level <= maxLevel; level += 1) {
+    const ids = [...(layerMap.get(level) || [])]
+    ids.sort((left, right) => {
+      const leftBary = average((incoming.get(left) || []).map((item) => positions.get(item)?.x).filter((item): item is number => typeof item === 'number'))
+      const rightBary = average((incoming.get(right) || []).map((item) => positions.get(item)?.x).filter((item): item is number => typeof item === 'number'))
+      if (leftBary !== rightBary) return leftBary - rightBary
+      return (nodeMap.get(left)?.name || left).localeCompare(nodeMap.get(right)?.name || right)
+    })
+
+    const y = maxLevel === 0 ? height / 2 : topPadding + rowGap * level
+    const rowSpread = Math.min(220, width * 0.18)
+    const rawXs = ids.map((id, index) => {
+      const preferredNeighbors = [
+        ...(outgoing.get(id) || []).map((item) => positions.get(item)?.x).filter((item): item is number => typeof item === 'number'),
+        ...(incoming.get(id) || []).map((item) => positions.get(item)?.x).filter((item): item is number => typeof item === 'number'),
+      ]
+
+      const barycenter = preferredNeighbors.length ? average(preferredNeighbors) : centerX
+      if (ids.length === 1) {
+        const singleOffset = level === 0 ? 0 : level % 2 === 1 ? -rowSpread : rowSpread
+        return barycenter * 0.55 + (centerX + singleOffset) * 0.45
+      }
+
+      const base = minX + ((maxX - minX) * (index + 1)) / (ids.length + 1)
+      return barycenter * 0.65 + base * 0.35
+    })
+
+    const minGap = clamp((maxX - minX) / Math.max(ids.length, 1), 250, 340)
+    const adjusted = spreadPositions(rawXs, minGap, minX, maxX)
+    adjusted.forEach((x, index) => {
+      positions.set(ids[index]!, { x, y })
+    })
+  }
+
+  return positions
+}
+
 function buildOption(): echarts.EChartsOption {
+  const width = chartEl.value?.clientWidth || 1080
+  const height = chartEl.value?.clientHeight || 620
+  const positions = computeLayout(width, height)
+
   const nodes = graphData.value.nodes.map((node) => {
     const tone = nodeTone(node)
     const isSelected = props.selectedNode === node.id
     const addresses = displayAddresses(node)
     const longestAddress = addresses.reduce((max, address) => Math.max(max, address.length), 0)
     const ratioText = `${node.healthy_count}/${node.instance_count}`
-    const badgeWidth = Math.max(56, ratioText.length * 8 + 20)
-    const nodeWidth = Math.min(292, Math.max(220, Math.max(node.name.length * 8.5 + 90, longestAddress * 7 + 58)))
-    const nodeHeight = 74 + Math.max(1, addresses.length) * 24
-    const titleWidth = Math.max(112, nodeWidth - badgeWidth - 42)
+    const badgeWidth = 72
+    const nodeWidth = Math.min(300, Math.max(244, Math.max(node.name.length * 8.3 + 96, longestAddress * 7 + 66)))
+    const nodeHeight = 78 + Math.max(1, addresses.length) * 24
+    const titleWidth = Math.max(110, nodeWidth - badgeWidth - 44)
     const metaWidth = badgeWidth
-    const contentWidth = nodeWidth - 44
+    const contentWidth = nodeWidth - 46
     const title = escapeRichText(node.name)
     const addressRows = addresses.length
       ? addresses.map((address) => `{addr|${escapeRichText(address)}}`).join('\n')
       : '{empty|No instance}'
+    const pos = positions.get(node.id) || { x: width / 2, y: height / 2 }
 
     return {
       id: node.id,
       name: node.name,
       value: node.name,
+      x: pos.x,
+      y: pos.y,
       symbol: 'rect',
       symbolSize: [nodeWidth, nodeHeight],
-      draggable: false,
+      draggable: true,
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
-          {
-            offset: 0,
-            color: isSelected ? '#f8fbff' : tone.fillTop,
-          },
-          {
-            offset: 1,
-            color: isSelected ? '#eef5ff' : tone.fillBottom,
-          },
+          { offset: 0, color: isSelected ? '#f8fbff' : tone.fillTop },
+          { offset: 1, color: isSelected ? '#eef5ff' : tone.fillBottom },
         ]),
-        borderColor: isSelected ? '#3b82f6' : tone.border,
-        borderWidth: isSelected ? 2.4 : 1.4,
-        shadowColor: isSelected ? 'rgba(59, 130, 246, 0.18)' : tone.glow,
-        shadowBlur: isSelected ? 22 : 14,
-        shadowOffsetY: 6,
+        borderColor: isSelected ? '#2563eb' : tone.border,
+        borderWidth: isSelected ? 2.6 : 1.6,
+        shadowColor: isSelected ? 'rgba(37, 99, 235, 0.20)' : tone.glow,
+        shadowBlur: isSelected ? 24 : 16,
+        shadowOffsetY: 8,
       },
       label: {
         show: true,
@@ -149,7 +291,7 @@ function buildOption(): echarts.EChartsOption {
             fontSize: 15,
             fontWeight: 700,
             fontFamily: 'Inter, system-ui, sans-serif',
-            color: tone.text,
+            color: tone.title,
             lineHeight: 22,
             width: titleWidth,
             align: 'left' as const,
@@ -160,7 +302,9 @@ function buildOption(): echarts.EChartsOption {
             fontWeight: 700,
             color: tone.accent,
             backgroundColor: tone.badgeBg,
-            borderRadius: 6,
+            borderColor: 'rgba(255,255,255,0.55)',
+            borderWidth: 1,
+            borderRadius: 0,
             padding: [5, 0, 5, 0],
             lineHeight: 22,
             width: metaWidth,
@@ -182,7 +326,7 @@ function buildOption(): echarts.EChartsOption {
             backgroundColor: tone.chipBg,
             borderColor: tone.chipBorder,
             borderWidth: 1,
-            borderRadius: 6,
+            borderRadius: 0,
             padding: [5, 10, 5, 10],
             lineHeight: 26,
             width: contentWidth,
@@ -195,7 +339,7 @@ function buildOption(): echarts.EChartsOption {
             backgroundColor: 'rgba(248, 250, 252, 0.88)',
             borderColor: 'rgba(203, 213, 225, 0.72)',
             borderWidth: 1,
-            borderRadius: 6,
+            borderRadius: 0,
             padding: [5, 10, 5, 10],
             lineHeight: 26,
             width: contentWidth,
@@ -206,7 +350,21 @@ function buildOption(): echarts.EChartsOption {
     }
   })
 
+  const outgoingGroups = new Map<string, string[]>()
+  for (const edge of graphData.value.edges) {
+    if (!outgoingGroups.has(edge.source)) {
+      outgoingGroups.set(edge.source, [])
+    }
+    outgoingGroups.get(edge.source)!.push(edge.target)
+  }
+  for (const items of outgoingGroups.values()) {
+    items.sort()
+  }
+
   const links = graphData.value.edges.map((edge) => {
+    const siblings = outgoingGroups.get(edge.source) || []
+    const siblingIndex = siblings.indexOf(edge.target)
+    const baseCurve = siblings.length > 1 ? (siblingIndex - (siblings.length - 1) / 2) * 0.18 : 0
     const relatedToSelection =
       !!props.selectedNode && (edge.source === props.selectedNode || edge.target === props.selectedNode)
 
@@ -214,15 +372,15 @@ function buildOption(): echarts.EChartsOption {
       source: edge.source,
       target: edge.target,
       lineStyle: {
-        color: relatedToSelection ? 'rgba(37, 99, 235, 0.78)' : 'rgba(59, 130, 246, 0.36)',
-        curveness: 0.14,
-        width: relatedToSelection ? 3 : 2.2,
-        opacity: relatedToSelection ? 1 : 0.92,
+        color: relatedToSelection ? 'rgba(37, 99, 235, 0.82)' : 'rgba(59, 130, 246, 0.48)',
+        curveness: baseCurve,
+        width: relatedToSelection ? 3.2 : 2.4,
+        opacity: relatedToSelection ? 1 : 0.95,
       },
       emphasis: {
         lineStyle: {
-          width: 3.6,
-          color: 'rgba(29, 78, 216, 0.92)',
+          width: 3.8,
+          color: 'rgba(29, 78, 216, 0.95)',
           opacity: 1,
         },
       },
@@ -230,10 +388,13 @@ function buildOption(): echarts.EChartsOption {
   })
 
   return {
+    animationDuration: 600,
+    animationDurationUpdate: 350,
+    animationEasing: 'cubicOut',
     tooltip: {
       trigger: 'item',
       backgroundColor: '#ffffff',
-      borderColor: '#e2e8f0',
+      borderColor: '#dbe4f0',
       borderWidth: 1,
       padding: [12, 16],
       textStyle: {
@@ -241,7 +402,7 @@ function buildOption(): echarts.EChartsOption {
         fontSize: 12,
         fontFamily: 'Inter, system-ui, sans-serif',
       },
-      extraCssText: 'border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);',
+      extraCssText: 'border-radius: 0; box-shadow: 0 12px 30px rgba(15,23,42,0.10);',
       formatter(params: any) {
         if (params.dataType === 'edge') {
           return `<span style="color:#64748b">${params.data.source}</span> &rarr; <span style="color:#64748b">${params.data.target}</span>`
@@ -259,43 +420,36 @@ function buildOption(): echarts.EChartsOption {
               .join('<br/>')
           : '<span style="color:#94a3b8">No live instances</span>'
 
-        return `<div style="font-weight:600;font-size:13px;margin-bottom:6px">${node.name}</div><div style="color:#64748b;font-size:11px;margin-bottom:8px">${node.healthy_count}/${node.instance_count} alive / total</div>${instances}`
+        return `<div style="font-weight:700;font-size:13px;margin-bottom:6px">${node.name}</div><div style="color:#64748b;font-size:11px;margin-bottom:8px">${node.healthy_count}/${node.instance_count} alive / total</div>${instances}`
       },
     },
-    animationDuration: 500,
-    animationDurationUpdate: 300,
-    animationEasing: 'cubicOut',
     series: [
       {
         type: 'graph',
-        layout: 'force',
+        layout: 'none',
+        coordinateSystem: null,
         data: nodes,
         links,
-        tooltip: { show: false },
         roam: true,
         zoom: 1,
+        tooltip: { show: false },
         label: {
           position: 'inside',
         },
-        edgeSymbol: ['circle', 'arrow'],
-        edgeSymbolSize: [4, 12],
+        edgeSymbol: ['none', 'arrow'],
+        edgeSymbolSize: [0, 14],
+        edgeLabel: {
+          show: false,
+        },
         lineStyle: {
-          opacity: 0.95,
+          opacity: 0.96,
         },
         emphasis: {
           focus: 'adjacency' as const,
           lineStyle: {
-            width: 3.6,
-            color: 'rgba(29, 78, 216, 0.92)',
-            opacity: 1,
+            width: 3.8,
+            color: 'rgba(29, 78, 216, 0.95)',
           },
-        },
-        force: {
-          layoutAnimation: false,
-          repulsion: 1180,
-          edgeLength: [220, 320],
-          gravity: 0.03,
-          friction: 0.55,
         },
       },
     ],
@@ -322,11 +476,12 @@ function ensureChart() {
 async function render() {
   await nextTick()
   ensureChart()
-  chart?.setOption(buildOption(), false)
+  chart?.setOption(buildOption(), true)
 }
 
 function resize() {
   chart?.resize()
+  render()
 }
 
 function zoom(delta: number) {
@@ -369,7 +524,7 @@ onBeforeUnmount(() => {
 
     <div v-if="!loading && graphData.nodes.length === 0" class="board-empty">
       <div class="empty-state-inner">
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="4" y="8" width="14" height="10" rx="2" stroke="#cbd5e1" stroke-width="1.5"/><rect x="22" y="22" width="14" height="10" rx="2" stroke="#cbd5e1" stroke-width="1.5"/><path d="M18 13h4v4" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 27h-4v-4" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="4" y="8" width="14" height="10" rx="0" stroke="#cbd5e1" stroke-width="1.5"/><rect x="22" y="22" width="14" height="10" rx="0" stroke="#cbd5e1" stroke-width="1.5"/><path d="M18 13h4v4" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 27h-4v-4" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <p>No topology data</p>
       </div>
     </div>
@@ -388,7 +543,7 @@ onBeforeUnmount(() => {
     linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
   background-size: 20px 20px;
   border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 14px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -400,9 +555,9 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-direction: column;
   gap: 1px;
-  border-radius: 10px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
@@ -421,7 +576,7 @@ onBeforeUnmount(() => {
 
 .board-toolbar button:hover {
   background: #ffffff;
-  color: #3b82f6;
+  color: #2563eb;
 }
 
 .zoom-value {
@@ -442,7 +597,7 @@ onBeforeUnmount(() => {
 .graph-canvas {
   width: 100%;
   height: 100%;
-  min-height: 500px;
+  min-height: 560px;
 }
 
 .graph-canvas.hidden {
@@ -452,7 +607,7 @@ onBeforeUnmount(() => {
 .board-empty {
   display: grid;
   height: 100%;
-  min-height: 500px;
+  min-height: 560px;
   place-items: center;
 }
 
@@ -472,7 +627,7 @@ onBeforeUnmount(() => {
 @media (max-width: 920px) {
   .graph-canvas,
   .board-empty {
-    min-height: 400px;
+    min-height: 420px;
   }
 }
 </style>
