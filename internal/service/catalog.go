@@ -225,11 +225,22 @@ func (s *catalogService) getSubscribersNoLock(namespace, serviceName string) []s
 }
 
 func (s *catalogService) getTopologySubscribers(namespace, serviceName string) []string {
+	activeServices := make(map[string]bool)
+	for _, summary := range s.store.Services.ListServicesNS(namespace) {
+		activeServices[summary.Name] = true
+	}
+	if len(activeServices) == 0 || !activeServices[serviceName] {
+		return []string{}
+	}
+
 	reports := s.store.Topology.Reports(namespace)
 	consumers := make([]string, 0)
 	for consumer, report := range reports {
+		if !activeServices[consumer] {
+			continue
+		}
 		for _, provider := range report.Providers {
-			if provider == serviceName {
+			if provider == serviceName && activeServices[provider] {
 				consumers = append(consumers, consumer)
 				break
 			}
@@ -246,6 +257,7 @@ func (s *catalogService) GetDependencyGraph(namespace string) map[string]interfa
 	for _, svc := range services {
 		nodeSet[svc.Name] = true
 	}
+	s.store.Topology.Prune(ns, nodeSet)
 
 	// Build nodes
 	nodes := make([]map[string]interface{}, 0)
@@ -258,49 +270,13 @@ func (s *catalogService) GetDependencyGraph(namespace string) map[string]interfa
 		})
 	}
 
-	// Build edges from dependency tracking
-	edges := make([]map[string]string, 0)
-	reports := s.store.Topology.Reports(ns)
-	for consumer, report := range reports {
-		for _, provider := range report.Providers {
-			edges = append(edges, map[string]string{
-				"source": consumer,
-				"target": provider,
-			})
-			if !nodeSet[consumer] {
-				nodes = append(nodes, map[string]interface{}{
-					"id":   consumer,
-					"name": consumer,
-				})
-				nodeSet[consumer] = true
-			}
-			if !nodeSet[provider] {
-				nodes = append(nodes, map[string]interface{}{
-					"id":   provider,
-					"name": provider,
-				})
-				nodeSet[provider] = true
-			}
-		}
-	}
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for consumer, providers := range s.deps[ns] {
-		for provider := range providers {
-			edges = append(edges, map[string]string{
-				"source": consumer,
-				"target": provider,
-			})
-			// Ensure nodes exist
-			if !nodeSet[consumer] {
-				nodes = append(nodes, map[string]interface{}{
-					"id":   consumer,
-					"name": consumer,
-				})
-				nodeSet[consumer] = true
-			}
-		}
+	dependencyEdges := s.dependencyEdges(ns, nodeSet)
+	edges := make([]map[string]string, 0, len(dependencyEdges))
+	for _, edge := range dependencyEdges {
+		edges = append(edges, map[string]string{
+			"source": edge.Source,
+			"target": edge.Target,
+		})
 	}
 
 	return map[string]interface{}{
@@ -358,19 +334,13 @@ func (s *catalogService) ReportTopology(namespace, consumerService string, provi
 func (s *catalogService) GetTopology(namespace string) *model.TopologyGraph {
 	ns := s.namespaceKey(namespace)
 	serviceNames := make(map[string]bool)
+	serviceSummaries := s.store.Services.ListServicesNS(ns)
 	nodes := make([]model.TopologyNode, 0)
 
-	for _, summary := range s.store.Services.ListServicesNS(ns) {
+	for _, summary := range serviceSummaries {
 		serviceNames[summary.Name] = true
 	}
-	reports := s.store.Topology.Reports(ns)
-	for consumer, report := range reports {
-		serviceNames[consumer] = true
-		for _, provider := range report.Providers {
-			serviceNames[provider] = true
-		}
-	}
-
+	s.store.Topology.Prune(ns, serviceNames)
 	names := make([]string, 0, len(serviceNames))
 	for name := range serviceNames {
 		names = append(names, name)
@@ -403,10 +373,37 @@ func (s *catalogService) GetTopology(namespace string) *model.TopologyGraph {
 		})
 	}
 
-	edges := make([]model.TopologyEdge, 0)
+	edges := s.dependencyEdges(ns, serviceNames)
+
+	return &model.TopologyGraph{
+		Namespace: ns,
+		Nodes:     nodes,
+		Edges:     edges,
+	}
+}
+
+func (s *catalogService) dependencyEdges(namespace string, activeServices map[string]bool) []model.TopologyEdge {
+	reports := s.store.Topology.Reports(namespace)
+	edgeMap := make(map[string]model.TopologyEdge)
+
+	addEdge := func(edge model.TopologyEdge) {
+		if !activeServices[edge.Source] || !activeServices[edge.Target] || edge.Source == edge.Target {
+			return
+		}
+
+		key := edge.Source + "\x00" + edge.Target
+		if existing, ok := edgeMap[key]; ok {
+			if existing.Checksum == "" && edge.Checksum != "" {
+				edgeMap[key] = edge
+			}
+			return
+		}
+		edgeMap[key] = edge
+	}
+
 	for consumer, report := range reports {
 		for _, provider := range report.Providers {
-			edges = append(edges, model.TopologyEdge{
+			addEdge(model.TopologyEdge{
 				Source:    consumer,
 				Target:    provider,
 				Checksum:  report.Checksum,
@@ -414,18 +411,29 @@ func (s *catalogService) GetTopology(namespace string) *model.TopologyGraph {
 			})
 		}
 	}
+
+	s.mu.RLock()
+	for consumer, providers := range s.deps[namespace] {
+		for provider := range providers {
+			addEdge(model.TopologyEdge{
+				Source: consumer,
+				Target: provider,
+			})
+		}
+	}
+	s.mu.RUnlock()
+
+	edges := make([]model.TopologyEdge, 0, len(edgeMap))
+	for _, edge := range edgeMap {
+		edges = append(edges, edge)
+	}
 	sort.Slice(edges, func(i, j int) bool {
 		if edges[i].Source == edges[j].Source {
 			return edges[i].Target < edges[j].Target
 		}
 		return edges[i].Source < edges[j].Source
 	})
-
-	return &model.TopologyGraph{
-		Namespace: ns,
-		Nodes:     nodes,
-		Edges:     edges,
-	}
+	return edges
 }
 
 // Namespace management

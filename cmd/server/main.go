@@ -77,6 +77,10 @@ func main() {
 
 	// 2. Create Registry Store
 	registry := store.NewRegistry(cfg.DataDir)
+	if !registry.HasAPIKeyAuthSetting() {
+		registry.SetAPIKeyAuthEnabled(cfg.Auth.APIKey.Enabled)
+	}
+	cfg.Auth.APIKey.Enabled = registry.GetAPIKeyAuthEnabled()
 
 	// Initialize Logger from config
 	persistedLevel := registry.GetLogLevel()

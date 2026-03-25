@@ -11,17 +11,19 @@ import (
 
 // ConfigStore handles cluster settings, mode, and environment.
 type ConfigStore struct {
-	mu           sync.RWMutex
-	mode         string
-	environment  string
-	seeds        []string
-	logLevel     string
-	eventRetDays int
-	logRetDays   int
-	eventTypes   []string
-	hbMaxFail    int
-	removalDelay int
-	dataPath     string
+	mu            sync.RWMutex
+	mode          string
+	environment   string
+	seeds         []string
+	logLevel      string
+	eventRetDays  int
+	logRetDays    int
+	eventTypes    []string
+	hbMaxFail     int
+	removalDelay  int
+	apiKeyAuth    bool
+	apiKeyAuthSet bool
+	dataPath      string
 }
 
 func NewConfigStore(dataPath string) *ConfigStore {
@@ -150,7 +152,26 @@ func (s *ConfigStore) SetInstanceRemovalDelaySeconds(n int) {
 	s.removalDelay = n
 }
 
-func (s *ConfigStore) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int) {
+func (s *ConfigStore) GetAPIKeyAuthEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.apiKeyAuth
+}
+
+func (s *ConfigStore) HasAPIKeyAuthEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.apiKeyAuthSet
+}
+
+func (s *ConfigStore) SetAPIKeyAuthEnabled(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.apiKeyAuth = enabled
+	s.apiKeyAuthSet = true
+}
+
+func (s *ConfigStore) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.mode = mode
@@ -172,6 +193,8 @@ func (s *ConfigStore) Restore(mode, env, logLevel string, seeds []string, eventR
 	if removalDelay > 0 {
 		s.removalDelay = removalDelay
 	}
+	s.apiKeyAuth = apiKeyAuth
+	s.apiKeyAuthSet = true
 	s.Save()
 }
 
@@ -191,6 +214,7 @@ func (s *ConfigStore) Load() {
 			EventTypes         *[]string `json:"event_types"`
 			HBMaxFail          int       `json:"heartbeat_max_failures"`
 			RemovalDelay       int       `json:"instance_removal_delay_seconds"`
+			APIKeyAuthEnabled  *bool     `json:"api_key_auth_enabled"`
 		}
 		if err := json.Unmarshal(data, &meta); err == nil {
 			s.mode = meta.Mode
@@ -210,6 +234,10 @@ func (s *ConfigStore) Load() {
 			}
 			if meta.RemovalDelay > 0 {
 				s.removalDelay = meta.RemovalDelay
+			}
+			if meta.APIKeyAuthEnabled != nil {
+				s.apiKeyAuth = *meta.APIKeyAuthEnabled
+				s.apiKeyAuthSet = true
 			}
 		}
 	}
@@ -240,6 +268,7 @@ func (s *ConfigStore) Save() {
 		EventTypes         []string `json:"event_types"`
 		HBMaxFail          int      `json:"heartbeat_max_failures"`
 		RemovalDelay       int      `json:"instance_removal_delay_seconds"`
+		APIKeyAuthEnabled  bool     `json:"api_key_auth_enabled"`
 	}{
 		Mode:               s.GetMode(),
 		Environment:        s.GetEnvironment(),
@@ -249,6 +278,7 @@ func (s *ConfigStore) Save() {
 		EventTypes:         s.GetEventTypes(),
 		HBMaxFail:          s.GetHeartbeatMaxFailures(),
 		RemovalDelay:       s.GetInstanceRemovalDelaySeconds(),
+		APIKeyAuthEnabled:  s.GetAPIKeyAuthEnabled(),
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(settingsFile, data, 0644)

@@ -112,6 +112,8 @@ func (r *Registry) SetLogRetentionDays(d int)    { r.Config.SetLogRetentionDays(
 func (r *Registry) GetEventTypes() []string      { return r.Config.GetEventTypes() }
 func (r *Registry) SetEventTypes(t []string)     { r.Config.SetEventTypes(t); r.Config.Save() }
 func (r *Registry) GetHeartbeatMaxFailures() int { return r.Config.GetHeartbeatMaxFailures() }
+func (r *Registry) GetAPIKeyAuthEnabled() bool   { return r.Config.GetAPIKeyAuthEnabled() }
+func (r *Registry) HasAPIKeyAuthSetting() bool   { return r.Config.HasAPIKeyAuthEnabled() }
 func (r *Registry) SetHeartbeatMaxFailures(n int) {
 	r.Config.SetHeartbeatMaxFailures(n)
 	r.Config.Save()
@@ -121,6 +123,10 @@ func (r *Registry) GetInstanceRemovalDelaySeconds() int {
 }
 func (r *Registry) SetInstanceRemovalDelaySeconds(n int) {
 	r.Config.SetInstanceRemovalDelaySeconds(n)
+	r.Config.Save()
+}
+func (r *Registry) SetAPIKeyAuthEnabled(enabled bool) {
+	r.Config.SetAPIKeyAuthEnabled(enabled)
 	r.Config.Save()
 }
 func (r *Registry) ListEvents() []*model.Event { return r.Events.List() }
@@ -191,6 +197,7 @@ type SnapshotData struct {
 	EventTypes         []string                                    `json:"event_types"`
 	HBMaxFail          int                                         `json:"heartbeat_max_failures"`
 	RemovalDelay       int                                         `json:"instance_removal_delay_seconds"`
+	APIKeyAuthEnabled  bool                                        `json:"api_key_auth_enabled"`
 }
 
 // Snapshot returns a deep copy of all data.
@@ -225,6 +232,7 @@ func (r *Registry) Snapshot() *SnapshotData {
 		EventTypes:         r.Config.GetEventTypes(),
 		HBMaxFail:          r.Config.GetHeartbeatMaxFailures(),
 		RemovalDelay:       r.Config.GetInstanceRemovalDelaySeconds(),
+		APIKeyAuthEnabled:  r.Config.GetAPIKeyAuthEnabled(),
 	}
 	return snap
 }
@@ -263,7 +271,7 @@ func (r *Registry) Restore(data *SnapshotData) {
 		r.Topology.Restore(data.TopologyReports)
 	}
 	r.Auth.Restore(data.Users, data.APIKeys)
-	r.Config.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay)
+	r.Config.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled)
 
 	r.Services.Save()
 	r.Auth.Save()

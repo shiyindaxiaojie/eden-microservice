@@ -360,6 +360,7 @@ func (s *settingsService) GetSystemSettings() *model.SystemSettings {
 		EventTypes:                  s.store.GetEventTypes(),
 		HeartbeatMaxFailures:        s.store.GetHeartbeatMaxFailures(),
 		InstanceRemovalDelaySeconds: s.store.GetInstanceRemovalDelaySeconds(),
+		APIKeyAuthEnabled:           s.store.GetAPIKeyAuthEnabled(),
 	}
 }
 
@@ -418,6 +419,9 @@ func (s *settingsService) ApplySystemSettings(settings *model.SystemSettings) er
 	if err := s.SetInstanceRemovalDelaySeconds(target.InstanceRemovalDelaySeconds); err != nil {
 		return err
 	}
+	if err := s.SetAPIKeyAuthEnabled(target.APIKeyAuthEnabled); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -452,6 +456,15 @@ func coerceStringSlice(value interface{}) ([]string, bool) {
 		return result, true
 	default:
 		return nil, false
+	}
+}
+
+func coerceBool(value interface{}) (bool, bool) {
+	switch v := value.(type) {
+	case bool:
+		return v, true
+	default:
+		return false, false
 	}
 }
 
@@ -491,7 +504,26 @@ func (s *settingsService) SaveSettingLocalV2(key string, value interface{}) {
 		if v, ok := coerceInt(value); ok {
 			s.store.SetInstanceRemovalDelaySeconds(v)
 		}
+	case "api_key_auth_enabled":
+		if v, ok := coerceBool(value); ok {
+			s.store.SetAPIKeyAuthEnabled(v)
+		}
 	}
+}
+
+func (s *settingsService) SetAPIKeyAuthEnabled(enabled bool) error {
+	if err := s.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if s.store.GetMode() == "cp" && s.cpNode != nil {
+		cmd := cp.Command{Type: cp.CmdSetAPIKeyAuthEnabled, BoolValue: enabled}
+		if err := s.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	s.store.SetAPIKeyAuthEnabled(enabled)
+	s.syncSettingsToPeers(map[string]interface{}{"api_key_auth_enabled": enabled})
+	return nil
 }
 func (s *settingsService) SetSeeds(seeds []string) error {
 	s.store.SetSeeds(seeds)

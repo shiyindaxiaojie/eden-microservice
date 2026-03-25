@@ -21,6 +21,7 @@ import (
 func main() {
 	logger.NewBuilder().AddConsole().Init()
 
+	// 初始化基于 Nacos 协议的注册中心适配器，后续通过统一的 registry 接口演示注册、发现、订阅和心跳。
 	reg, err := nacos.NewRegistry(&registry.Config{
 		Addresses: []string{envOr("NACOS_ADDR", "127.0.0.1:8500")},
 		Namespace: envOr("NACOS_NAMESPACE", "public"),
@@ -29,6 +30,7 @@ func main() {
 		logger.Fatal("create registry failed: %v", err)
 	}
 
+	// 定义当前服务实例元信息，后续通过 Nacos 协议适配层写入注册中心并用于心跳续约。
 	instance := &registry.ServiceInstance{
 		ID:          envOr("SERVICE_ID", "nacos-user-center-1"),
 		ServiceName: "nacos-user-center",
@@ -37,17 +39,20 @@ func main() {
 		Weight:      100,
 	}
 
+	// 通过 Nacos 协议适配层将当前实例注册到我们的注册中心，供其他服务按服务名发现。
 	if err := reg.Register(instance); err != nil {
 		logger.Fatal("register failed: %v", err)
 	}
 	logger.Info("registered %s on %s:%d", instance.ID, instance.Host, instance.Port)
 
+	// 订阅依赖服务的实例变化，演示适配层如何把注册中心变更事件回调到统一接口。
 	if err := reg.Subscribe("nacos-auth-center", func(items []*registry.ServiceInstance) {
 		logger.Info("[subscribe] nacos-auth-center updated: %d instance(s)", len(items))
 	}); err != nil {
 		logger.Warn("subscribe nacos-auth-center failed: %v", err)
 	}
 
+	// 定时通过适配层续约实例，维持当前服务在注册中心中的可发现状态。
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -60,6 +65,18 @@ func main() {
 		}
 	}()
 
+	// 启动服务，以下演示服务间的调用链，不属于注册中心 SDK 集成逻辑。
+	server := newHTTPServer(instance.Port, newUserCenterHandler(reg, instance))
+	startHTTPServer("user-center", server, instance.Port)
+	waitForStopSignal()
+	shutdownHTTPServer(server)
+
+	// 优雅下线
+	_ = reg.Deregister(instance)
+	_ = reg.Close()
+}
+
+func newUserCenterHandler(reg registry.Registry, instance *registry.ServiceInstance) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{
@@ -105,28 +122,35 @@ func main() {
 
 		writeJSON(w, userByID(path))
 	})
+	return mux
+}
 
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", instance.Port),
-		Handler: mux,
+func newHTTPServer(port int, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: handler,
 	}
+}
 
+func startHTTPServer(serviceName string, server *http.Server, port int) {
 	go func() {
-		logger.Info("user-center listening on :%d", instance.Port)
+		logger.Info("%s listening on :%d", serviceName, port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("listen failed: %v", err)
 		}
 	}()
+}
 
+func waitForStopSignal() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
+}
 
+func shutdownHTTPServer(server *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
-	_ = reg.Deregister(instance)
-	_ = reg.Close()
 }
 
 func callJSON(reg registry.Registry, serviceName, path string) (interface{}, string, error) {

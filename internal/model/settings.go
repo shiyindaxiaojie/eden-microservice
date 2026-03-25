@@ -71,6 +71,7 @@ type SystemSettings struct {
 	EventTypes                  []string `json:"event_types"`
 	HeartbeatMaxFailures        int      `json:"heartbeat_max_failures"`
 	InstanceRemovalDelaySeconds int      `json:"instance_removal_delay_seconds"`
+	APIKeyAuthEnabled           bool     `json:"api_key_auth_enabled"`
 }
 
 func DefaultEventTypes() []string {

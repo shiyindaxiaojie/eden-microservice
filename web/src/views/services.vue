@@ -537,16 +537,16 @@ onBeforeUnmount(() => {
             <el-table :data="pagedServices" height="100%" style="width: 100%; font-size: 14px;">
               <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
               <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
-              <el-table-column :label="text('命名空间', 'Namespace')" width="120" prop="namespace" />
+              <el-table-column :label="text('命名空间', 'Namespace')" min-width="80" prop="namespace" />
 
-              <el-table-column :label="text('地址', 'Address')" min-width="180">
+              <el-table-column :label="text('地址', 'Address')" min-width="100">
                 <template #default="{ row }">
                   <code class="cell-addr" style="font-family: inherit; font-size: 14px;">{{ row.instances[0] ? `${row.instances[0].host}:${row.instances[0].port}` : '-' }}</code>
                   <span v-if="row.instances.length > 1" style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">+{{ row.instances.length - 1 }}</span>
                 </template>
               </el-table-column>
 
-              <el-table-column :label="text('状态', 'Status')" width="180">
+              <el-table-column :label="text('状态', 'Status')" min-width="80">
                 <template #default="{ row }">
                   <div class="cell-health">
                     <span class="health-badge" :style="{ color: row.healthTone, background: row.healthSurface, borderColor: row.healthBorder, fontSize: '13px' }">

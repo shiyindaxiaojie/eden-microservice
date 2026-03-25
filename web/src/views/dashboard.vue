@@ -5,6 +5,8 @@ import {
   getEvents,
   getLogFiles,
   getLogs,
+  getNamespaces,
+  getRbacUsers,
   type ClusterStats,
   type RegistryEvent,
 } from '../api/registry'
@@ -26,11 +28,22 @@ interface ParsedLogLine {
   message?: string
 }
 
+interface MemorySample {
+  timestamp: number
+  value: number
+}
+
 type DashboardPanel = 'events' | 'logs'
 type EventTimeFilter = 'all' | '1h' | '24h' | '7d'
 
 const AUTO_REFRESH_MS = 10000
 const LOG_LINE_COUNT = 160
+const MEMORY_TREND_WINDOW_MS = 10 * 60 * 1000
+const MEMORY_CHART_WIDTH = 320
+const MEMORY_CHART_HEIGHT = 118
+const MEMORY_CHART_PADDING_X = 10
+const MEMORY_CHART_PADDING_TOP = 14
+const MEMORY_CHART_PADDING_BOTTOM = 18
 const KNOWN_EVENT_TYPES = [
   'service_register',
   'service_online',
@@ -47,6 +60,13 @@ const { t, locale } = useI18n()
 const stats = ref<ClusterStats | null>(null)
 const events = ref<RegistryEvent[]>([])
 const logFiles = ref<LogFileOption[]>([])
+const namespaceCount = ref<number | null>(null)
+const defaultNamespaceCount = ref(0)
+const customNamespaceCount = ref(0)
+const userCount = ref<number | null>(null)
+const builtinUserCount = ref(0)
+const customUserCount = ref(0)
+const memoryHistory = ref<MemorySample[]>([])
 const activeLogFile = ref('')
 const logs = ref<string[]>([])
 const loading = ref(true)
@@ -119,6 +139,285 @@ const logLinesLabel = computed(() =>
 const eventTypeFilterLabel = computed(() => (locale.value === 'zh' ? '事件类型' : 'Event Type'))
 const eventTimeFilterLabel = computed(() => (locale.value === 'zh' ? '发生时间' : 'Occurred'))
 const autoScrollLabel = computed(() => (locale.value === 'zh' ? '自动滚动' : 'Auto Scroll'))
+const eventSummaryText = computed(() => {
+  const total = events.value.length
+  const filtered = filteredEvents.value.length
+  const isFiltered = activeEventType.value !== 'all' || activeEventTime.value !== 'all'
+
+  if (locale.value === 'zh') {
+    return isFiltered ? `筛选 ${filtered} / 总计 ${total}` : `总计 ${total} 条`
+  }
+
+  return isFiltered ? `${filtered} filtered / ${total} total` : `${total} total`
+})
+
+const refreshChipText = computed(() =>
+  locale.value === 'zh' ? '10s 刷新' : '10s refresh',
+)
+
+const localizedRoleText = computed(() => {
+  const role = (stats.value?.role || '').toLowerCase()
+  if (!role) return t.value.common.unknown
+
+  const roleMap: Record<string, { zh: string; en: string }> = {
+    leader: { zh: 'Leader', en: 'Leader' },
+    follower: { zh: 'Follower', en: 'Follower' },
+    candidate: { zh: 'Candidate', en: 'Candidate' },
+    peer: { zh: '节点', en: 'Peer' },
+    standalone: { zh: '单机', en: 'Standalone' },
+  }
+
+  const matched = roleMap[role]
+  if (matched) {
+    return locale.value === 'zh' ? matched.zh : matched.en
+  }
+
+  return stats.value?.role || t.value.common.unknown
+})
+
+const deploymentModeText = computed(() => {
+  if (!stats.value) return '-'
+  return stats.value.environment === 'cluster'
+    ? (locale.value === 'zh' ? '集群部署' : 'Cluster deployment')
+    : (locale.value === 'zh' ? '单机部署' : 'Standalone deployment')
+})
+
+const deploymentUnitText = computed(() =>
+  locale.value === 'zh' ? '个节点' : 'nodes',
+)
+
+const serviceUnitText = computed(() =>
+  locale.value === 'zh' ? '个服务' : 'services',
+)
+
+const namespaceUnitText = computed(() =>
+  locale.value === 'zh' ? '个命名空间' : 'namespaces',
+)
+
+const userUnitText = computed(() =>
+  locale.value === 'zh' ? '个用户' : 'users',
+)
+
+const serviceScaleText = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.instance_count === 0) {
+    return locale.value === 'zh' ? '当前没有已注册实例' : 'No registered instances yet'
+  }
+
+  return locale.value === 'zh'
+    ? `实例总数 ${stats.value.instance_count}`
+    : `${stats.value.instance_count} instances total`
+})
+
+const healthSubtitleText = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.instance_count === 0) {
+    return locale.value === 'zh' ? '当前没有可统计实例' : 'No instances to evaluate'
+  }
+
+  return locale.value === 'zh'
+    ? `健康率 ${stats.value.health_rate.toFixed(1)}%`
+    : `${stats.value.health_rate.toFixed(1)}% health rate`
+})
+
+const resourceSubtitleText = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.environment === 'standalone') {
+    return locale.value === 'zh' ? '当前节点本地资源占用' : 'Resource usage of the current node'
+  }
+
+  return leaderNoteText.value
+})
+
+const registryStatusText = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.service_count === 0) {
+    return locale.value === 'zh' ? '暂无服务' : 'No services'
+  }
+
+  return locale.value === 'zh' ? '已有注册' : 'Registry active'
+})
+
+const serviceHealthRateValue = computed(() => {
+  if (!stats.value?.instance_count) return 0
+  return Math.min(100, Math.max(0, stats.value.health_rate))
+})
+
+const serviceOverviewText = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.instance_count === 0) {
+    return locale.value === 'zh' ? '暂无已注册实例' : 'No registered instances yet'
+  }
+
+  return locale.value === 'zh'
+    ? `共 ${stats.value.instance_count} 个实例，健康 ${stats.value.healthy_count} 个`
+    : `${stats.value.instance_count} instances, ${stats.value.healthy_count} healthy`
+})
+
+const serviceHealthComparisonText = computed(() => {
+  if (!stats.value) return '-'
+  if (stats.value.instance_count === 0) {
+    return locale.value === 'zh' ? '暂无可用健康对比' : 'No health comparison available'
+  }
+
+  return locale.value === 'zh'
+    ? `健康率 ${stats.value.health_rate.toFixed(1)}%`
+    : `${stats.value.health_rate.toFixed(1)}% health rate`
+})
+
+const namespaceLabelText = computed(() => {
+  if (namespaceCount.value == null) return '-'
+  if (namespaceCount.value === 0) {
+    return locale.value === 'zh' ? '暂无命名空间' : 'No namespaces yet'
+  }
+
+  return locale.value === 'zh' ? '已创建的命名空间' : 'Created namespaces'
+})
+
+const namespaceNoteText = computed(() => {
+  if (namespaceCount.value == null) {
+    return locale.value === 'zh' ? '命名空间数据暂时不可用' : 'Namespace data unavailable'
+  }
+
+  if (namespaceCount.value === 0) {
+    return locale.value === 'zh' ? '可以先创建命名空间做环境隔离' : 'Create namespaces first to isolate services'
+  }
+
+  if (defaultNamespaceCount.value === 0) {
+    return locale.value === 'zh' ? '未检测到 default 命名空间' : 'No default namespace detected'
+  }
+
+  return locale.value === 'zh'
+    ? `默认 ${defaultNamespaceCount.value} 个，自定义 ${customNamespaceCount.value} 个`
+    : `${defaultNamespaceCount.value} default, ${customNamespaceCount.value} custom`
+})
+
+const userLabelText = computed(() => {
+  if (userCount.value == null) return '-'
+  if (userCount.value === 0) {
+    return locale.value === 'zh' ? '暂无可登录用户' : 'No console users yet'
+  }
+
+  return locale.value === 'zh' ? '控制台可登录用户' : 'Console users'
+})
+
+const userNoteText = computed(() => {
+  if (userCount.value == null) {
+    return locale.value === 'zh' ? '用户数据暂时不可用' : 'User data unavailable'
+  }
+
+  if (userCount.value === 0) {
+    return locale.value === 'zh' ? '可在访问控制中按需添加用户' : 'Add users in access control when needed'
+  }
+
+  return locale.value === 'zh'
+    ? `内置 ${builtinUserCount.value} 个，自定义 ${customUserCount.value} 个`
+    : `${builtinUserCount.value} built-in, ${customUserCount.value} custom`
+})
+
+const memoryTrendModel = computed(() => {
+  const samples = memoryHistory.value.filter((item) => Number.isFinite(item.value))
+  const baselineY = MEMORY_CHART_HEIGHT - MEMORY_CHART_PADDING_BOTTOM
+
+  if (samples.length === 0) {
+    return {
+      points: [] as Array<MemorySample & { x: number; y: number }>,
+      polyline: '',
+      areaPath: '',
+      lastPoint: null as (MemorySample & { x: number; y: number }) | null,
+      firstSample: null as MemorySample | null,
+      lastSample: null as MemorySample | null,
+      min: null as number | null,
+      max: null as number | null,
+      delta: null as number | null,
+    }
+  }
+
+  const values = samples.map((item) => item.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const innerWidth = MEMORY_CHART_WIDTH - MEMORY_CHART_PADDING_X * 2
+  const innerHeight = MEMORY_CHART_HEIGHT - MEMORY_CHART_PADDING_TOP - MEMORY_CHART_PADDING_BOTTOM
+  const valueRange = Math.max(1, max - min)
+
+  const points = samples.map((sample, index) => {
+    const ratio = samples.length === 1 ? 0.5 : index / (samples.length - 1)
+    const normalized = (sample.value - min) / valueRange
+    const x = MEMORY_CHART_PADDING_X + ratio * innerWidth
+    const y = MEMORY_CHART_PADDING_TOP + (1 - normalized) * innerHeight
+    return {
+      ...sample,
+      x: Number(x.toFixed(2)),
+      y: Number(y.toFixed(2)),
+    }
+  })
+
+  const polyline = points.map((point) => `${point.x},${point.y}`).join(' ')
+  const areaPath = points.length === 0
+    ? ''
+    : `${points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')} L ${points.at(-1)?.x ?? 0} ${baselineY} L ${points[0]?.x ?? 0} ${baselineY} Z`
+
+  return {
+    points,
+    polyline,
+    areaPath,
+    lastPoint: points.at(-1) ?? null,
+    firstSample: samples[0] ?? null,
+    lastSample: samples.at(-1) ?? null,
+    min,
+    max,
+    delta: samples.length > 1 ? (samples.at(-1)?.value ?? 0) - samples[0].value : null,
+  }
+})
+
+const memoryTrendWindowText = computed(() =>
+  locale.value === 'zh' ? '近 10 分钟内存趋势，每 10 秒刷新一次' : 'Last 10 minutes, refreshed every 10s',
+)
+
+const memoryTrendMinText = computed(() =>
+  memoryTrendModel.value.min == null ? '-' : formatMemory(memoryTrendModel.value.min),
+)
+
+const memoryTrendMaxText = computed(() =>
+  memoryTrendModel.value.max == null ? '-' : formatMemory(memoryTrendModel.value.max),
+)
+
+const memoryTrendDeltaText = computed(() => {
+  const delta = memoryTrendModel.value.delta
+  if (delta == null) {
+    return locale.value === 'zh' ? '采样中...' : 'Collecting samples'
+  }
+
+  const prefix = delta > 0 ? '+' : delta < 0 ? '-' : '±'
+  const value = formatMemory(Math.abs(delta))
+  return locale.value === 'zh'
+    ? `较 10 分钟前 ${prefix}${value}`
+    : `${prefix}${value} vs 10m ago`
+})
+
+const memoryTrendDeltaClass = computed(() => {
+  const delta = memoryTrendModel.value.delta
+  if (delta == null || delta === 0) return 'is-flat'
+  return delta > 0 ? 'is-up' : 'is-down'
+})
+
+const memoryTrendEmptyText = computed(() =>
+  locale.value === 'zh' ? '采样几次后将显示趋势' : 'The trend will appear after a few samples',
+)
+
+const memoryTrendStartLabel = computed(() => {
+  if (!memoryTrendModel.value.firstSample) return '--:--'
+  return formatClock(memoryTrendModel.value.firstSample.timestamp)
+})
+
+const memoryTrendEndLabel = computed(() => {
+  if (!memoryTrendModel.value.lastSample) return '--:--'
+  return formatClock(memoryTrendModel.value.lastSample.timestamp)
+})
+
+const memoryTrendPolyline = computed(() => memoryTrendModel.value.polyline)
+const memoryTrendAreaPath = computed(() => memoryTrendModel.value.areaPath)
+const memoryTrendLastPoint = computed(() => memoryTrendModel.value.lastPoint)
 
 const localizedLogFiles = computed(() =>
   logFiles.value.map((item) => ({
@@ -221,25 +520,53 @@ async function fetchLogs(file = activeLogFile.value) {
 
 async function fetchData() {
   try {
-    const [statsRes, eventsRes, logFilesRes] = await Promise.all([
+    const [statsRes, eventsRes, logFilesRes, namespacesRes, usersRes] = await Promise.allSettled([
       getClusterStats(),
       getEvents(),
       getLogFiles(),
+      getNamespaces(),
+      getRbacUsers(),
     ])
 
-    stats.value = statsRes.data
-    events.value = eventsRes.data || []
+    if (statsRes.status === 'fulfilled') {
+      stats.value = statsRes.value.data
+      recordMemorySample(statsRes.value.data.memory_usage)
+    }
 
-    const files = logFilesRes.data || []
-    logFiles.value = files
+    if (eventsRes.status === 'fulfilled') {
+      events.value = eventsRes.value.data || []
+    }
 
-    const activeStillExists = files.some((item) => item.file === activeLogFile.value)
-    const nextActiveFile = activeStillExists ? activeLogFile.value : files[0]?.file || ''
+    if (logFilesRes.status === 'fulfilled') {
+      const files = logFilesRes.value.data || []
+      logFiles.value = files
 
-    if (nextActiveFile !== activeLogFile.value) {
-      activeLogFile.value = nextActiveFile
-    } else {
-      await fetchLogs(nextActiveFile)
+      const activeStillExists = files.some((item) => item.file === activeLogFile.value)
+      const nextActiveFile = activeStillExists ? activeLogFile.value : files[0]?.file || ''
+
+      if (nextActiveFile !== activeLogFile.value) {
+        activeLogFile.value = nextActiveFile
+      } else {
+        await fetchLogs(nextActiveFile)
+      }
+    }
+
+    if (namespacesRes.status === 'fulfilled') {
+      const namespaces = namespacesRes.value.data || []
+      const defaultCount = namespaces.filter((item) => item.name === 'default').length
+
+      namespaceCount.value = namespaces.length
+      defaultNamespaceCount.value = defaultCount
+      customNamespaceCount.value = Math.max(0, namespaces.length - defaultCount)
+    }
+
+    if (usersRes.status === 'fulfilled') {
+      const users = usersRes.value.data || []
+      const builtinCount = users.filter((item) => item.is_builtin).length
+
+      userCount.value = users.length
+      builtinUserCount.value = builtinCount
+      customUserCount.value = Math.max(0, users.length - builtinCount)
     }
   } catch (error) {
     console.error('fetch dashboard data failed', error)
@@ -268,11 +595,35 @@ function formatTime(ts: string) {
 }
 
 function formatMemory(bytes: number | undefined) {
-  if (!bytes) return '-'
+  if (bytes == null || !Number.isFinite(bytes)) return '-'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+function formatClock(ts: number) {
+  return new Date(ts).toLocaleTimeString(locale.value === 'zh' ? 'zh-CN' : 'en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+function recordMemorySample(bytes: number | undefined) {
+  if (bytes == null || !Number.isFinite(bytes)) return
+
+  const now = Date.now()
+  const cutoff = now - MEMORY_TREND_WINDOW_MS
+  const preservedSamples = memoryHistory.value.filter((item) => item.timestamp >= cutoff)
+
+  memoryHistory.value = [
+    ...preservedSamples,
+    {
+      timestamp: now,
+      value: bytes,
+    },
+  ]
 }
 
 function getEventTypeMeta(type: string) {
@@ -403,56 +754,121 @@ onBeforeUnmount(() => {
     <section class="metric-grid">
       <article class="metric-card is-blue">
         <div class="metric-card-head">
-          <div class="metric-icon"><el-icon><Connection /></el-icon></div>
-          <span class="metric-side-label">{{ stats?.role || t.common.unknown }}</span>
+          <div class="metric-card-title">
+            <div class="metric-icon"><el-icon><Connection /></el-icon></div>
+            <h3 class="metric-heading">{{ locale === 'zh' ? '节点' : 'Nodes' }}</h3>
+          </div>
+          <span class="metric-badge">{{ stats?.mode?.toUpperCase() || '--' }}</span>
         </div>
 
         <div class="metric-main">
-          <div class="metric-value">{{ stats?.node_count ?? '-' }}</div>
-          <div class="metric-label">{{ t.dashboard.nodes }}</div>
+          <div class="metric-value-row">
+            <div class="metric-value">{{ stats?.node_count ?? '-' }}</div>
+            <small class="metric-unit">{{ deploymentUnitText }}</small>
+          </div>
+          <div class="metric-inline-meta">
+            <span>{{ deploymentModeText }}</span>
+            <span>{{ localizedRoleText }}</span>
+          </div>
           <div class="metric-note">{{ leaderNoteText }}</div>
         </div>
       </article>
 
       <article class="metric-card is-cyan">
         <div class="metric-card-head">
-          <div class="metric-icon"><el-icon><Grid /></el-icon></div>
-          <span class="metric-side-label">{{ serviceHealthText }}</span>
-        </div>
-
-        <div class="metric-main">
-          <div class="metric-value">
-            <span>{{ stats?.service_count ?? '-' }}</span>
-            <small>/ {{ stats?.instance_count ?? '-' }}</small>
+          <div class="metric-card-title">
+            <div class="metric-icon"><el-icon><Grid /></el-icon></div>
+            <h3 class="metric-heading">{{ locale === 'zh' ? '服务注册' : 'Services' }}</h3>
           </div>
-          <div class="metric-label">{{ t.dashboard.services }} / {{ t.dashboard.instances }}</div>
-          <div class="metric-note">{{ clusterModeText || '-' }}</div>
-        </div>
-      </article>
-
-      <article class="metric-card is-purple">
-        <div class="metric-card-head">
-          <div class="metric-icon"><el-icon><Monitor /></el-icon></div>
-          <span class="metric-side-label">{{ currentNodeText }}</span>
+          <span class="metric-badge">{{ `${stats?.healthy_count ?? 0}/${stats?.instance_count ?? 0}` }}</span>
         </div>
 
         <div class="metric-main">
-          <div class="metric-value">{{ formatMemory(stats?.memory_usage) }}</div>
-          <div class="metric-label">{{ t.dashboard.memoryUsage }}</div>
-          <div class="metric-note">{{ t.dashboard.memoryDesc }}</div>
+          <div class="metric-value-row">
+            <div class="metric-value">{{ stats?.service_count ?? '-' }}</div>
+            <small class="metric-unit">{{ serviceUnitText }}</small>
+          </div>
+          <div class="metric-inline-meta">
+            <span>{{ locale === 'zh' ? '实例' : 'Instances' }} {{ stats?.instance_count ?? '-' }}</span>
+            <span>{{ locale === 'zh' ? '健康' : 'Healthy' }} {{ stats?.healthy_count ?? '-' }}</span>
+          </div>
+          <div class="metric-progress">
+            <div class="metric-progress-track">
+              <span class="metric-progress-fill" :style="{ width: `${serviceHealthRateValue}%` }"></span>
+            </div>
+            <span class="metric-progress-text">{{ serviceOverviewText }}</span>
+          </div>
         </div>
       </article>
 
       <article class="metric-card is-green">
         <div class="metric-card-head">
-          <div class="metric-icon"><el-icon><CircleCheck /></el-icon></div>
-          <span class="metric-side-label">{{ healthStatusText }}</span>
+          <div class="metric-card-title">
+            <div class="metric-icon"><el-icon><FolderOpened /></el-icon></div>
+            <h3 class="metric-heading">{{ locale === 'zh' ? '命名空间' : 'Namespaces' }}</h3>
+          </div>
+          <span class="metric-badge">{{ `${customNamespaceCount}` }}</span>
         </div>
 
         <div class="metric-main">
-          <div class="metric-value">{{ stats ? `${stats.health_rate.toFixed(1)}%` : '-' }}</div>
-          <div class="metric-label">{{ t.dashboard.healthRate }}</div>
-          <div class="metric-note">{{ refreshBadgeText }}</div>
+          <div class="metric-value-row">
+            <div class="metric-value">{{ namespaceCount ?? '-' }}</div>
+            <small class="metric-unit">{{ namespaceUnitText }}</small>
+          </div>
+          <div class="metric-inline-meta">
+            <span>{{ locale === 'zh' ? '默认' : 'Default' }} {{ defaultNamespaceCount }}</span>
+            <span>{{ locale === 'zh' ? '自定义' : 'Custom' }} {{ customNamespaceCount }}</span>
+          </div>
+          <div class="metric-note">{{ namespaceLabelText }}</div>
+        </div>
+      </article>
+
+      <article class="metric-card is-slate">
+        <div class="metric-card-head">
+          <div class="metric-card-title">
+            <div class="metric-icon"><el-icon><Monitor /></el-icon></div>
+            <h3 class="metric-heading">{{ locale === 'zh' ? '系统信息' : 'System' }}</h3>
+          </div>
+          <span class="metric-badge">10m</span>
+        </div>
+
+        <div class="metric-main metric-main--system">
+          <div class="metric-value-row">
+            <div class="metric-value metric-value--memory">{{ formatMemory(stats?.memory_usage) }}</div>
+          </div>
+          <div class="metric-inline-meta">
+            <span>{{ locale === 'zh' ? '最低' : 'Min' }} {{ memoryTrendMinText }}</span>
+            <span>{{ locale === 'zh' ? '最高' : 'Max' }} {{ memoryTrendMaxText }}</span>
+          </div>
+          <div class="metric-sparkline-shell">
+            <svg class="metric-sparkline-svg" :viewBox="`0 0 ${MEMORY_CHART_WIDTH} ${MEMORY_CHART_HEIGHT}`" preserveAspectRatio="none">
+              <path
+                v-if="memoryTrendAreaPath"
+                :d="memoryTrendAreaPath"
+                fill="rgba(59, 130, 246, 0.12)"
+              />
+              <polyline
+                v-if="memoryTrendPolyline"
+                :points="memoryTrendPolyline"
+                fill="none"
+                stroke="#2563eb"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle
+                v-if="memoryTrendLastPoint"
+                :cx="memoryTrendLastPoint.x"
+                :cy="memoryTrendLastPoint.y"
+                r="4.5"
+                fill="#ffffff"
+                stroke="#2563eb"
+                stroke-width="3"
+              />
+            </svg>
+            <div v-if="!memoryTrendPolyline" class="metric-sparkline-empty">{{ memoryTrendEmptyText }}</div>
+          </div>
+          <div class="metric-note">{{ memoryTrendDeltaText }}</div>
         </div>
       </article>
     </section>
@@ -503,7 +919,10 @@ onBeforeUnmount(() => {
             </el-select>
           </div>
 
-          <span class="panel-count">{{ filteredEvents.length }}</span>
+          <div class="panel-summary">
+            <span class="panel-summary-kicker">{{ eventsTabText }}</span>
+            <strong class="panel-summary-value">{{ eventSummaryText }}</strong>
+          </div>
         </div>
 
         <div v-else class="panel-actions panel-actions--logs">
@@ -627,12 +1046,12 @@ onBeforeUnmount(() => {
 }
 
 .metric-grid {
-  flex: 0 0 20%;
-  min-height: 120px;
-  max-height: 160px;
+  flex: 0 0 18%;
+  min-height: 106px;
+  max-height: 138px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
   align-items: stretch;
 }
 
@@ -640,16 +1059,16 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   height: 100%;
-  padding: 12px 18px 14px;
+  padding: 10px 12px;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: var(--bg-secondary);
-  box-shadow: none;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.2s ease;
 }
 
 .metric-card::before {
@@ -658,6 +1077,14 @@ onBeforeUnmount(() => {
   inset: 0 0 auto;
   height: 3px;
   opacity: 0.9;
+}
+
+.metric-card::after {
+  display: none;
+}
+
+.metric-card:hover {
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
 }
 
 .metric-card.is-blue::before {
@@ -676,21 +1103,45 @@ onBeforeUnmount(() => {
   background: linear-gradient(90deg, #10b981, #22c55e);
 }
 
+.metric-card.is-slate::before {
+  background: linear-gradient(90deg, #475569, #94a3b8);
+}
+
 .metric-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+}
+
+.metric-card-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .metric-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
+  font-size: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.metric-heading {
+  margin: 0;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .metric-card.is-blue .metric-icon {
@@ -713,31 +1164,31 @@ onBeforeUnmount(() => {
   background: rgba(16, 185, 129, 0.12);
 }
 
-.metric-side-label {
-  max-width: 58%;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.metric-card.is-slate .metric-icon {
+  color: #475569;
+  background: rgba(100, 116, 139, 0.12);
 }
 
 .metric-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
+  flex: 1;
+}
+
+.metric-main--system {
+  gap: 6px;
+}
+
+.metric-value-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .metric-value {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: clamp(28px, 2.3vw, 34px);
+  font-size: clamp(22px, 1.7vw, 28px);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -745,25 +1196,311 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.metric-value small {
-  font-size: 16px;
+.metric-value--memory {
+  font-size: clamp(20px, 1.55vw, 26px);
+}
+
+.metric-unit {
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
 }
 
-.metric-label {
-  font-size: 13px;
+.metric-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  max-width: 44%;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metric-inline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.metric-inline-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.metric-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.metric-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-progress-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.metric-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #06b6d4, #10b981);
+  box-shadow: 0 6px 14px rgba(16, 185, 129, 0.2);
+}
+
+.metric-progress-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.system-panel {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(240px, 1fr) minmax(320px, 1.15fr);
+  gap: 18px;
+  padding: 20px 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(191, 219, 254, 0.35), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+}
+
+.system-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.system-icon {
+  color: #2563eb;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.system-value {
+  font-size: clamp(34px, 3vw, 44px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+}
+
+.system-label {
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-secondary);
 }
 
-.metric-note {
+.system-note {
+  margin: 0;
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.55;
   color: var(--text-muted);
+}
+
+.system-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.system-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.system-stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.system-stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.system-chart-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.system-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.system-chart-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.system-chart-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.system-chart-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.system-chart-delta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
   white-space: nowrap;
+}
+
+.system-chart-delta.is-up {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.system-chart-delta.is-down {
+  color: #0f766e;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.system-chart-delta.is-flat {
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.system-chart-shell {
+  position: relative;
+  flex: 1;
+  min-height: 134px;
+  border-radius: 18px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background:
+    linear-gradient(180deg, rgba(59, 130, 246, 0.03), rgba(59, 130, 246, 0)),
+    repeating-linear-gradient(
+      to top,
+      rgba(148, 163, 184, 0.08),
+      rgba(148, 163, 184, 0.08) 1px,
+      transparent 1px,
+      transparent 34px
+    );
+}
+
+.system-chart-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.system-chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.system-chart-axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.metric-sparkline-shell {
+  position: relative;
+  flex: 0 0 28px;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background:
+    linear-gradient(180deg, rgba(59, 130, 246, 0.04), rgba(59, 130, 246, 0)),
+    repeating-linear-gradient(
+      to top,
+      rgba(148, 163, 184, 0.08),
+      rgba(148, 163, 184, 0.08) 1px,
+      transparent 1px,
+      transparent 12px
+    );
+}
+
+.metric-sparkline-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.metric-sparkline-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .activity-panel {
@@ -782,10 +1519,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px 18px 12px;
+  gap: 18px;
+  padding: 16px 20px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0));
 }
 
 .panel-tabs {
@@ -824,7 +1562,7 @@ onBeforeUnmount(() => {
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   flex-shrink: 0;
 }
@@ -849,18 +1587,29 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-.panel-count {
+.panel-summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.08);
-  color: var(--accent-blue);
-  font-size: 13px;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(96, 165, 250, 0.14));
+}
+
+.panel-summary-kicker {
+  font-size: 12px;
   font-weight: 700;
+  color: var(--accent-blue);
+}
+
+.panel-summary-value {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .panel-scroll {
@@ -1214,18 +1963,28 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1360px) {
   .metric-grid {
-    flex: none;
-    min-height: 0;
-    max-height: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .metric-card {
-    min-height: 124px;
+  .system-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .system-chart-panel {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 980px) {
+  .system-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .system-chart-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .activity-head {
     flex-direction: column;
     align-items: stretch;
@@ -1234,10 +1993,23 @@ onBeforeUnmount(() => {
   .panel-actions {
     justify-content: flex-start;
   }
+
+  .panel-summary {
+    align-self: flex-start;
+  }
 }
 
 @media (max-width: 900px) {
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    min-height: 0;
+  }
+
+  .metric-stats,
+  .system-stat-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1246,6 +2018,11 @@ onBeforeUnmount(() => {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .panel-summary {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .panel-filter {

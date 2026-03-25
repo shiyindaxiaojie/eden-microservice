@@ -102,6 +102,7 @@ export interface SystemSettings {
   event_types: string[]
   heartbeat_max_failures: number
   instance_removal_delay_seconds: number
+  api_key_auth_enabled: boolean
 }
 
 export interface RbacUser {

@@ -31,6 +31,7 @@ const (
 	CmdSetEventTypes                  CommandType = "set_event_types"
 	CmdSetHeartbeatMaxFailures        CommandType = "set_heartbeat_max_failures"
 	CmdSetInstanceRemovalDelaySeconds CommandType = "set_instance_removal_delay_seconds"
+	CmdSetAPIKeyAuthEnabled           CommandType = "set_api_key_auth_enabled"
 )
 
 // Command represents a Raft log command.
@@ -50,6 +51,7 @@ type Command struct {
 	LogLevel    string          `json:"log_level,omitempty"`   // for set_log_level
 	IntValue    int             `json:"int_value,omitempty"`
 	StringList  []string        `json:"string_list,omitempty"`
+	BoolValue   bool            `json:"bool_value,omitempty"`
 }
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
@@ -124,6 +126,9 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		return nil
 	case CmdSetInstanceRemovalDelaySeconds:
 		f.registry.SetInstanceRemovalDelaySeconds(cmd.IntValue)
+		return nil
+	case CmdSetAPIKeyAuthEnabled:
+		f.registry.SetAPIKeyAuthEnabled(cmd.BoolValue)
 		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)

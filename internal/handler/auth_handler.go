@@ -115,7 +115,12 @@ func (h *Handler) RBAC(roles ...string) func(http.Handler) http.Handler {
 // APIKeyMiddleware handles API Key authentication for service registration.
 func (h *Handler) APIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !h.config.Auth.APIKey.Enabled {
+		settings := h.settings.GetSystemSettings()
+		apiKeyEnabled := h.config.Auth.APIKey.Enabled
+		if settings != nil {
+			apiKeyEnabled = settings.APIKeyAuthEnabled
+		}
+		if !apiKeyEnabled {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -20,124 +20,214 @@ let chart: echarts.ECharts | null = null
 
 const graphData = computed(() => props.graph || { namespace: 'default', nodes: [], edges: [] })
 
+function displayAddresses(node: TopologyNode) {
+  const seen = new Set<string>()
+  const items: string[] = []
+
+  for (const instance of node.instances) {
+    const address = `${instance.host}:${instance.port}`
+    if (seen.has(address)) continue
+    seen.add(address)
+    items.push(address)
+    if (items.length >= 3) break
+  }
+
+  return items
+}
+
+function escapeRichText(value: string) {
+  return value.replace(/[{}|]/g, ' ').replace(/\n/g, ' ')
+}
+
 function nodeTone(node: TopologyNode) {
   if (node.instance_count === 0) {
     return {
-      border: '#475569',
-      fill: '#ffffff',
+      border: '#94a3b8',
+      fillTop: '#ffffff',
+      fillBottom: '#f8fafc',
       accent: '#64748b',
       text: '#94a3b8',
+      subtext: '#94a3b8',
+      badgeBg: 'rgba(148, 163, 184, 0.12)',
+      chipBg: 'rgba(255, 255, 255, 0.86)',
+      chipBorder: 'rgba(148, 163, 184, 0.18)',
+      glow: 'rgba(148, 163, 184, 0.16)',
     }
   }
+
   if (node.healthy_count === node.instance_count) {
     return {
       border: '#22c55e',
-      fill: '#ffffff',
-      accent: '#10b981',
+      fillTop: '#ffffff',
+      fillBottom: '#f0fdf4',
+      accent: '#16a34a',
       text: '#0f172a',
+      subtext: '#64748b',
+      badgeBg: 'rgba(34, 197, 94, 0.14)',
+      chipBg: 'rgba(255, 255, 255, 0.94)',
+      chipBorder: 'rgba(134, 239, 172, 0.55)',
+      glow: 'rgba(34, 197, 94, 0.14)',
     }
   }
+
   if (node.healthy_count > 0) {
     return {
       border: '#f59e0b',
-      fill: '#ffffff',
+      fillTop: '#ffffff',
+      fillBottom: '#fffbeb',
       accent: '#d97706',
       text: '#0f172a',
+      subtext: '#64748b',
+      badgeBg: 'rgba(245, 158, 11, 0.16)',
+      chipBg: 'rgba(255, 255, 255, 0.94)',
+      chipBorder: 'rgba(253, 230, 138, 0.6)',
+      glow: 'rgba(245, 158, 11, 0.16)',
     }
   }
+
   return {
     border: '#ef4444',
-    fill: '#ffffff',
+    fillTop: '#ffffff',
+    fillBottom: '#fef2f2',
     accent: '#dc2626',
     text: '#0f172a',
+    subtext: '#64748b',
+    badgeBg: 'rgba(239, 68, 68, 0.14)',
+    chipBg: 'rgba(255, 255, 255, 0.94)',
+    chipBorder: 'rgba(252, 165, 165, 0.58)',
+    glow: 'rgba(239, 68, 68, 0.16)',
   }
 }
 
 function buildOption(): echarts.EChartsOption {
-  const upstreamCounts = new Map<string, number>()
-  const downstreamCounts = new Map<string, number>()
-
-  for (const edge of graphData.value.edges) {
-    upstreamCounts.set(edge.source, (upstreamCounts.get(edge.source) || 0) + 1)
-    downstreamCounts.set(edge.target, (downstreamCounts.get(edge.target) || 0) + 1)
-  }
-
   const nodes = graphData.value.nodes.map((node) => {
     const tone = nodeTone(node)
     const isSelected = props.selectedNode === node.id
-    const upstreamCount = upstreamCounts.get(node.id) || 0
-    const downstreamCount = downstreamCounts.get(node.id) || 0
-    const nodeWidth = Math.min(192, Math.max(152, node.name.length * 10 + 44))
-    const titleWidth = Math.max(92, nodeWidth - 50)
-    const metaWidth = nodeWidth - titleWidth
-    const summaryWidth = nodeWidth - 20
-    const summary = `Inst ${node.instance_count} · ↑${upstreamCount} ↓${downstreamCount}`
+    const addresses = displayAddresses(node)
+    const longestAddress = addresses.reduce((max, address) => Math.max(max, address.length), 0)
+    const ratioText = `${node.healthy_count}/${node.instance_count}`
+    const badgeWidth = Math.max(56, ratioText.length * 8 + 20)
+    const nodeWidth = Math.min(292, Math.max(220, Math.max(node.name.length * 8.5 + 90, longestAddress * 7 + 58)))
+    const nodeHeight = 74 + Math.max(1, addresses.length) * 24
+    const titleWidth = Math.max(112, nodeWidth - badgeWidth - 42)
+    const metaWidth = badgeWidth
+    const contentWidth = nodeWidth - 44
+    const title = escapeRichText(node.name)
+    const addressRows = addresses.length
+      ? addresses.map((address) => `{addr|${escapeRichText(address)}}`).join('\n')
+      : '{empty|No instance}'
 
     return {
       id: node.id,
       name: node.name,
       value: node.name,
       symbol: 'rect',
-      symbolSize: [nodeWidth, 68],
+      symbolSize: [nodeWidth, nodeHeight],
       draggable: false,
       itemStyle: {
-        color: isSelected ? 'rgba(59, 130, 246, 0.08)' : tone.fill,
+        color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
+          {
+            offset: 0,
+            color: isSelected ? '#f8fbff' : tone.fillTop,
+          },
+          {
+            offset: 1,
+            color: isSelected ? '#eef5ff' : tone.fillBottom,
+          },
+        ]),
         borderColor: isSelected ? '#3b82f6' : tone.border,
-        borderWidth: isSelected ? 2 : 1.25,
-        shadowColor: isSelected ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
-        shadowBlur: isSelected ? 8 : 0,
-        shadowOffsetY: 0,
+        borderWidth: isSelected ? 2.4 : 1.4,
+        shadowColor: isSelected ? 'rgba(59, 130, 246, 0.18)' : tone.glow,
+        shadowBlur: isSelected ? 22 : 14,
+        shadowOffsetY: 6,
       },
       label: {
         show: true,
-        formatter: `{title|${node.name}}{meta|${node.healthy_count}/${node.instance_count}}\n{sub|${summary}}`,
+        formatter: `{title|${title}}{meta|${ratioText}}\n{hint|Alive / Registered}\n${addressRows}`,
         rich: {
           title: {
-            fontSize: 14,
+            fontSize: 15,
             fontWeight: 700,
             fontFamily: 'Inter, system-ui, sans-serif',
-            color: '#0f172a',
-            lineHeight: 18,
+            color: tone.text,
+            lineHeight: 22,
             width: titleWidth,
-            align: 'left',
+            align: 'left' as const,
           },
           meta: {
-            fontSize: 11,
+            fontSize: 12,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontWeight: 700,
+            color: tone.accent,
+            backgroundColor: tone.badgeBg,
+            borderRadius: 6,
+            padding: [5, 0, 5, 0],
+            lineHeight: 22,
+            width: metaWidth,
+            align: 'right' as const,
+          },
+          hint: {
+            fontSize: 10,
             fontFamily: 'Inter, system-ui, sans-serif',
             fontWeight: 600,
-            color: tone.accent,
+            color: tone.subtext,
             lineHeight: 18,
-            width: metaWidth,
-            align: 'right',
+            width: contentWidth,
+            align: 'left' as const,
           },
-          sub: {
+          addr: {
+            fontSize: 11,
+            fontFamily: 'JetBrains Mono, SFMono-Regular, Consolas, monospace',
+            color: '#334155',
+            backgroundColor: tone.chipBg,
+            borderColor: tone.chipBorder,
+            borderWidth: 1,
+            borderRadius: 6,
+            padding: [5, 10, 5, 10],
+            lineHeight: 26,
+            width: contentWidth,
+            align: 'left' as const,
+          },
+          empty: {
             fontSize: 11,
             fontFamily: 'Inter, system-ui, sans-serif',
-            color: '#64748b',
-            lineHeight: 16,
-            width: summaryWidth,
-            align: 'left',
+            color: '#94a3b8',
+            backgroundColor: 'rgba(248, 250, 252, 0.88)',
+            borderColor: 'rgba(203, 213, 225, 0.72)',
+            borderWidth: 1,
+            borderRadius: 6,
+            padding: [5, 10, 5, 10],
+            lineHeight: 26,
+            width: contentWidth,
+            align: 'left' as const,
           },
         },
       },
     }
   })
 
-  const links = graphData.value.edges.map((edge) => ({
-    source: edge.source,
-    target: edge.target,
-    lineStyle: {
-      color: '#d7e0ee',
-      curveness: 0.2,
-      width: 1,
-    },
-    emphasis: {
+  const links = graphData.value.edges.map((edge) => {
+    const relatedToSelection =
+      !!props.selectedNode && (edge.source === props.selectedNode || edge.target === props.selectedNode)
+
+    return {
+      source: edge.source,
+      target: edge.target,
       lineStyle: {
-        width: 1.5,
-        color: '#3b82f6',
+        color: relatedToSelection ? 'rgba(37, 99, 235, 0.78)' : 'rgba(59, 130, 246, 0.36)',
+        curveness: 0.14,
+        width: relatedToSelection ? 3 : 2.2,
+        opacity: relatedToSelection ? 1 : 0.92,
       },
-    },
-  }))
+      emphasis: {
+        lineStyle: {
+          width: 3.6,
+          color: 'rgba(29, 78, 216, 0.92)',
+          opacity: 1,
+        },
+      },
+    }
+  })
 
   return {
     tooltip: {
@@ -154,19 +244,22 @@ function buildOption(): echarts.EChartsOption {
       extraCssText: 'border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);',
       formatter(params: any) {
         if (params.dataType === 'edge') {
-          return `<span style="color:#64748b">${params.data.source}</span> → <span style="color:#64748b">${params.data.target}</span>`
+          return `<span style="color:#64748b">${params.data.source}</span> &rarr; <span style="color:#64748b">${params.data.target}</span>`
         }
+
         const node = graphData.value.nodes.find((item) => item.id === params.data.id)
         if (!node) return params.data.name
+
         const instances = node.instances.length
           ? node.instances
               .map(
                 (instance) =>
-                  `<span style="font-family:monospace;font-size:11px;color:#475569">${instance.host}:${instance.port}</span> <span style="color:${instance.status === 'passing' ? '#10b981' : '#ef4444'};font-size:10px">${instance.status === 'passing' ? '● healthy' : '● critical'}</span>`,
+                  `<span style="font-family:monospace;font-size:11px;color:#475569">${instance.host}:${instance.port}</span> <span style="color:${instance.status === 'passing' ? '#10b981' : '#ef4444'};font-size:10px">${instance.status === 'passing' ? 'healthy' : 'critical'}</span>`,
               )
               .join('<br/>')
           : '<span style="color:#94a3b8">No live instances</span>'
-        return `<div style="font-weight:600;font-size:13px;margin-bottom:6px">${node.name}</div><div style="color:#64748b;font-size:11px;margin-bottom:8px">${node.healthy_count}/${node.instance_count} healthy</div>${instances}`
+
+        return `<div style="font-weight:600;font-size:13px;margin-bottom:6px">${node.name}</div><div style="color:#64748b;font-size:11px;margin-bottom:8px">${node.healthy_count}/${node.instance_count} alive / total</div>${instances}`
       },
     },
     animationDuration: 500,
@@ -184,14 +277,25 @@ function buildOption(): echarts.EChartsOption {
         label: {
           position: 'inside',
         },
-        edgeSymbol: ['none', 'arrow'],
-        edgeSymbolSize: [0, 10],
+        edgeSymbol: ['circle', 'arrow'],
+        edgeSymbolSize: [4, 12],
+        lineStyle: {
+          opacity: 0.95,
+        },
+        emphasis: {
+          focus: 'adjacency' as const,
+          lineStyle: {
+            width: 3.6,
+            color: 'rgba(29, 78, 216, 0.92)',
+            opacity: 1,
+          },
+        },
         force: {
           layoutAnimation: false,
-          repulsion: 880,
-          edgeLength: [140, 240],
-          gravity: 0.05,
-          friction: 0.6,
+          repulsion: 1180,
+          edgeLength: [220, 320],
+          gravity: 0.03,
+          friction: 0.55,
         },
       },
     ],
@@ -280,11 +384,11 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   background:
-    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.12) 1px, transparent 0),
-    #ffffff;
+    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.08) 1px, transparent 0),
+    linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
   background-size: 20px 20px;
   border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 10px;
+  border-radius: 14px;
   overflow: hidden;
 }
 
@@ -296,10 +400,10 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-direction: column;
   gap: 1px;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.15);
-  box-shadow: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .board-toolbar button {

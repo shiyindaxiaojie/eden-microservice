@@ -87,6 +87,7 @@ function createDefaultSettings(): SystemSettings {
     event_types: EVENT_OPTIONS.map((item) => item.value),
     heartbeat_max_failures: 3,
     instance_removal_delay_seconds: 600,
+    api_key_auth_enabled: false,
   }
 }
 
@@ -127,6 +128,7 @@ function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettin
     event_types: normalizeEventTypes(input?.event_types ?? defaults.event_types),
     heartbeat_max_failures: Math.max(1, input?.heartbeat_max_failures ?? defaults.heartbeat_max_failures),
     instance_removal_delay_seconds: Math.max(60, input?.instance_removal_delay_seconds ?? defaults.instance_removal_delay_seconds),
+    api_key_auth_enabled: Boolean(input?.api_key_auth_enabled ?? defaults.api_key_auth_enabled),
   }
 }
 
@@ -392,6 +394,14 @@ onMounted(() => {
                   </div>
                 </div>
 
+                <div class="registry-auth-bar">
+                  <div class="registry-auth-copy">
+                    <div class="registry-auth-title">客户端凭据认证</div>
+                    <p class="registry-auth-desc">主要用于控制客户端集成注册中心时是否需要携带凭据，默认不开启。</p>
+                  </div>
+                  <el-switch v-model="draftSettings.api_key_auth_enabled" />
+                </div>
+
                 <el-form label-position="left" label-width="140px" class="compact-form basic-inline-form registry-form">
                   <div class="form-grid">
                     <el-form-item>
@@ -524,21 +534,16 @@ onMounted(() => {
 
         <div class="tab-content">
           <div class="content-header credentials-header">
-            <div class="header-main">
-              <div class="title-row">
-                <h3 class="tab-content-title">API Key 管理</h3>
-                <el-radio-group v-model="credentialView" size="small" class="view-switch">
-                  <el-radio-button label="list"><el-icon><Operation /></el-icon></el-radio-button>
-                  <el-radio-button label="grid"><el-icon><Grid /></el-icon></el-radio-button>
-                </el-radio-group>
-              </div>
-              <p class="content-desc">管理服务注册与控制台访问使用的 API Key，支持快速生成、复制与回收。</p>
-              <div class="action-row">
-                <el-button type="primary" @click="showDialog = true; generateRandKey()">
-                  <el-icon style="margin-right: 4px"><Plus /></el-icon>
-                  新建 API Key
-                </el-button>
-              </div>
+            <p class="content-desc credentials-desc">管理服务注册与控制台访问使用的 API Key，支持快速生成、复制与回收。</p>
+            <div class="credentials-toolbar">
+              <el-radio-group v-model="credentialView" size="small" class="view-switch">
+                <el-radio-button label="list"><el-icon><Operation /></el-icon></el-radio-button>
+                <el-radio-button label="grid"><el-icon><Grid /></el-icon></el-radio-button>
+              </el-radio-group>
+              <el-button type="primary" class="new-key-btn" @click="showDialog = true; generateRandKey()">
+                <el-icon style="margin-right: 4px"><Plus /></el-icon>
+                新建 API Key
+              </el-button>
             </div>
           </div>
 
@@ -759,12 +764,18 @@ onMounted(() => {
 
 .tab-content {
   animation: fadeIn 0.25s ease;
+  min-height: 0;
 }
 
 .basic-settings {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
 }
 
 .basic-grid {
@@ -1138,6 +1149,42 @@ onMounted(() => {
   padding-top: 5px;
 }
 
+.registry-auth-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.045), rgba(59, 130, 246, 0.02));
+}
+
+.registry-auth-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.registry-auth-title {
+  margin-bottom: 2px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.registry-auth-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.registry-auth-bar :deep(.el-switch) {
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1255,21 +1302,25 @@ onMounted(() => {
 }
 
 .credentials-header {
-  margin-bottom: 24px;
-}
-
-.title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
-.tab-content-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+.credentials-desc {
+  margin: 0 !important;
+  max-width: 720px;
+}
+
+.credentials-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .content-desc {
@@ -1279,13 +1330,10 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.action-row {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-  border: 1px dashed var(--border-color);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.02);
+.new-key-btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
 }
 
 .key-grid {
@@ -1409,6 +1457,15 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .credentials-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .credentials-toolbar {
+    margin-left: 0;
+  }
+
   .registry-form :deep(.el-form-item__label) {
     width: 140px !important;
   }
@@ -1435,6 +1492,11 @@ onMounted(() => {
     min-width: 0;
   }
 
+  .registry-auth-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .basic-inline-form :deep(.el-form-item) {
     display: block;
   }
@@ -1452,9 +1514,9 @@ onMounted(() => {
     margin-left: 0 !important;
   }
 
-  .title-row {
-    flex-direction: column;
-    align-items: stretch;
+  .credentials-toolbar {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .save-actions {

@@ -108,6 +108,62 @@ func (s *TopologyStore) Reports(namespace string) map[string]*model.TopologyRepo
 	return result
 }
 
+// Prune removes stale topology reports that point to non-existent services.
+// It keeps only active consumer/provider relationships for the given namespace.
+func (s *TopologyStore) Prune(namespace string, activeServices map[string]bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ns := normalizeTopologyNS(namespace)
+	reports, ok := s.reports[ns]
+	if !ok {
+		return false
+	}
+
+	changed := false
+	for consumer, report := range reports {
+		if !activeServices[consumer] {
+			delete(reports, consumer)
+			changed = true
+			continue
+		}
+
+		filteredProviders := make([]string, 0, len(report.Providers))
+		for _, provider := range report.Providers {
+			if provider == "" || provider == consumer || !activeServices[provider] {
+				continue
+			}
+			filteredProviders = append(filteredProviders, provider)
+		}
+		filteredProviders = uniqueSortedServices(filteredProviders)
+
+		if len(filteredProviders) == 0 {
+			delete(reports, consumer)
+			changed = true
+			continue
+		}
+
+		if !equalStrings(report.Providers, filteredProviders) {
+			cp := *report
+			cp.Providers = filteredProviders
+			cp.UpdatedAt = time.Now().Format(time.RFC3339)
+			reports[consumer] = &cp
+			changed = true
+		}
+	}
+
+	if len(reports) == 0 {
+		delete(s.reports, ns)
+		changed = true
+	}
+
+	if changed {
+		s.saveNoLock()
+	}
+
+	return changed
+}
+
 // Snapshot returns a deep copy of all namespace reports.
 func (s *TopologyStore) Snapshot() map[string]map[string]*model.TopologyReport {
 	s.mu.RLock()

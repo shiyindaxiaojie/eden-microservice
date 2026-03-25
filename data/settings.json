@@ -1,12 +1,18 @@
 {
   "mode": "ap",
-  "environment": "cluster",
+  "environment": "standalone",
   "log_level": "INFO",
   "event_retention_days": 7,
   "log_retention_days": 30,
   "event_types": [
-    "Server Node Sync",
-    "Heartbeat",
-    "Client Registration"
-  ]
+    "registry_node_sync",
+    "service_heartbeat",
+    "service_register",
+    "service_online",
+    "service_offline",
+    "service_remove"
+  ],
+  "heartbeat_max_failures": 3,
+  "instance_removal_delay_seconds": 600,
+  "api_key_auth_enabled": false
 }

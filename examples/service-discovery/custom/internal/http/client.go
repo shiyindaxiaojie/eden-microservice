@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
+	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/registry"
 )
 
 type Client struct {

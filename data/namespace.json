@@ -1,8 +1,7 @@
 [
   {
     "name": "default",
-    "description": "默认命名空间",
-    "created_at": "2026-03-23T09:39:15+08:00",
-    "updated_at": "2026-03-25T10:39:27+08:00"
+    "description": "Default namespace",
+    "created_at": "2026-03-25T23:21:00+08:00"
   }
 ]
