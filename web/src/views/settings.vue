@@ -394,16 +394,22 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <div class="registry-auth-bar">
-                  <div class="registry-auth-copy">
-                    <div class="registry-auth-title">客户端凭据认证</div>
-                    <p class="registry-auth-desc">主要用于控制客户端集成注册中心时是否需要携带凭据，默认不开启。</p>
-                  </div>
-                  <el-switch v-model="draftSettings.api_key_auth_enabled" />
-                </div>
+                <el-form label-position="left" label-width="120px" class="compact-form basic-inline-form registry-form">
+                  <div class="form-grid registry-form-grid">
+                    <el-form-item class="switch-form-item">
+                      <template #label>
+                        <span class="label-with-tip">
+                          客户端凭据认证
+                          <el-tooltip content="主要用于控制客户端集成注册中心时是否需要携带凭据，默认不开启。" placement="top">
+                            <el-icon class="help-icon"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </span>
+                      </template>
+                      <div class="inline-switch-control">
+                        <el-switch v-model="draftSettings.api_key_auth_enabled" />
+                      </div>
+                    </el-form-item>
 
-                <el-form label-position="left" label-width="140px" class="compact-form basic-inline-form registry-form">
-                  <div class="form-grid">
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
@@ -729,6 +735,8 @@ onMounted(() => {
 .settings-container {
   width: 100%;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .settings-tabs {
@@ -738,7 +746,7 @@ onMounted(() => {
 }
 
 .settings-tabs :deep(.el-tabs__header) {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .settings-tabs :deep(.el-tabs__nav-wrap::after) {
@@ -770,25 +778,23 @@ onMounted(() => {
 .basic-settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   height: 100%;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
+  overflow: hidden;
 }
 
 .basic-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.95fr);
-  gap: 16px;
+  gap: 12px;
   align-items: start;
 }
 
 .settings-column {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .channels-grid {
@@ -809,18 +815,18 @@ onMounted(() => {
 }
 
 .settings-section {
-  padding: 20px 22px;
+  padding: 18px 20px;
 }
 
 .mode-section {
-  padding: 28px;
+  padding: 22px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .section-header h4 {
@@ -887,18 +893,18 @@ onMounted(() => {
 }
 
 .consistency-wrapper-v7 {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .main-mode-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
 }
 
 .mode-card-v7 {
   position: relative;
-  min-height: 160px;
+  min-height: 136px;
   overflow: hidden;
   display: flex;
   cursor: pointer;
@@ -936,20 +942,20 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
-  padding: 24px;
+  padding: 18px;
 }
 
 .mode-icon-v7 {
-  width: 56px;
-  height: 56px;
+  width: 50px;
+  height: 50px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 22px;
   color: var(--text-muted);
   background: rgba(0, 0, 0, 0.03);
   transition: all 0.3s ease;
@@ -967,24 +973,24 @@ onMounted(() => {
 }
 
 .mode-title-v7 {
-  margin-bottom: 8px;
-  font-size: 17px;
+  margin-bottom: 6px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--text-primary);
 }
 
 .mode-desc-v7 {
   color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .integrated-toggle-v7 {
   display: flex;
   gap: 4px;
   width: fit-content;
-  margin-top: 12px;
-  padding: 4px;
+  margin-top: 10px;
+  padding: 3px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.04);
 }
@@ -992,7 +998,7 @@ onMounted(() => {
 .toggle-option {
   position: relative;
   min-width: 100px;
-  padding: 8px 16px;
+  padding: 7px 14px;
   overflow: hidden;
   cursor: pointer;
   text-align: center;
@@ -1031,13 +1037,13 @@ onMounted(() => {
 }
 
 .toggle-text .primary {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text-muted);
 }
 
 .toggle-text .secondary {
-  font-size: 10px;
+  font-size: 9px;
   opacity: 0.75;
   color: var(--text-muted);
 }
@@ -1048,14 +1054,14 @@ onMounted(() => {
 }
 
 .technical-footer-v7 {
-  margin-top: 20px;
+  margin-top: 14px;
 }
 
 .info-bubble-v7 {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   align-items: flex-start;
-  padding: 16px 20px;
+  padding: 13px 16px;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.02);
@@ -1068,8 +1074,8 @@ onMounted(() => {
 
 .bubble-content {
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .info-bubble-v7.ap {
@@ -1107,17 +1113,17 @@ onMounted(() => {
 }
 
 .compact-form :deep(.el-form-item) {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .basic-inline-form :deep(.el-form-item) {
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .basic-inline-form :deep(.el-form-item__label) {
-  min-height: 32px;
-  padding-top: 6px;
+  min-height: 30px;
+  padding-top: 4px;
   line-height: 20px;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -1146,55 +1152,35 @@ onMounted(() => {
 }
 
 .registry-form :deep(.el-form-item__label) {
-  padding-top: 5px;
-}
-
-.registry-auth-bar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border: 1px solid rgba(59, 130, 246, 0.14);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.045), rgba(59, 130, 246, 0.02));
-}
-
-.registry-auth-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.registry-auth-title {
-  margin-bottom: 2px;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.registry-auth-desc {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.registry-auth-bar :deep(.el-switch) {
-  flex-shrink: 0;
-  margin-top: 6px;
+  padding-top: 4px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 16px;
+  gap: 10px 14px;
+}
+
+.registry-form-grid {
+  grid-template-columns: minmax(220px, 0.92fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.switch-form-item :deep(.el-form-item__content) {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.inline-switch-control {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
 
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: 32px;
   width: 100%;
   min-width: 0;
@@ -1268,30 +1254,27 @@ onMounted(() => {
   min-width: 40px;
   text-align: left;
   color: var(--accent-blue);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .event-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 8px;
+  gap: 8px 8px;
 }
 
 .save-toolbar {
-  position: sticky;
-  bottom: 6px;
-  z-index: 12;
   display: flex;
   justify-content: flex-end;
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 0;
   background: transparent;
 }
 
 .save-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
   padding: 0;
   border: 0;
@@ -1457,6 +1440,10 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .registry-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .credentials-header {
     align-items: flex-start;
     flex-direction: column;
@@ -1482,6 +1469,10 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .registry-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .log-level-options {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1490,11 +1481,6 @@ onMounted(() => {
 
   .log-level-option {
     min-width: 0;
-  }
-
-  .registry-auth-bar {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .basic-inline-form :deep(.el-form-item) {
@@ -1525,6 +1511,14 @@ onMounted(() => {
 
   .save-actions :deep(.el-button) {
     flex: 1;
+  }
+}
+
+@media (max-height: 760px) {
+  .basic-settings {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
   }
 }
 </style>

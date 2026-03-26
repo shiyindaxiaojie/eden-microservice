@@ -509,13 +509,13 @@ onBeforeUnmount(() => {
                     </div>
                   </el-tooltip>
                   <div class="metric-sep"></div>
-                  <el-tooltip :content="text('上游依赖', 'Upstream')">
+                  <el-tooltip :content="text('依赖服务', 'Dependencies')">
                     <div class="metric-item">
                       <el-icon><Top /></el-icon>
                       <span>{{ service.upstreamCount }}</span>
                     </div>
                   </el-tooltip>
-                  <el-tooltip :content="text('下游依赖', 'Downstream')">
+                  <el-tooltip :content="text('被依赖服务', 'Dependents')">
                     <div class="metric-item">
                       <el-icon><Bottom /></el-icon>
                       <span>{{ service.downstreamCount }}</span>
@@ -561,7 +561,7 @@ onBeforeUnmount(() => {
                 <template #default="{ row }">{{ row.instance_count }}</template>
               </el-table-column>
 
-              <el-table-column :label="text('上游依赖', 'Upstream')" width="100" align="center">
+              <el-table-column :label="text('依赖服务', 'Dependencies')" width="112" align="center">
                 <template #default="{ row }">
                   <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.upstreamCount">
                     <template #reference>
@@ -576,7 +576,7 @@ onBeforeUnmount(() => {
                 </template>
               </el-table-column>
 
-              <el-table-column :label="text('下游依赖', 'Downstream')" width="100" align="center">
+              <el-table-column :label="text('被依赖服务', 'Dependents')" width="112" align="center">
                 <template #default="{ row }">
                   <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.downstreamCount">
                     <template #reference>
@@ -660,11 +660,11 @@ onBeforeUnmount(() => {
                   <strong>{{ selectedNodeDetail.instances.length }}</strong>
                 </div>
                 <div class="summary-pill">
-                  <span class="summary-label">{{ text('上游', 'Upstream') }}</span>
+                  <span class="summary-label">{{ text('依赖服务', 'Dependencies') }}</span>
                   <strong>{{ selectedUpstream.length }}</strong>
                 </div>
                 <div class="summary-pill">
-                  <span class="summary-label">{{ text('下游', 'Downstream') }}</span>
+                  <span class="summary-label">{{ text('被依赖服务', 'Dependents') }}</span>
                   <strong>{{ selectedDownstream.length }}</strong>
                 </div>
                 <div class="summary-pill">
@@ -700,7 +700,7 @@ onBeforeUnmount(() => {
               <div class="side-group">
                 <div class="group-head">
                   <div class="group-title">
-                    {{ text('上游依赖', 'Upstream') }}
+                    {{ text('依赖服务', 'Dependencies') }}
                     <span class="count">{{ selectedUpstream.length }}</span>
                   </div>
                   <span class="group-hint">{{ text('点击切换', 'Click to inspect') }}</span>
@@ -733,7 +733,7 @@ onBeforeUnmount(() => {
               <div class="side-group">
                 <div class="group-head">
                   <div class="group-title">
-                    {{ text('下游依赖', 'Downstream') }}
+                    {{ text('被依赖服务', 'Dependents') }}
                     <span class="count">{{ selectedDownstream.length }}</span>
                   </div>
                   <span class="group-hint">{{ text('点击切换', 'Click to inspect') }}</span>
@@ -747,7 +747,7 @@ onBeforeUnmount(() => {
                   >
                     <div class="dep-copy">
                       <span class="dep-name">{{ sn }}</span>
-                      <span class="dep-caption">{{ text('下游服务', 'Dependent service') }}</span>
+                      <span class="dep-caption">{{ text('依赖当前服务', 'Dependent service') }}</span>
                     </div>
                     <div v-if="serviceEntryMap[sn]" class="dep-info">
                       <span

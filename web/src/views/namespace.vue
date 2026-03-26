@@ -48,7 +48,7 @@ const form = ref<NamespaceForm>({
   name: '',
   description: '',
 })
-const viewMode = ref<ViewMode>('grid')
+const viewMode = ref<ViewMode>('list')
 const filterMode = ref<FilterMode>('all')
 const currentPage = ref(1)
 const pageSize = ref(12)

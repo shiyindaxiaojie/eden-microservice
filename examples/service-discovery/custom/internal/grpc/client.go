@@ -139,35 +139,30 @@ func (c *Client) Discovery(serviceName string) ([]*registry.ServiceInstance, err
 }
 
 func (c *Client) Subscribe(serviceName string, callback func([]*registry.ServiceInstance)) error {
-	target := c.targets[0]
-
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = c.withConsumerService(ctx)
 	c.addCancel(cancel)
 
-	stream, err := target.client.Watch(ctx, &pb.WatchRequest{
-		ServiceName: serviceName,
-		Namespace:   c.namespace,
-	})
-	if err != nil {
-		cancel()
-		return err
-	}
-
 	go func() {
 		for {
-			msg, err := stream.Recv()
-			if err != nil {
+			connected := c.watch(ctx, serviceName, callback)
+			if ctx.Err() != nil {
 				return
 			}
-			callback(protoToInstances(msg.Instances))
+			delay := time.Second
+			if !connected {
+				delay = 3 * time.Second
+			}
+			if !waitContext(ctx, delay) {
+				return
+			}
 		}
 	}()
 	return nil
 }
 
 func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
-	return c.withClient(func(client pb.RegistryServiceClient) error {
+	err := c.withClient(func(client pb.RegistryServiceClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -184,6 +179,10 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 		}
 		return nil
 	})
+	if err != nil && isInstanceNotFound(err) {
+		return c.Register(instance)
+	}
+	return err
 }
 
 func (c *Client) Close() error {
@@ -267,4 +266,44 @@ func splitAddrs(raw string) []string {
 		}
 	}
 	return addrs
+}
+
+func (c *Client) watch(ctx context.Context, serviceName string, callback func([]*registry.ServiceInstance)) bool {
+	for _, target := range c.targets {
+		stream, err := target.client.Watch(ctx, &pb.WatchRequest{
+			ServiceName: serviceName,
+			Namespace:   c.namespace,
+		})
+		if err != nil {
+			continue
+		}
+
+		for {
+			msg, err := stream.Recv()
+			if err != nil {
+				return true
+			}
+			callback(protoToInstances(msg.Instances))
+		}
+	}
+	return false
+}
+
+func waitContext(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func isInstanceNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
 }

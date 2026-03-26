@@ -117,7 +117,11 @@ func (c *Client) Heartbeat(instance *registry.ServiceInstance) error {
 		"service_name": instance.ServiceName,
 		"instance_id":  instance.ID,
 	}
-	return c.postJSON("/v1/catalog/heartbeat", body)
+	err := c.postJSON("/v1/catalog/heartbeat", body)
+	if err != nil && isInstanceNotFound(err) {
+		return c.Register(instance)
+	}
+	return err
 }
 
 func (c *Client) Close() error {
@@ -221,4 +225,11 @@ func normalizeTargets(addrs []string) []string {
 		targets = append(targets, "http://"+addr)
 	}
 	return targets
+}
+
+func isInstanceNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
 }

@@ -306,6 +306,7 @@ func (s *catalogService) recordDependencyNoLock(namespace, consumerService, prov
 		s.deps[namespace][consumerService] = make(map[string]bool)
 	}
 	s.deps[namespace][consumerService][providerService] = true
+	s.syncTopologyReportNoLock(namespace, consumerService)
 }
 
 func (s *catalogService) replaceDependenciesNoLock(namespace, consumerService string, providers []string) {
@@ -319,6 +320,61 @@ func (s *catalogService) replaceDependenciesNoLock(namespace, consumerService st
 		}
 		s.deps[namespace][consumerService][provider] = true
 	}
+}
+
+func (s *catalogService) syncTopologyReportNoLock(namespace, consumerService string) {
+	providers := sortedProviders(s.deps[namespace][consumerService], consumerService)
+	checksum := ""
+	if existing := s.store.Topology.Reports(namespace)[consumerService]; existing != nil && sameStringSlices(existing.Providers, providers) {
+		checksum = existing.Checksum
+	}
+	s.store.Topology.Report(namespace, consumerService, providers, checksum)
+}
+
+func (s *catalogService) syncTopologyReports(namespace string) {
+	s.mu.RLock()
+	providersByConsumer := make(map[string][]string, len(s.deps[namespace]))
+	for consumerService, providerSet := range s.deps[namespace] {
+		providersByConsumer[consumerService] = sortedProviders(providerSet, consumerService)
+	}
+	s.mu.RUnlock()
+
+	if len(providersByConsumer) == 0 {
+		return
+	}
+
+	reports := s.store.Topology.Reports(namespace)
+	for consumerService, providers := range providersByConsumer {
+		checksum := ""
+		if existing := reports[consumerService]; existing != nil && sameStringSlices(existing.Providers, providers) {
+			checksum = existing.Checksum
+		}
+		s.store.Topology.Report(namespace, consumerService, providers, checksum)
+	}
+}
+
+func sortedProviders(providerSet map[string]bool, consumerService string) []string {
+	providers := make([]string, 0, len(providerSet))
+	for provider := range providerSet {
+		if provider == "" || provider == consumerService {
+			continue
+		}
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
+	return providers
+}
+
+func sameStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *catalogService) ReportTopology(namespace, consumerService string, providers []string, checksum string) bool {
@@ -383,6 +439,7 @@ func (s *catalogService) GetTopology(namespace string) *model.TopologyGraph {
 }
 
 func (s *catalogService) dependencyEdges(namespace string, activeServices map[string]bool) []model.TopologyEdge {
+	s.syncTopologyReports(namespace)
 	reports := s.store.Topology.Reports(namespace)
 	edgeMap := make(map[string]model.TopologyEdge)
 
