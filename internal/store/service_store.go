@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -295,9 +294,7 @@ func (s *ServiceStore) Stats() Stats {
 		st.HealthRate = float64(st.HealthyCount) / float64(st.InstanceCount) * 100
 	}
 
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	st.MemoryUsage = ms.Alloc
+	st.MemoryUsage = currentProcessMemoryUsage()
 	return st
 }
 
