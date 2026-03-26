@@ -751,7 +751,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="dashboard-shell">
-    <section class="metric-grid">
+    <section class="metric-grid" data-guide="dashboard-metrics">
       <article class="metric-card is-blue">
         <div class="metric-card-head">
           <div class="metric-card-title">
@@ -770,7 +770,7 @@ onBeforeUnmount(() => {
             <span>{{ deploymentModeText }}</span>
             <span>{{ localizedRoleText }}</span>
           </div>
-          <div class="metric-note">{{ leaderNoteText }}</div>
+          <div class="metric-note" :title="leaderNoteText">{{ leaderNoteText }}</div>
         </div>
       </article>
 
@@ -796,7 +796,7 @@ onBeforeUnmount(() => {
             <div class="metric-progress-track">
               <span class="metric-progress-fill" :style="{ width: `${serviceHealthRateValue}%` }"></span>
             </div>
-            <span class="metric-progress-text">{{ serviceOverviewText }}</span>
+            <span class="metric-progress-text">{{ serviceHealthComparisonText }}</span>
           </div>
         </div>
       </article>
@@ -819,7 +819,7 @@ onBeforeUnmount(() => {
             <span>{{ locale === 'zh' ? '默认' : 'Default' }} {{ defaultNamespaceCount }}</span>
             <span>{{ locale === 'zh' ? '自定义' : 'Custom' }} {{ customNamespaceCount }}</span>
           </div>
-          <div class="metric-note">{{ namespaceLabelText }}</div>
+          <div class="metric-note" :title="namespaceLabelText">{{ namespaceLabelText }}</div>
         </div>
       </article>
 
@@ -833,14 +833,17 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="metric-main metric-main--system">
-          <div class="metric-value-row">
-            <div class="metric-value metric-value--memory">{{ formatMemory(stats?.memory_usage) }}</div>
+          <div class="metric-system-copy">
+            <div class="metric-value-row">
+              <div class="metric-value metric-value--memory">{{ formatMemory(stats?.memory_usage) }}</div>
+            </div>
+            <div class="metric-inline-meta">
+              <span>{{ locale === 'zh' ? '最低' : 'Min' }} {{ memoryTrendMinText }}</span>
+              <span>{{ locale === 'zh' ? '最高' : 'Max' }} {{ memoryTrendMaxText }}</span>
+            </div>
+            <div class="metric-note" :title="memoryTrendDeltaText">{{ memoryTrendDeltaText }}</div>
           </div>
-          <div class="metric-inline-meta">
-            <span>{{ locale === 'zh' ? '最低' : 'Min' }} {{ memoryTrendMinText }}</span>
-            <span>{{ locale === 'zh' ? '最高' : 'Max' }} {{ memoryTrendMaxText }}</span>
-          </div>
-          <div class="metric-sparkline-shell">
+          <div class="metric-sparkline-shell metric-sparkline-shell--system">
             <svg class="metric-sparkline-svg" :viewBox="`0 0 ${MEMORY_CHART_WIDTH} ${MEMORY_CHART_HEIGHT}`" preserveAspectRatio="none">
               <path
                 v-if="memoryTrendAreaPath"
@@ -868,12 +871,11 @@ onBeforeUnmount(() => {
             </svg>
             <div v-if="!memoryTrendPolyline" class="metric-sparkline-empty">{{ memoryTrendEmptyText }}</div>
           </div>
-          <div class="metric-note">{{ memoryTrendDeltaText }}</div>
         </div>
       </article>
     </section>
 
-    <section class="activity-panel">
+    <section class="activity-panel" data-guide="dashboard-activity">
       <header class="activity-head">
         <div class="panel-tabs">
           <button
@@ -1046,9 +1048,9 @@ onBeforeUnmount(() => {
 }
 
 .metric-grid {
-  flex: 0 0 18%;
-  min-height: 106px;
-  max-height: 138px;
+  flex: 0 0 25%;
+  min-height: 0;
+  max-height: 25%;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -1059,10 +1061,10 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
   height: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px 10px;
   overflow: hidden;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
@@ -1112,6 +1114,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 30px;
 }
 
 .metric-card-title {
@@ -1173,12 +1176,24 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 4px;
   flex: 1;
 }
 
 .metric-main--system {
-  gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: stretch;
+  gap: 8px 10px;
+}
+
+.metric-system-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
 }
 
 .metric-value-row {
@@ -1188,7 +1203,7 @@ onBeforeUnmount(() => {
 }
 
 .metric-value {
-  font-size: clamp(22px, 1.7vw, 28px);
+  font-size: clamp(20px, 1.55vw, 28px);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1197,7 +1212,7 @@ onBeforeUnmount(() => {
 }
 
 .metric-value--memory {
-  font-size: clamp(20px, 1.55vw, 26px);
+  font-size: clamp(18px, 1.4vw, 24px);
 }
 
 .metric-unit {
@@ -1225,13 +1240,13 @@ onBeforeUnmount(() => {
 .metric-inline-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .metric-inline-meta span {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
+  min-height: 18px;
   padding: 0 6px;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.08);
@@ -1243,7 +1258,7 @@ onBeforeUnmount(() => {
 
 .metric-note {
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.3;
   color: var(--text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1254,13 +1269,13 @@ onBeforeUnmount(() => {
 .metric-progress {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .metric-progress-track {
   position: relative;
   width: 100%;
-  height: 6px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.16);
@@ -1278,9 +1293,10 @@ onBeforeUnmount(() => {
   font-size: 10px;
   font-weight: 700;
   color: var(--text-secondary);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .system-panel {
@@ -1468,8 +1484,8 @@ onBeforeUnmount(() => {
 
 .metric-sparkline-shell {
   position: relative;
-  flex: 0 0 28px;
-  height: 28px;
+  flex: 0 0 24px;
+  height: 24px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.12);
@@ -1482,6 +1498,12 @@ onBeforeUnmount(() => {
       transparent 1px,
       transparent 12px
     );
+}
+
+.metric-sparkline-shell--system {
+  flex: none;
+  height: auto;
+  min-height: 64px;
 }
 
 .metric-sparkline-svg {
@@ -1497,7 +1519,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 4px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--text-muted);
   text-align: center;
@@ -1963,7 +1985,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1360px) {
   .metric-grid {
+    flex: none;
+    max-height: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-main--system {
+    grid-template-columns: minmax(0, 1fr) 108px;
   }
 
   .system-panel {
@@ -1974,7 +2002,6 @@ onBeforeUnmount(() => {
     grid-column: 1 / -1;
   }
 }
-
 @media (max-width: 980px) {
   .system-panel {
     grid-template-columns: 1fr;
@@ -2001,7 +2028,17 @@ onBeforeUnmount(() => {
 
 @media (max-width: 900px) {
   .metric-grid {
+    flex: none;
+    max-height: none;
     grid-template-columns: 1fr;
+  }
+
+  .metric-main--system {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-sparkline-shell--system {
+    min-height: 54px;
   }
 
   .metric-card {

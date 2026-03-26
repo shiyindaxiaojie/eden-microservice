@@ -327,7 +327,7 @@ onBeforeUnmount(() => {
   <div class="svc-shell">
     <div class="svc-main glass-card">
       <!-- ─── Toolbar ─── -->
-      <div class="svc-toolbar">
+      <div class="svc-toolbar" data-guide="services-toolbar">
         <!-- Row 1: Filters & Controls -->
         <div class="toolbar-row">
           <!-- Left: Namespace + Search -->
@@ -436,6 +436,7 @@ onBeforeUnmount(() => {
 
               <button
                 type="button"
+                data-guide="services-topology-switch"
                 :class="{ active: activePanel === 'topology' }"
                 :title="text('拓扑', 'Topology View')"
                 @click="activePanel = 'topology'"
@@ -620,7 +621,7 @@ onBeforeUnmount(() => {
 
       <!-- ─── Topology Panel ─── -->
       <section v-else class="topo-stage">
-        <div class="topo-canvas" v-loading="loading">
+        <div class="topo-canvas" v-loading="loading" data-guide="services-topology-canvas">
           <TopologyGraphCanvas
             :graph="topology"
             :loading="loading"

@@ -5,6 +5,7 @@ import type { TopologyGraph, TopologyInstance, TopologyNode } from '../api/regis
 import { useI18n } from '../utils/i18n'
 
 type NodeHealthState = 'empty' | 'healthy' | 'partial' | 'critical'
+type Point = [number, number]
 
 interface ServiceNodeMetrics {
   width: number
@@ -16,18 +17,28 @@ interface ServiceNodeMetrics {
   iconTop: number
 }
 
-const SERVICE_CARD_WIDTH = 188
-const CARD_PADDING_X = 14
-const CARD_PADDING_TOP = 12
-const CARD_PADDING_BOTTOM = 12
-const STATUS_LINE_HEIGHT = 16
-const STATUS_TITLE_GAP = 4
-const TITLE_LINE_HEIGHT = 16
-const TITLE_MAX_CHARS = 18
+const SERVICE_CARD_WIDTH = 236
+const SERVICE_CARD_MIN_HEIGHT = 92
+const MIN_RENDER_SIZE = 120
+const CARD_PADDING_X = 20
+const CARD_PADDING_TOP = 16
+const CARD_PADDING_BOTTOM = 18
+const STATUS_LINE_HEIGHT = 18
+const STATUS_BADGE_WIDTH = 52
+const STATUS_TITLE_GAP = 8
+const TITLE_LINE_HEIGHT = 18
+const TITLE_MAX_CHARS = 20
 const TITLE_MAX_LINES = 3
 const INSTANCE_ICON_SIZE = 16
 const INSTANCE_ICON_GAP = 8
-const INSTANCE_TOP_GAP = 10
+const INSTANCE_ICON_OFFSET_X = 12
+const INSTANCE_TOP_GAP = 14
+const EDGE_ARROW_SIZE = 8
+const EDGE_LANE_GAP = 18
+const EDGE_SIBLING_GAP = 8
+const EDGE_PADDING_X = 24
+const EDGE_PADDING_Y = 14
+const NODE_SCALE_RATIO = 1
 const INSTANCE_HEX_SYMBOL = 'path://M0 -1L0.866 -0.5L0.866 0.5L0 1L-0.866 0.5L-0.866 -0.5Z'
 
 const { locale } = useI18n()
@@ -48,6 +59,9 @@ const emit = defineEmits<{
 
 const chartEl = ref<HTMLElement | null>(null)
 let chart: echarts.ECharts | null = null
+let renderVersion = 0
+let resizeObserver: ResizeObserver | null = null
+let edgeLayoutFrame = 0
 
 const graphData = computed(() => props.graph || { namespace: 'default', nodes: [], edges: [] })
 
@@ -225,7 +239,7 @@ function wrapServiceName(name: string, maxCharsPerLine = TITLE_MAX_CHARS, maxLin
   }
 
   if (compact.length === maxLines && compact[maxLines - 1]!.length > maxCharsPerLine) {
-    compact[maxLines - 1] = `${compact[maxLines - 1]!.slice(0, Math.max(1, maxCharsPerLine - 1))}…`
+    compact[maxLines - 1] = `${compact[maxLines - 1]!.slice(0, Math.max(1, maxCharsPerLine - 3))}...`
   }
 
   return {
@@ -236,12 +250,13 @@ function wrapServiceName(name: string, maxCharsPerLine = TITLE_MAX_CHARS, maxLin
 
 function serviceMetrics(node: TopologyNode): ServiceNodeMetrics {
   const wrappedTitle = wrapServiceName(node.name)
-  const iconColumns = Math.max(1, Math.floor((SERVICE_CARD_WIDTH - CARD_PADDING_X * 2 + INSTANCE_ICON_GAP) / (INSTANCE_ICON_SIZE + INSTANCE_ICON_GAP)))
+  const iconColumns = Math.max(1, Math.floor((SERVICE_CARD_WIDTH - CARD_PADDING_X * 2 - INSTANCE_ICON_OFFSET_X + INSTANCE_ICON_GAP) / (INSTANCE_ICON_SIZE + INSTANCE_ICON_GAP)))
   const iconRows = node.instances.length ? Math.ceil(node.instances.length / iconColumns) : 0
-  const iconTop =
-    CARD_PADDING_TOP + STATUS_LINE_HEIGHT + STATUS_TITLE_GAP + wrappedTitle.lines * TITLE_LINE_HEIGHT + INSTANCE_TOP_GAP
+  const headerHeight = Math.max(STATUS_LINE_HEIGHT, TITLE_LINE_HEIGHT)
+  const titleExtraHeight = Math.max(0, wrappedTitle.lines - 1) * TITLE_LINE_HEIGHT
+  const iconTop = CARD_PADDING_TOP + headerHeight + titleExtraHeight + INSTANCE_TOP_GAP
   const iconsHeight = iconRows ? iconRows * INSTANCE_ICON_SIZE + (iconRows - 1) * INSTANCE_ICON_GAP : 0
-  const height = Math.max(76, iconTop + iconsHeight + CARD_PADDING_BOTTOM)
+  const height = Math.max(SERVICE_CARD_MIN_HEIGHT, iconTop + iconsHeight + CARD_PADDING_BOTTOM)
 
   return {
     width: SERVICE_CARD_WIDTH,
@@ -376,6 +391,143 @@ function computeLayout(width: number, height: number, metricsMap: Map<string, Se
   return positions
 }
 
+function buildEdgeDescriptor(sourceId: string, targetId: string, index: number) {
+  return `${sourceId}->${targetId}#${index}`
+}
+
+function getRectAnchor(center: Point, metrics: ServiceNodeMetrics, dx: number, dy: number, laneOffset: number): Point {
+  const halfW = metrics.width / 2
+  const halfH = metrics.height / 2
+  const safeDx = Math.abs(dx) < 1e-6 ? (dx >= 0 ? 1e-6 : -1e-6) : dx
+  const safeDy = Math.abs(dy) < 1e-6 ? (dy >= 0 ? 1e-6 : -1e-6) : dy
+  const hitX = halfW / Math.abs(safeDx)
+  const hitY = halfH / Math.abs(safeDy)
+
+  if (hitX < hitY) {
+    const y = clamp(safeDy * hitX + laneOffset, -halfH + EDGE_PADDING_Y, halfH - EDGE_PADDING_Y)
+    return [center[0] + Math.sign(safeDx) * halfW, center[1] + y]
+  }
+
+  const x = clamp(safeDx * hitY + laneOffset, -halfW + EDGE_PADDING_X, halfW - EDGE_PADDING_X)
+  return [center[0] + x, center[1] + Math.sign(safeDy) * halfH]
+}
+
+function buildPreciseEdgePoints(
+  sourceCenter: Point,
+  targetCenter: Point,
+  sourceMetrics: ServiceNodeMetrics,
+  targetMetrics: ServiceNodeMetrics,
+  laneOffset: number,
+  bend: number,
+): Point[] {
+  const dx = targetCenter[0] - sourceCenter[0]
+  const dy = targetCenter[1] - sourceCenter[1]
+  const start = getRectAnchor(sourceCenter, sourceMetrics, dx, dy, laneOffset)
+  const end = getRectAnchor(targetCenter, targetMetrics, -dx, -dy, laneOffset)
+
+  if (Math.abs(bend) < 0.5) {
+    return [start, end]
+  }
+
+  const vx = end[0] - start[0]
+  const vy = end[1] - start[1]
+  const length = Math.hypot(vx, vy) || 1
+  const mid: Point = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+  const control: Point = [mid[0] - (vy / length) * bend, mid[1] + (vx / length) * bend]
+  return [start, end, control]
+}
+
+function getGraphRuntime() {
+  if (!chart) return null
+
+  const ec = chart as any
+  const model = ec.getModel?.()
+  const seriesModel = model?.getSeriesByIndex?.(0)
+  const graph = seriesModel?.getGraph?.()
+  const graphView = seriesModel ? ec.getViewOfSeriesModel?.(seriesModel) : null
+
+  if (!seriesModel || !graph || !graphView) {
+    return null
+  }
+
+  return { seriesModel, graph, graphView }
+}
+
+function applyPreciseEdgeLayouts() {
+  const runtime = getGraphRuntime()
+  if (!runtime) return
+
+  const metricsMap = new Map(graphData.value.nodes.map((node) => [node.id, serviceMetrics(node)] as const))
+  const pairGroups = new Map<string, string[]>()
+  const outgoingGroups = new Map<string, string[]>()
+
+  runtime.graph.eachEdge((edge: any, index: number) => {
+    const sourceId = String(edge.node1.id)
+    const targetId = String(edge.node2.id)
+    const descriptor = buildEdgeDescriptor(sourceId, targetId, index)
+    const pairKey = [sourceId, targetId].sort().join('::')
+
+    if (!pairGroups.has(pairKey)) {
+      pairGroups.set(pairKey, [])
+    }
+    pairGroups.get(pairKey)!.push(descriptor)
+
+    if (!outgoingGroups.has(sourceId)) {
+      outgoingGroups.set(sourceId, [])
+    }
+    outgoingGroups.get(sourceId)!.push(descriptor)
+  })
+
+  runtime.graph.eachEdge((edge: any, index: number) => {
+    const sourceId = String(edge.node1.id)
+    const targetId = String(edge.node2.id)
+    const sourceMetrics = metricsMap.get(sourceId)
+    const targetMetrics = metricsMap.get(targetId)
+    const sourceLayout = edge.node1.getLayout() as number[] | undefined
+    const targetLayout = edge.node2.getLayout() as number[] | undefined
+
+    if (!sourceMetrics || !targetMetrics || !sourceLayout || !targetLayout) {
+      return
+    }
+
+    const descriptor = buildEdgeDescriptor(sourceId, targetId, index)
+    const pairKey = [sourceId, targetId].sort().join('::')
+    const pairItems = pairGroups.get(pairKey) || []
+    const pairIndex = Math.max(0, pairItems.indexOf(descriptor))
+    const pairLane = pairItems.length > 1 ? (pairIndex - (pairItems.length - 1) / 2) * EDGE_LANE_GAP : 0
+
+    const outgoingItems = outgoingGroups.get(sourceId) || []
+    const outgoingIndex = Math.max(0, outgoingItems.indexOf(descriptor))
+    const outgoingLane = outgoingItems.length > 1 ? (outgoingIndex - (outgoingItems.length - 1) / 2) * EDGE_SIBLING_GAP : 0
+
+    const laneOffset = pairLane + outgoingLane
+    const bend = pairItems.length > 2 ? pairLane * 1.15 : 0
+    const points = buildPreciseEdgePoints(
+      [sourceLayout[0]!, sourceLayout[1]!] as Point,
+      [targetLayout[0]!, targetLayout[1]!] as Point,
+      sourceMetrics,
+      targetMetrics,
+      laneOffset,
+      bend,
+    )
+
+    ;(points as any).__original = points.map((point) => [point[0], point[1]] as Point)
+    edge.setLayout(points as any)
+  })
+
+  ;(runtime.graphView as any)._lineDraw?.updateLayout()
+}
+
+function schedulePreciseEdgeLayouts() {
+  if (edgeLayoutFrame) {
+    window.cancelAnimationFrame(edgeLayoutFrame)
+  }
+
+  edgeLayoutFrame = window.requestAnimationFrame(() => {
+    edgeLayoutFrame = 0
+    applyPreciseEdgeLayouts()
+  })
+}
 function instanceTone(instance: TopologyInstance, selected: boolean) {
   const passing = instance.status === 'passing'
   return {
@@ -385,9 +537,7 @@ function instanceTone(instance: TopologyInstance, selected: boolean) {
   }
 }
 
-function buildOption(): echarts.EChartsOption {
-  const width = chartEl.value?.clientWidth || 1080
-  const height = chartEl.value?.clientHeight || 620
+function buildOption(width: number, height: number): echarts.EChartsOption {
   const metricsMap = new Map(graphData.value.nodes.map((node) => [node.id, serviceMetrics(node)] as const))
   const positions = computeLayout(width, height, metricsMap)
 
@@ -397,6 +547,12 @@ function buildOption(): echarts.EChartsOption {
     const state = serviceHealthState(node)
     const isSelected = props.selectedNode === node.id
     const contentWidth = metrics.width - CARD_PADDING_X * 2
+    const titleLines = metrics.titleText.split('\n')
+    const titleLeadWidth = Math.max(88, contentWidth - STATUS_BADGE_WIDTH - STATUS_TITLE_GAP)
+    const titleFormatter = [
+      `{titleLead|${escapeRichText(titleLines[0] || node.name)}}{status|${escapeRichText(nodeStatusLabel(state))}}`, 
+      ...titleLines.slice(1).map((line) => `{title|${escapeRichText(line)}}`),
+    ].join('\n')
     const pos = positions.get(node.id) || { x: width / 2, y: height / 2 }
 
     return {
@@ -410,7 +566,7 @@ function buildOption(): echarts.EChartsOption {
       namespace: node.namespace,
       x: pos.x,
       y: pos.y,
-      symbol: 'roundRect',
+      symbol: 'rect',
       symbolSize: [metrics.width, metrics.height],
       draggable: false,
       z: 2,
@@ -421,28 +577,37 @@ function buildOption(): echarts.EChartsOption {
         ]),
         borderColor: isSelected ? '#2563eb' : tone.border,
         borderWidth: isSelected ? 2.4 : 1.4,
-        borderRadius: 16,
+        borderRadius: 0,
         shadowColor: isSelected ? 'rgba(37, 99, 235, 0.22)' : tone.glow,
         shadowBlur: isSelected ? 22 : 14,
         shadowOffsetY: 8,
       },
       label: {
         show: true,
-        position: 'inside',
+        position: 'insideTopLeft',
         align: 'left' as const,
         verticalAlign: 'top' as const,
         padding: [CARD_PADDING_TOP, CARD_PADDING_X, 0, CARD_PADDING_X],
-        formatter: `{status|${escapeRichText(nodeStatusLabel(state))}}\n{title|${escapeRichText(metrics.titleText)}}`,
+        formatter: titleFormatter,
         rich: {
           status: {
-            width: contentWidth,
+            width: STATUS_BADGE_WIDTH,
             align: 'right' as const,
             fontSize: 10,
             fontFamily: 'Inter, system-ui, sans-serif',
             fontWeight: 700,
             color: tone.badgeText,
-
+            padding: [0, 0, 0, STATUS_TITLE_GAP],
             lineHeight: STATUS_LINE_HEIGHT,
+          },
+          titleLead: {
+            width: titleLeadWidth,
+            align: 'left' as const,
+            fontSize: 14,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontWeight: 700,
+            color: tone.title,
+            lineHeight: TITLE_LINE_HEIGHT,
           },
           title: {
             width: contentWidth,
@@ -455,13 +620,16 @@ function buildOption(): echarts.EChartsOption {
           },
         },
       },
+      emphasis: {
+        disabled: true,
+      },
     }
   })
 
   const instanceNodes: any[] = graphData.value.nodes.flatMap((node) => {
     const metrics = metricsMap.get(node.id) || serviceMetrics(node)
     const pos = positions.get(node.id) || { x: width / 2, y: height / 2 }
-    const left = pos.x - metrics.width / 2 + CARD_PADDING_X + INSTANCE_ICON_SIZE / 2
+    const left = pos.x - metrics.width / 2 + CARD_PADDING_X + INSTANCE_ICON_OFFSET_X + INSTANCE_ICON_SIZE / 2
     const top = pos.y - metrics.height / 2 + metrics.iconTop + INSTANCE_ICON_SIZE / 2
     const selectedParent = props.selectedNode === node.id
 
@@ -492,16 +660,26 @@ function buildOption(): echarts.EChartsOption {
           shadowBlur: selectedParent ? 12 : 8,
         },
         label: { show: false },
+        emphasis: {
+          disabled: true,
+        },
       }
     })
   })
 
   const outgoingGroups = new Map<string, string[]>()
+  const pairGroups = new Map<string, string[]>()
   for (const edge of graphData.value.edges) {
     if (!outgoingGroups.has(edge.source)) {
       outgoingGroups.set(edge.source, [])
     }
     outgoingGroups.get(edge.source)!.push(edge.target)
+
+    const pairKey = [edge.source, edge.target].sort().join('::')
+    if (!pairGroups.has(pairKey)) {
+      pairGroups.set(pairKey, [])
+    }
+    pairGroups.get(pairKey)!.push(`${edge.source}->${edge.target}`)
   }
   for (const items of outgoingGroups.values()) {
     items.sort()
@@ -510,25 +688,28 @@ function buildOption(): echarts.EChartsOption {
   const links: any[] = graphData.value.edges.map((edge) => {
     const siblings = outgoingGroups.get(edge.source) || []
     const siblingIndex = siblings.indexOf(edge.target)
-    const baseCurve = siblings.length > 1 ? (siblingIndex - (siblings.length - 1) / 2) * 0.16 : 0
+    const siblingCurve = siblings.length > 1 ? (siblingIndex - (siblings.length - 1) / 2) * 0.12 : 0
+    const pairKey = [edge.source, edge.target].sort().join('::')
+    const pairItems = pairGroups.get(pairKey) || []
+    const pairRoot = pairKey.split('::')[0]
+    const pairCurve = pairItems.length > 1 ? (edge.source === pairRoot ? 0.18 : -0.18) : 0
+    const curve = clamp(pairCurve + siblingCurve, -0.28, 0.28)
     const relatedToSelection =
       !!props.selectedNode && (edge.source === props.selectedNode || edge.target === props.selectedNode)
 
     return {
       source: edge.source,
       target: edge.target,
+      symbol: ['none', 'arrow'],
+      symbolSize: [0, relatedToSelection ? EDGE_ARROW_SIZE + 1 : EDGE_ARROW_SIZE],
       lineStyle: {
-        color: relatedToSelection ? 'rgba(37, 99, 235, 0.86)' : 'rgba(59, 130, 246, 0.38)',
-        curveness: baseCurve,
-        width: relatedToSelection ? 2.9 : 2,
-        opacity: relatedToSelection ? 1 : 0.92,
+        color: relatedToSelection ? 'rgba(37, 99, 235, 0.86)' : 'rgba(59, 130, 246, 0.42)',
+        curveness: curve,
+        width: relatedToSelection ? 2.8 : 1.9,
+        opacity: relatedToSelection ? 1 : 0.94,
       },
       emphasis: {
-        lineStyle: {
-          width: 3.4,
-          color: 'rgba(29, 78, 216, 0.94)',
-          opacity: 1,
-        },
+        disabled: true,
       },
     }
   })
@@ -585,17 +766,22 @@ function buildOption(): echarts.EChartsOption {
       {
         type: 'graph',
         layout: 'none',
+        nodeScaleRatio: NODE_SCALE_RATIO,
 
         data: [...serviceNodes, ...instanceNodes],
         links,
         roam: true,
+        scaleLimit: {
+          min: 0.45,
+          max: 2.4,
+        },
         zoom: currentZoom.value,
         tooltip: { show: true },
         label: {
-          position: 'inside',
+          position: 'insideTopLeft',
         },
         edgeSymbol: ['none', 'arrow'],
-        edgeSymbolSize: [0, 12],
+        edgeSymbolSize: [0, EDGE_ARROW_SIZE],
         edgeLabel: {
           show: false,
         },
@@ -603,14 +789,17 @@ function buildOption(): echarts.EChartsOption {
           opacity: 0.95,
         },
         emphasis: {
-          focus: 'adjacency' as const,
-          lineStyle: {
-            width: 3.4,
-            color: 'rgba(29, 78, 216, 0.94)',
-          },
+          disabled: true,
         },
       },
     ],
+  }
+}
+
+function getCanvasSize() {
+  return {
+    width: chartEl.value?.clientWidth || 0,
+    height: chartEl.value?.clientHeight || 0,
   }
 }
 
@@ -632,18 +821,27 @@ function ensureChart() {
       if (option?.series?.[0]) {
         currentZoom.value = option.series[0].zoom || 1
       }
+      schedulePreciseEdgeLayouts()
     })
   }
 }
 
 async function render() {
+  const version = ++renderVersion
   await nextTick()
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+  if (version !== renderVersion) return
+
+  const { width, height } = getCanvasSize()
+  if (width < MIN_RENDER_SIZE || height < MIN_RENDER_SIZE) return
+
   ensureChart()
-  chart?.setOption(buildOption(), true)
+  chart?.resize({ width, height })
+  chart?.setOption(buildOption(width, height), { notMerge: true, lazyUpdate: true })
+  schedulePreciseEdgeLayouts()
 }
 
 function resize() {
-  chart?.resize()
   render()
 }
 
@@ -658,16 +856,36 @@ function zoom(delta: number) {
   })
 }
 
-watch(graphData, render, { deep: true })
-watch(() => props.selectedNode, render)
-watch(locale, render)
+function resetView() {
+  currentZoom.value = 1
+  render()
+}
+
+watch(graphData, render, { deep: true, flush: 'post' })
+watch(() => props.selectedNode, render, { flush: 'post' })
+watch(() => props.loading, render, { flush: 'post' })
+watch(locale, render, { flush: 'post' })
 
 onMounted(async () => {
+  if (typeof ResizeObserver !== 'undefined' && chartEl.value) {
+    resizeObserver = new ResizeObserver(() => {
+      render()
+    })
+    resizeObserver.observe(chartEl.value)
+  }
+
   await render()
   window.addEventListener('resize', resize)
 })
 
 onBeforeUnmount(() => {
+  renderVersion += 1
+  if (edgeLayoutFrame) {
+    window.cancelAnimationFrame(edgeLayoutFrame)
+    edgeLayoutFrame = 0
+  }
+  resizeObserver?.disconnect()
+  resizeObserver = null
   window.removeEventListener('resize', resize)
   chart?.dispose()
   chart = null
@@ -680,7 +898,7 @@ onBeforeUnmount(() => {
       <button type="button" @click="zoom(0.15)" title="Zoom in">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 4v8M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
-      <div class="zoom-value">{{ Math.round(currentZoom * 100) }}%</div>
+      <button type="button" class="zoom-value" @click="resetView" :title="text('重置视图', 'Reset view')">{{ Math.round(currentZoom * 100) }}%</button>
       <button type="button" @click="zoom(-0.15)" title="Zoom out">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
@@ -757,14 +975,27 @@ onBeforeUnmount(() => {
   font-size: 10px;
   font-family: 'Inter', system-ui, sans-serif;
   font-weight: 600;
+  border: 0;
   border-top: 1px solid rgba(148, 163, 184, 0.12);
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  cursor: pointer;
+  padding: 0;
+}
+
+.zoom-value:hover {
+  background: #ffffff;
+  color: #2563eb;
 }
 
 .graph-canvas {
   width: 100%;
   height: 100%;
   min-height: 560px;
+  cursor: grab;
+}
+
+.graph-canvas:active {
+  cursor: grabbing;
 }
 
 .graph-canvas.hidden {
@@ -798,3 +1029,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+

@@ -270,7 +270,7 @@ onMounted(fetchCluster)
   <div class="svc-shell">
     <div class="svc-main glass-card">
     <!-- Toolbar -->
-    <div class="svc-toolbar">
+    <div class="svc-toolbar" data-guide="cluster-toolbar">
       <div class="toolbar-row">
         <div class="toolbar-group">
           <div class="field-item">
