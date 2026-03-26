@@ -12,7 +12,7 @@ import (
 
 	hraft "github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
 )
 
 // ServerID is a type alias for Raft server ID.
@@ -29,15 +29,15 @@ type Config struct {
 
 // Node wraps a hashicorp/raft instance and the registry.
 type Node struct {
-	Raft     *hraft.Raft
-	fsm      *FSM
-	Registry *store.Registry
-	config   Config
+	Raft   *hraft.Raft
+	fsm    *FSM
+	State  *state.State
+	config Config
 }
 
 // NewNode creates and starts a Raft node.
-func NewNode(cfg Config, registry *store.Registry) (*Node, error) {
-	fsm := NewFSM(registry)
+func NewNode(cfg Config, runtimeState *state.State) (*Node, error) {
+	fsm := NewFSM(runtimeState)
 
 	raftConfig := hraft.DefaultConfig()
 	raftConfig.LocalID = hraft.ServerID(cfg.NodeID)
@@ -90,10 +90,10 @@ func NewNode(cfg Config, registry *store.Registry) (*Node, error) {
 	}
 
 	return &Node{
-		Raft:     r,
-		fsm:      fsm,
-		Registry: registry,
-		config:   cfg,
+		Raft:   r,
+		fsm:    fsm,
+		State:  runtimeState,
+		config: cfg,
 	}, nil
 }
 

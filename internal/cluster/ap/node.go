@@ -8,31 +8,33 @@ import (
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
+	"google.golang.org/grpc"
 )
 
 // Node represents an AP mode node that broadcasts changes to seed peers.
 type Node struct {
-	Config   *config.Config
-	Registry *store.Registry
-	PM       *cluster.PeerManager
+	Config *config.Config
+	State  *state.State
+	PM     *cluster.PeerManager
 }
 
 type syncDiscoveryPayload struct {
-	ServicesByNamespace map[string]map[string]map[string]*model.Instance `json:"services_by_namespace"`
-	Namespaces          []*model.Namespace                               `json:"namespaces"`
-	TopologyReports     map[string]map[string]*model.TopologyReport      `json:"topology_reports"`
+	ServicesByNamespace map[string]map[string]map[string]*catalog.Instance `json:"services_by_namespace"`
+	Namespaces          []*catalog.Namespace                               `json:"namespaces"`
+	TopologyReports     map[string]map[string]*catalog.TopologyReport      `json:"topology_reports"`
 }
 
 // NewNode creates an AP mode node.
-func NewNode(cfg *config.Config, registry *store.Registry) *Node {
+func NewNode(cfg *config.Config, runtimeState *state.State) *Node {
 	n := &Node{
-		Config:   cfg,
-		Registry: registry,
-		PM:       cluster.NewPeerManager(),
+		Config: cfg,
+		State:  runtimeState,
+		PM:     cluster.NewPeerManager(),
 	}
 	// Initial peers from seeds
 	n.SyncSeeds()
@@ -86,21 +88,21 @@ func (n *Node) fullSync() {
 	}
 
 	if len(payload.ServicesByNamespace) > 0 {
-		n.Registry.Services.MergeNS(payload.ServicesByNamespace)
+		n.State.Catalog.Instances.MergeNS(payload.ServicesByNamespace)
 	}
 	if len(payload.Namespaces) > 0 {
-		n.Registry.Namespaces.Restore(payload.Namespaces)
+		n.State.Catalog.Namespaces.Restore(payload.Namespaces)
 	}
 	if len(payload.TopologyReports) > 0 {
-		n.Registry.Topology.Restore(payload.TopologyReports)
+		n.State.Catalog.Topology.Restore(payload.TopologyReports)
 	}
-	n.Registry.AppendEvent(model.EventTypeRegistryNodeSync, "Cluster", target.ID, "Full sync completed")
+	n.State.AppendEvent(catalog.EventTypeRegistryNodeSync, "Cluster", target.ID, "Full sync completed")
 	logger.Info("[AP Node] Full sync completed with %s", target.ID)
 }
 
 // SyncSeeds updates the internal peer map from registry seeds.
 func (n *Node) SyncSeeds() {
-	seeds := n.Registry.GetSeeds()
+	seeds := n.State.GetSeeds()
 	n.PM.UpdatePeers(seeds)
 }
 
@@ -114,54 +116,73 @@ func (n *Node) GetPM() interface{} {
 	return n.PM
 }
 
+func (n *Node) GetLeaderConn(leaderID string) (*grpc.ClientConn, error) {
+	var conn *grpc.ClientConn
+	var connErr error
+	n.PM.Range(func(peer *cluster.Peer) bool {
+		if peer.ID == leaderID {
+			conn, connErr = peer.GetConn()
+			return false
+		}
+		return true
+	})
+	if conn == nil {
+		if connErr != nil {
+			return nil, fmt.Errorf("failed to proxy to leader: %w", connErr)
+		}
+		return nil, fmt.Errorf("leader connection not found in peer manager for %s", leaderID)
+	}
+	return conn, nil
+}
+
 // Apply executes the command locally and broadcasts it.
 // isReplicate flag prevents infinite broadcast loops.
 func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 	// Local execution
 	switch cmdType {
 	case "register":
-		if inst, ok := data.(*model.Instance); ok {
-			n.Registry.Register(inst)
+		if inst, ok := data.(*catalog.Instance); ok {
+			n.State.Register(inst)
 		}
 	case "deregister":
 		if d, ok := data.(map[string]string); ok {
-			n.Registry.Services.DeregisterNS(d["namespace"], d["service_name"], d["instance_id"])
+			n.State.Catalog.Instances.DeregisterNS(d["namespace"], d["service_name"], d["instance_id"])
 		}
 	case "heartbeat":
 		if d, ok := data.(map[string]string); ok {
-			inst, _ := n.Registry.HeartbeatNS(d["namespace"], d["service_name"], d["instance_id"])
+			inst, _ := n.State.HeartbeatNS(d["namespace"], d["service_name"], d["instance_id"])
 			if inst == nil {
 				return fmt.Errorf("instance not found")
 			}
 		}
 	case "add_api_key":
-		if k, ok := data.(*model.APIKey); ok {
-			n.Registry.AddAPIKey(k)
+		if k, ok := data.(*auth.APIKey); ok {
+			n.State.AddAPIKey(k)
 		}
 	case "delete_api_key":
 		if key, ok := data.(string); ok {
-			n.Registry.DeleteAPIKey(key)
+			n.State.DeleteAPIKey(key)
 		}
 	case "add_user":
-		if u, ok := data.(*model.User); ok {
-			n.Registry.AddUser(u)
+		if u, ok := data.(*auth.User); ok {
+			n.State.AddUser(u)
 		}
 	case "delete_user":
 		if username, ok := data.(string); ok {
-			n.Registry.DeleteUser(username)
+			n.State.DeleteUser(username)
 		}
 	case "set_mode":
 		if mode, ok := data.(string); ok {
-			n.Registry.SetMode(mode)
+			n.State.SetMode(mode)
 		}
 	case "set_seeds":
 		if seeds, ok := data.([]string); ok {
-			n.Registry.SetSeeds(seeds)
+			n.State.SetSeeds(seeds)
 			n.SyncSeeds()
 		}
 	case "set_log_level":
 		if level, ok := data.(string); ok {
-			n.Registry.SetLogLevel(level)
+			n.State.SetLogLevel(level)
 		}
 	}
 

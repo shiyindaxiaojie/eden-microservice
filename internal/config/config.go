@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 	"github.com/spf13/viper"
 )
 
@@ -134,7 +134,7 @@ func LoadConfig(path string) (*Config, error) {
 	// Default Storage Configuration
 	viper.SetDefault("storage.event_retention_days", 30)
 	viper.SetDefault("storage.log_retention_days", 30)
-	viper.SetDefault("storage.event_types", model.DefaultEventTypes())
+	viper.SetDefault("storage.event_types", catalog.DefaultEventTypes())
 
 	viper.SetDefault("registry.heartbeat_interval_seconds", 10)
 	viper.SetDefault("registry.heartbeat_max_failures", 3)

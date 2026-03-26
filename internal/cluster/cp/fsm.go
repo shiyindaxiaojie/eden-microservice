@@ -7,128 +7,87 @@ import (
 
 	hraft "github.com/hashicorp/raft"
 	"github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	clustercmd "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/command"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
 )
-
-// CommandType identifies the kind of Raft log entry.
-type CommandType string
-
-const (
-	CmdRegister                       CommandType = "register"
-	CmdDeregister                     CommandType = "deregister"
-	CmdHeartbeat                      CommandType = "heartbeat"
-	CmdAddAPIKey                      CommandType = "add_api_key"
-	CmdDeleteAPIKey                   CommandType = "delete_api_key"
-	CmdAddUser                        CommandType = "add_user"
-	CmdDeleteUser                     CommandType = "delete_user"
-	CmdSetMode                        CommandType = "set_mode"
-	CmdSetEnv                         CommandType = "set_env"
-	CmdSetSeeds                       CommandType = "set_seeds"
-	CmdSetLogLevel                    CommandType = "set_log_level"
-	CmdSetEventRetentionDays          CommandType = "set_event_retention_days"
-	CmdSetLogRetentionDays            CommandType = "set_log_retention_days"
-	CmdSetEventTypes                  CommandType = "set_event_types"
-	CmdSetHeartbeatMaxFailures        CommandType = "set_heartbeat_max_failures"
-	CmdSetInstanceRemovalDelaySeconds CommandType = "set_instance_removal_delay_seconds"
-	CmdSetAPIKeyAuthEnabled           CommandType = "set_api_key_auth_enabled"
-)
-
-// Command represents a Raft log command.
-type Command struct {
-	Type        CommandType     `json:"type"`
-	Instance    *model.Instance `json:"instance,omitempty"`
-	Namespace   string          `json:"namespace,omitempty"`
-	ServiceName string          `json:"service_name,omitempty"`
-	InstanceID  string          `json:"instance_id,omitempty"`
-	APIKey      *model.APIKey   `json:"api_key,omitempty"`
-	User        *model.User     `json:"user,omitempty"`
-	Key         string          `json:"key,omitempty"`         // for delete operations
-	Username    string          `json:"username,omitempty"`    // for delete operations
-	Mode        string          `json:"mode,omitempty"`        // for set_mode
-	Environment string          `json:"environment,omitempty"` // for set_env
-	Seeds       []string        `json:"seeds,omitempty"`       // for set_seeds
-	LogLevel    string          `json:"log_level,omitempty"`   // for set_log_level
-	IntValue    int             `json:"int_value,omitempty"`
-	StringList  []string        `json:"string_list,omitempty"`
-	BoolValue   bool            `json:"bool_value,omitempty"`
-}
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
 type FSM struct {
-	registry *store.Registry
+	state *state.State
 }
 
 // NewFSM creates a new FSM wrapping the registry.
-func NewFSM(registry *store.Registry) *FSM {
-	return &FSM{registry: registry}
+func NewFSM(runtimeState *state.State) *FSM {
+	return &FSM{state: runtimeState}
 }
 
 // Apply is called by Raft once a log entry is committed.
 func (f *FSM) Apply(l *hraft.Log) interface{} {
-	var cmd Command
+	var cmd clustercmd.Command
 	if err := json.Unmarshal(l.Data, &cmd); err != nil {
 		logger.Error("[FSM] failed to unmarshal command: %v", err)
 		return err
 	}
 
 	switch cmd.Type {
-	case CmdRegister:
-		f.registry.Register(cmd.Instance)
+	case clustercmd.CmdRegister:
+		f.state.Register(fromReplicatedInstance(cmd.Instance))
 		return nil
-	case CmdDeregister:
-		_, ok := f.registry.Services.DeregisterNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
+	case clustercmd.CmdDeregister:
+		_, ok := f.state.Catalog.Instances.DeregisterNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		return ok
-	case CmdHeartbeat:
-		inst, _ := f.registry.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
+	case clustercmd.CmdHeartbeat:
+		inst, _ := f.state.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		if inst == nil {
 			return fmt.Errorf("instance not found")
 		}
 		return nil
-	case CmdAddAPIKey:
-		f.registry.AddAPIKey(cmd.APIKey)
+	case clustercmd.CmdAddAPIKey:
+		f.state.AddAPIKey(fromReplicatedAPIKey(cmd.APIKey))
 		return nil
-	case CmdDeleteAPIKey:
-		f.registry.DeleteAPIKey(cmd.Key)
+	case clustercmd.CmdDeleteAPIKey:
+		f.state.DeleteAPIKey(cmd.Key)
 		return nil
-	case CmdAddUser:
-		f.registry.AddUser(cmd.User)
+	case clustercmd.CmdAddUser:
+		f.state.AddUser(fromReplicatedUser(cmd.User))
 		return nil
-	case CmdDeleteUser:
-		f.registry.DeleteUser(cmd.Username)
+	case clustercmd.CmdDeleteUser:
+		f.state.DeleteUser(cmd.Username)
 		return nil
-	case CmdSetMode:
-		f.registry.SetMode(cmd.Mode)
+	case clustercmd.CmdSetMode:
+		f.state.SetMode(cmd.Mode)
 		return nil
-	case CmdSetEnv:
-		f.registry.SetEnvironment(cmd.Environment)
+	case clustercmd.CmdSetEnv:
+		f.state.SetEnvironment(cmd.Environment)
 		return nil
-	case CmdSetSeeds:
-		f.registry.SetSeeds(cmd.Seeds)
+	case clustercmd.CmdSetSeeds:
+		f.state.SetSeeds(cmd.Seeds)
 		return nil
-	case CmdSetLogLevel:
-		f.registry.SetLogLevel(cmd.LogLevel)
+	case clustercmd.CmdSetLogLevel:
+		f.state.SetLogLevel(cmd.LogLevel)
 		if lg, ok := logger.GetLogger().(*logger.Logger); ok {
 			lg.SetLevel(logger.ParseLevel(cmd.LogLevel))
 		}
 		return nil
-	case CmdSetEventRetentionDays:
-		f.registry.SetEventRetentionDays(cmd.IntValue)
+	case clustercmd.CmdSetEventRetentionDays:
+		f.state.SetEventRetentionDays(cmd.IntValue)
 		return nil
-	case CmdSetLogRetentionDays:
-		f.registry.SetLogRetentionDays(cmd.IntValue)
+	case clustercmd.CmdSetLogRetentionDays:
+		f.state.SetLogRetentionDays(cmd.IntValue)
 		return nil
-	case CmdSetEventTypes:
-		f.registry.SetEventTypes(cmd.StringList)
+	case clustercmd.CmdSetEventTypes:
+		f.state.SetEventTypes(cmd.StringList)
 		return nil
-	case CmdSetHeartbeatMaxFailures:
-		f.registry.SetHeartbeatMaxFailures(cmd.IntValue)
+	case clustercmd.CmdSetHeartbeatMaxFailures:
+		f.state.SetHeartbeatMaxFailures(cmd.IntValue)
 		return nil
-	case CmdSetInstanceRemovalDelaySeconds:
-		f.registry.SetInstanceRemovalDelaySeconds(cmd.IntValue)
+	case clustercmd.CmdSetInstanceRemovalDelaySeconds:
+		f.state.SetInstanceRemovalDelaySeconds(cmd.IntValue)
 		return nil
-	case CmdSetAPIKeyAuthEnabled:
-		f.registry.SetAPIKeyAuthEnabled(cmd.BoolValue)
+	case clustercmd.CmdSetAPIKeyAuthEnabled:
+		f.state.SetAPIKeyAuthEnabled(cmd.BoolValue)
 		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
@@ -137,24 +96,24 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 
 // Snapshot returns a snapshot of the FSM state.
 func (f *FSM) Snapshot() (hraft.FSMSnapshot, error) {
-	snap := f.registry.Snapshot()
+	snap := f.state.Snapshot()
 	return &fsmSnapshot{data: snap}, nil
 }
 
 // Restore restores the FSM from a snapshot.
 func (f *FSM) Restore(rc io.ReadCloser) error {
 	defer rc.Close()
-	var sd store.SnapshotData
+	var sd state.SnapshotData
 	if err := json.NewDecoder(rc).Decode(&sd); err != nil {
 		return err
 	}
-	f.registry.Restore(&sd)
+	f.state.Restore(&sd)
 	return nil
 }
 
 // fsmSnapshot implements raft.FSMSnapshot.
 type fsmSnapshot struct {
-	data *store.SnapshotData
+	data *state.SnapshotData
 }
 
 func (s *fsmSnapshot) Persist(sink hraft.SnapshotSink) error {
@@ -171,3 +130,54 @@ func (s *fsmSnapshot) Persist(sink hraft.SnapshotSink) error {
 }
 
 func (s *fsmSnapshot) Release() {}
+
+func fromReplicatedInstance(inst *clustercmd.Instance) *catalog.Instance {
+	if inst == nil {
+		return nil
+	}
+	return &catalog.Instance{
+		ID:            inst.ID,
+		ServiceName:   inst.ServiceName,
+		Namespace:     inst.Namespace,
+		Host:          inst.Host,
+		Port:          inst.Port,
+		Weight:        inst.Weight,
+		Datacenter:    inst.Datacenter,
+		Metadata:      inst.Metadata,
+		Status:        catalog.HealthStatus(inst.Status),
+		ManualOffline: inst.ManualOffline,
+		LastHeartbeat: inst.LastHeartbeat,
+		RegisteredAt:  inst.RegisteredAt,
+	}
+}
+
+func fromReplicatedUser(user *clustercmd.User) *auth.User {
+	if user == nil {
+		return nil
+	}
+	return &auth.User{
+		Username:  user.Username,
+		Password:  user.Password,
+		Nickname:  user.Nickname,
+		Phone:     user.Phone,
+		Email:     user.Email,
+		Remark:    user.Remark,
+		Role:      user.Role,
+		IsBuiltIn: user.IsBuiltIn,
+	}
+}
+
+func fromReplicatedAPIKey(key *clustercmd.APIKey) *auth.APIKey {
+	if key == nil {
+		return nil
+	}
+	return &auth.APIKey{
+		Key:         key.Key,
+		Label:       key.Label,
+		Description: key.Description,
+		CreatedBy:   key.CreatedBy,
+		CreatedAt:   key.CreatedAt,
+		ExpiresAt:   key.ExpiresAt,
+		Status:      key.Status,
+	}
+}

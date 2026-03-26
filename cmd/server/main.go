@@ -21,16 +21,17 @@ import (
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
 	pb_cluster "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
 	pb_reg "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	platformcluster "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
 	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
-	egrpc "github.com/shiyindaxiaojie/eden-go-registry/internal/grpc"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/handler"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/health"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/model"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/pkg/crypto"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/service"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/store"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
+	grpcapi "github.com/shiyindaxiaojie/eden-go-registry/internal/transport/grpc"
+	httpapi "github.com/shiyindaxiaojie/eden-go-registry/internal/transport/http"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -75,24 +76,24 @@ func main() {
 		cfg.Mode = "ap"
 	}
 
-	// 2. Create Registry Store
-	registry := store.NewRegistry(cfg.DataDir)
-	if !registry.HasAPIKeyAuthSetting() {
-		registry.SetAPIKeyAuthEnabled(cfg.Auth.APIKey.Enabled)
+	// 2. Create runtime state
+	runtimeState := state.New(cfg.DataDir)
+	if !runtimeState.HasAPIKeyAuthSetting() {
+		runtimeState.SetAPIKeyAuthEnabled(cfg.Auth.APIKey.Enabled)
 	}
-	cfg.Auth.APIKey.Enabled = registry.GetAPIKeyAuthEnabled()
+	cfg.Auth.APIKey.Enabled = runtimeState.GetAPIKeyAuthEnabled()
 
 	// Initialize Logger from config
-	persistedLevel := registry.GetLogLevel()
+	persistedLevel := runtimeState.GetLogLevel()
 	if persistedLevel != "" {
 		cfg.Log.Level = persistedLevel
 	}
-	applyLogRetentionDays(&cfg.Log, registry.GetLogRetentionDays())
+	applyLogRetentionDays(&cfg.Log, runtimeState.GetLogRetentionDays())
 	logger.Init(config.ToLoggerConfiguration(cfg.Log))
 	// (Logs moved and combined below after port resolution)
 
 	// Seed built-in users from config
-	var builtInUsers []model.User
+	var builtInUsers []auth.User
 	for _, uc := range cfg.Auth.Users {
 		// Frontend will send SHA256 of the password
 		sha256Pwd := crypto.HashSHA256(uc.Password)
@@ -103,7 +104,7 @@ func main() {
 			finalPwd = string(hashed)
 		}
 
-		builtInUsers = append(builtInUsers, model.User{
+		builtInUsers = append(builtInUsers, auth.User{
 			Username: uc.Username,
 			Password: finalPwd,
 			Nickname: uc.Nickname,
@@ -111,7 +112,7 @@ func main() {
 			Role:     uc.Role,
 		})
 	}
-	registry.Auth.SeedBuiltInUsers(builtInUsers)
+	runtimeState.Auth.SeedBuiltInUsers(builtInUsers)
 
 	// 3. Setup Consistency Mode (Initialize BOTH for online switching)
 	var cpNode *cp.Node
@@ -176,7 +177,7 @@ func main() {
 		DataDir:   cfg.DataDir,
 		Bootstrap: cfg.Bootstrap,
 	}
-	cpNode, err = cp.NewNode(raftCfg, registry)
+	cpNode, err = cp.NewNode(raftCfg, runtimeState)
 	if err != nil {
 		logger.Fatal("Failed to start Raft node: %v", err)
 	}
@@ -185,7 +186,7 @@ func main() {
 	logger.Info("    Eden Go Registry")
 	logger.Info("========================================")
 	logger.Info("  Node ID   : %s", cfg.NodeID)
-	logger.Info("  Mode      : %s", strings.ToUpper(registry.GetMode()))
+	logger.Info("  Mode      : %s", strings.ToUpper(runtimeState.GetMode()))
 	logger.Info("  HTTP Addr : %s", cfg.HTTPAddr)
 	logger.Info("  GRPC Addr : %s", cfg.GRPCAddr)
 	logger.Info("  QUIC Addr : %s", cfg.QUICAddr)
@@ -210,37 +211,37 @@ func main() {
 
 	// Always setup AP (Gossip/HTTP)
 	logger.Info("  AP Seeds  : %v", cfg.Seeds)
-	apNode = ap.NewNode(cfg, registry)
+	apNode = ap.NewNode(cfg, runtimeState)
 	// If registry already has seeds, sync them
-	if len(registry.GetSeeds()) == 0 && len(cfg.Seeds) > 0 {
-		registry.SetSeeds(cfg.Seeds)
+	if len(runtimeState.GetSeeds()) == 0 && len(cfg.Seeds) > 0 {
+		runtimeState.SetSeeds(cfg.Seeds)
 	}
 	apNode.SyncSeeds()
 
 	// Set initial mode from config if metadata doesn't have it
-	if registry.GetMode() == "" {
-		registry.SetMode(cfg.Mode)
+	if runtimeState.GetMode() == "" {
+		runtimeState.SetMode(cfg.Mode)
 	}
-	logger.Info("  Active Mode: %s", strings.ToUpper(registry.GetMode()))
+	logger.Info("  Active Mode: %s", strings.ToUpper(runtimeState.GetMode()))
 
 	// 4. Start Health Checker
 	// Default TTL 30s, check every 10s if not specified in future config
-	checker := health.NewChecker(registry, 30*time.Second, 10*time.Second)
+	checker := catalog.NewChecker(runtimeState.Catalog, runtimeState.Settings, 30*time.Second, 10*time.Second)
 	checker.Start()
 
 	// 5. Setup Specialized Services
-	catSvc := service.NewCatalogService(registry, cpNode, apNode)
-	authSvc := service.NewAuthService(registry)
-	setSvc := service.NewSettingsService(registry, cpNode, apNode)
-	clsSvc := service.NewClusterService(registry, cpNode, apNode)
+	catSvc := catalog.NewRegistry(runtimeState.Catalog, runtimeState.Settings, cpNode, apNode)
+	authSvc := auth.NewAuthenticator(runtimeState.Auth)
+	setSvc := settings.NewController(runtimeState.Settings, runtimeState.Auth, cpNode, apNode, runtimeState.Catalog.Events)
+	clsSvc := platformcluster.NewMembership(runtimeState.Catalog, cpNode)
 
 	// 6. Start HTTP API
-	h := handler.NewHandler(cfg, catSvc, authSvc, setSvc, clsSvc)
+	h := httpapi.NewHandler(cfg, catSvc, authSvc, setSvc, clsSvc)
 
 	// Start gRPC API
 	grpcServer := grpc.NewServer()
-	regServer := egrpc.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
-	clusterServer := egrpc.NewClusterServer(registry, apNode)
+	regServer := grpcapi.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
+	clusterServer := grpcapi.NewClusterServer(runtimeState, apNode)
 	pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
 	pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)
 	reflection.Register(grpcServer)
@@ -267,7 +268,7 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 			NextProtos:   []string{"h3"},
 		}
-		qlis, err := egrpc.NewQUICListener(cfg.QUICAddr, tlsConf)
+		qlis, err := grpcapi.NewQUICListener(cfg.QUICAddr, tlsConf)
 		if err != nil {
 			logger.Error("Failed to listen for QUIC: %v", err)
 			return

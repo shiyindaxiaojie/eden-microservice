@@ -2,27 +2,27 @@ package cluster
 
 import (
 	"context"
-	"sync"
-	"time"
+	"encoding/json"
+	"fmt"
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Peer represents a remote node in the cluster.
 type Peer struct {
-	ID         string // HTTP address (identifier)
-	grpcAddr   string // Resolved gRPC address
-	conn       *grpc.ClientConn
-	client     pb.ClusterServiceClient
-	mu         sync.RWMutex
-	lastSeen   time.Time
+	ID       string // HTTP address (identifier)
+	grpcAddr string // Resolved gRPC address
+	conn     *grpc.ClientConn
+	client   pb.ClusterServiceClient
+	mu       sync.RWMutex
+	lastSeen time.Time
 }
 
 // PeerManager manages gRPC connections to cluster peers.
@@ -210,8 +210,8 @@ func (pm *PeerManager) Broadcast(ctx context.Context, f func(ctx context.Context
 				logger.Debug("[PeerManager] skip broadcast to %s: could not get client: %v", p.ID, err)
 				return
 			}
-			
-			// Best-effort replication 
+
+			// Best-effort replication
 			if err := f(broadcastCtx, client); err != nil {
 				logger.Warn("[PeerManager] replication to %s failed: %v", p.ID, err)
 			}
