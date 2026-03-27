@@ -8,7 +8,7 @@ import (
 	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
+	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 )
 
 // Replicator represents a component that can apply replicated commands (e.g. ap.Node).
@@ -19,7 +19,7 @@ type Replicator interface {
 // ClusterServer implements the ClusterService gRPC interface.
 type ClusterServer struct {
 	pb.UnimplementedClusterServiceServer
-	state      *state.State
+	state      *clusterpkg.RuntimeState
 	replicator Replicator
 }
 
@@ -30,7 +30,7 @@ type syncDiscoveryPayload struct {
 }
 
 // NewClusterServer creates a new gRPC cluster server.
-func NewClusterServer(runtimeState *state.State, replicator Replicator) *ClusterServer {
+func NewClusterServer(runtimeState *clusterpkg.RuntimeState, replicator Replicator) *ClusterServer {
 	return &ClusterServer{
 		state:      runtimeState,
 		replicator: replicator,

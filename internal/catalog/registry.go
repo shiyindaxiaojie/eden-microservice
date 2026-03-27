@@ -9,7 +9,7 @@ import (
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	grpc_registry "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
-	clustercmd "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/command"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
 	"google.golang.org/grpc"
 )
 
@@ -105,7 +105,7 @@ func (s *registry) Register(inst *Instance) error {
 		if !s.cpNode.IsLeader() {
 			return s.forwardToLeader("register", inst, "", "")
 		}
-		cmd := clustercmd.Command{Type: clustercmd.CmdRegister, Instance: toReplicatedInstance(inst)}
+		cmd := replication.Command{Type: replication.CmdRegister, Instance: toReplicatedInstance(inst)}
 		return s.cpNode.Apply(cmd, 5*time.Second)
 	}
 	if s.apNode != nil {
@@ -116,11 +116,11 @@ func (s *registry) Register(inst *Instance) error {
 	return nil
 }
 
-func toReplicatedInstance(inst *Instance) *clustercmd.Instance {
+func toReplicatedInstance(inst *Instance) *replication.Instance {
 	if inst == nil {
 		return nil
 	}
-	return &clustercmd.Instance{
+	return &replication.Instance{
 		ID:            inst.ID,
 		ServiceName:   inst.ServiceName,
 		Namespace:     inst.Namespace,
@@ -167,7 +167,7 @@ func (s *registry) Heartbeat(namespace, serviceName, instanceID string) error {
 		if !s.cpNode.IsLeader() {
 			return s.forwardToLeader("heartbeat", &Instance{Namespace: namespace}, serviceName, instanceID)
 		}
-		cmd := clustercmd.Command{Type: clustercmd.CmdHeartbeat, Namespace: namespace, ServiceName: serviceName, InstanceID: instanceID}
+		cmd := replication.Command{Type: replication.CmdHeartbeat, Namespace: namespace, ServiceName: serviceName, InstanceID: instanceID}
 		return s.cpNode.Apply(cmd, 5*time.Second)
 	}
 	data := map[string]string{"namespace": namespace, "service_name": serviceName, "instance_id": instanceID}

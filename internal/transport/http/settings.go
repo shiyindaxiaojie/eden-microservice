@@ -13,7 +13,7 @@ import (
 
 // ---------- RBAC (User Management) Handlers ----------
 
-func (h *Handler) handleListUsers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.settings.ListUsers()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
@@ -22,7 +22,7 @@ func (h *Handler) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, users)
 }
 
-func (h *Handler) handleSaveUser(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) saveUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -57,13 +57,13 @@ func (h *Handler) handleSaveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.settings.AddUser(&u); err != nil {
-		h.handleLeaderRedirect(w, err)
+		h.writeLeaderRedirect(w, err)
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	username := r.URL.Query().Get("username")
 
 	user, exists := h.settings.GetUser(username)
@@ -77,7 +77,7 @@ func (h *Handler) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.settings.DeleteUser(username); err != nil {
-		h.handleLeaderRedirect(w, err)
+		h.writeLeaderRedirect(w, err)
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
@@ -85,7 +85,7 @@ func (h *Handler) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // ---------- API Key Management Handlers ----------
 
-func (h *Handler) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	keys, err := h.settings.ListAPIKeys()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
@@ -94,7 +94,7 @@ func (h *Handler) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, keys)
 }
 
-func (h *Handler) handleSaveAPIKey(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) saveAPIKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -107,16 +107,16 @@ func (h *Handler) handleSaveAPIKey(w http.ResponseWriter, r *http.Request) {
 	k.CreatedAt = time.Now().Unix()
 
 	if err := h.settings.AddAPIKey(&k); err != nil {
-		h.handleLeaderRedirect(w, err)
+		h.writeLeaderRedirect(w, err)
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if err := h.settings.DeleteAPIKey(key); err != nil {
-		h.handleLeaderRedirect(w, err)
+		h.writeLeaderRedirect(w, err)
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
@@ -124,7 +124,7 @@ func (h *Handler) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 // ---------- Mode (Consistency) Handler ----------
 
-func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) mode(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		jsonOK(w, map[string]string{
 			"mode":      h.settings.GetMode(),
@@ -141,7 +141,7 @@ func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 		if env != "" {
 			logger.Info("[Settings] Changing environment to: %s", env)
 			if err := h.settings.SetEnvironment(env); err != nil {
-				h.handleLeaderRedirect(w, err)
+				h.writeLeaderRedirect(w, err)
 				return
 			}
 		}
@@ -149,7 +149,7 @@ func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 		if mode != "" {
 			logger.Info("[Settings] Changing mode to: %s", mode)
 			if err := h.settings.SetMode(mode); err != nil {
-				h.handleLeaderRedirect(w, err)
+				h.writeLeaderRedirect(w, err)
 				return
 			}
 		}
@@ -157,7 +157,7 @@ func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 		if logLevel != "" {
 			logger.Info("[Settings] Changing log level to: %s", logLevel)
 			if err := h.settings.SetLogLevel(logLevel); err != nil {
-				h.handleLeaderRedirect(w, err)
+				h.writeLeaderRedirect(w, err)
 				return
 			}
 		}
@@ -167,7 +167,7 @@ func (h *Handler) handleMode(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) systemSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		jsonOK(w, h.settings.GetSystemSettings())
@@ -178,7 +178,7 @@ func (h *Handler) handleSystemSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.settings.ApplySystemSettings(&req); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 		jsonOK(w, map[string]string{"status": "ok"})

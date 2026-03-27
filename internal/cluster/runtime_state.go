@@ -1,4 +1,4 @@
-package state
+package cluster
 
 import (
 	"time"
@@ -28,15 +28,15 @@ type SnapshotData struct {
 	APIKeyAuthEnabled  bool                                          `json:"api_key_auth_enabled"`
 }
 
-// State composes the domain modules into the registry's runtime state.
-type State struct {
+// RuntimeState composes the domain modules that participate in node runtime and cluster replication.
+type RuntimeState struct {
 	Catalog  *catalog.State
 	Auth     *auth.Directory
 	Settings *settings.Profile
 }
 
-func New(dataPath string) *State {
-	state := &State{
+func NewRuntimeState(dataPath string) *RuntimeState {
+	state := &RuntimeState{
 		Catalog:  catalog.NewState(dataPath),
 		Auth:     auth.NewDirectory(dataPath),
 		Settings: settings.NewProfile(dataPath),
@@ -49,186 +49,186 @@ func New(dataPath string) *State {
 	return state
 }
 
-func (s *State) Register(inst *catalog.Instance) {
+func (s *RuntimeState) Register(inst *catalog.Instance) {
 	s.Catalog.Register(inst)
 }
 
-func (s *State) Deregister(serviceName, instanceID string) (*catalog.Instance, bool) {
+func (s *RuntimeState) Deregister(serviceName, instanceID string) (*catalog.Instance, bool) {
 	return s.Catalog.Deregister(serviceName, instanceID)
 }
 
-func (s *State) Heartbeat(serviceName, instanceID string) (*catalog.Instance, bool) {
+func (s *RuntimeState) Heartbeat(serviceName, instanceID string) (*catalog.Instance, bool) {
 	return s.Catalog.Heartbeat(serviceName, instanceID)
 }
 
-func (s *State) HeartbeatNS(namespace, serviceName, instanceID string) (*catalog.Instance, bool) {
+func (s *RuntimeState) HeartbeatNS(namespace, serviceName, instanceID string) (*catalog.Instance, bool) {
 	return s.Catalog.HeartbeatNS(namespace, serviceName, instanceID)
 }
 
-func (s *State) GetMode() string {
+func (s *RuntimeState) GetMode() string {
 	return s.Settings.GetMode()
 }
 
-func (s *State) GetEnvironment() string {
+func (s *RuntimeState) GetEnvironment() string {
 	return s.Settings.GetEnvironment()
 }
 
-func (s *State) GetSeeds() []string {
+func (s *RuntimeState) GetSeeds() []string {
 	return s.Settings.GetSeeds()
 }
 
-func (s *State) GetLogLevel() string {
+func (s *RuntimeState) GetLogLevel() string {
 	return s.Settings.GetLogLevel()
 }
 
-func (s *State) Stats() catalog.Stats {
+func (s *RuntimeState) Stats() catalog.Stats {
 	return s.Catalog.Stats()
 }
 
-func (s *State) GetUser(username string) (*auth.User, bool) {
+func (s *RuntimeState) GetUser(username string) (*auth.User, bool) {
 	return s.Auth.GetUser(username)
 }
 
-func (s *State) GetAPIKey(key string) (*auth.APIKey, bool) {
+func (s *RuntimeState) GetAPIKey(key string) (*auth.APIKey, bool) {
 	return s.Auth.GetAPIKey(key)
 }
 
-func (s *State) ListServices() []catalog.ServiceSummary {
+func (s *RuntimeState) ListServices() []catalog.ServiceSummary {
 	return s.Catalog.ListServices()
 }
 
-func (s *State) ListServicesNS(namespace string) []catalog.ServiceSummary {
+func (s *RuntimeState) ListServicesNS(namespace string) []catalog.ServiceSummary {
 	return s.Catalog.ListServicesNS(namespace)
 }
 
-func (s *State) GetServiceHealthy(name string) []*catalog.Instance {
+func (s *RuntimeState) GetServiceHealthy(name string) []*catalog.Instance {
 	return s.Catalog.GetServiceHealthy(name)
 }
 
-func (s *State) GetServiceHealthyNS(namespace, name string) []*catalog.Instance {
+func (s *RuntimeState) GetServiceHealthyNS(namespace, name string) []*catalog.Instance {
 	return s.Catalog.GetServiceHealthyNS(namespace, name)
 }
 
-func (s *State) GetService(name string) []*catalog.Instance {
+func (s *RuntimeState) GetService(name string) []*catalog.Instance {
 	return s.Catalog.GetService(name)
 }
 
-func (s *State) GetServiceNS(namespace, name string) []*catalog.Instance {
+func (s *RuntimeState) GetServiceNS(namespace, name string) []*catalog.Instance {
 	return s.Catalog.GetServiceNS(namespace, name)
 }
 
-func (s *State) ListUsers() []*auth.User {
+func (s *RuntimeState) ListUsers() []*auth.User {
 	return s.Auth.ListUsers()
 }
 
-func (s *State) AddUser(user *auth.User) {
+func (s *RuntimeState) AddUser(user *auth.User) {
 	s.Auth.AddUser(user)
 	s.Auth.Save()
 }
 
-func (s *State) DeleteUser(username string) {
+func (s *RuntimeState) DeleteUser(username string) {
 	s.Auth.DeleteUser(username)
 	s.Auth.Save()
 }
 
-func (s *State) ListAPIKeys() []*auth.APIKey {
+func (s *RuntimeState) ListAPIKeys() []*auth.APIKey {
 	return s.Auth.ListAPIKeys()
 }
 
-func (s *State) AddAPIKey(key *auth.APIKey) {
+func (s *RuntimeState) AddAPIKey(key *auth.APIKey) {
 	s.Auth.AddAPIKey(key)
 	s.Auth.Save()
 }
 
-func (s *State) DeleteAPIKey(key string) {
+func (s *RuntimeState) DeleteAPIKey(key string) {
 	s.Auth.DeleteAPIKey(key)
 	s.Auth.Save()
 }
 
-func (s *State) SetMode(mode string) {
+func (s *RuntimeState) SetMode(mode string) {
 	s.Settings.SetMode(mode)
 	s.Settings.Save()
 }
 
-func (s *State) SetEnvironment(environment string) {
+func (s *RuntimeState) SetEnvironment(environment string) {
 	s.Settings.SetEnvironment(environment)
 	s.Settings.Save()
 }
 
-func (s *State) SetSeeds(seeds []string) {
+func (s *RuntimeState) SetSeeds(seeds []string) {
 	s.Settings.SetSeeds(seeds)
 	s.Settings.Save()
 }
 
-func (s *State) SetLogLevel(level string) {
+func (s *RuntimeState) SetLogLevel(level string) {
 	s.Settings.SetLogLevel(level)
 	s.Settings.Save()
 }
 
-func (s *State) GetEventRetentionDays() int {
+func (s *RuntimeState) GetEventRetentionDays() int {
 	return s.Settings.GetEventRetentionDays()
 }
 
-func (s *State) SetEventRetentionDays(days int) {
+func (s *RuntimeState) SetEventRetentionDays(days int) {
 	s.Settings.SetEventRetentionDays(days)
 	s.Settings.Save()
 	s.Catalog.Events.Cleanup(days)
 }
 
-func (s *State) GetLogRetentionDays() int {
+func (s *RuntimeState) GetLogRetentionDays() int {
 	return s.Settings.GetLogRetentionDays()
 }
 
-func (s *State) SetLogRetentionDays(days int) {
+func (s *RuntimeState) SetLogRetentionDays(days int) {
 	s.Settings.SetLogRetentionDays(days)
 	s.Settings.Save()
 }
 
-func (s *State) GetEventTypes() []string {
+func (s *RuntimeState) GetEventTypes() []string {
 	return s.Settings.GetEventTypes()
 }
 
-func (s *State) SetEventTypes(eventTypes []string) {
+func (s *RuntimeState) SetEventTypes(eventTypes []string) {
 	s.Settings.SetEventTypes(eventTypes)
 	s.Settings.Save()
 }
 
-func (s *State) GetHeartbeatMaxFailures() int {
+func (s *RuntimeState) GetHeartbeatMaxFailures() int {
 	return s.Settings.GetHeartbeatMaxFailures()
 }
 
-func (s *State) GetAPIKeyAuthEnabled() bool {
+func (s *RuntimeState) GetAPIKeyAuthEnabled() bool {
 	return s.Settings.GetAPIKeyAuthEnabled()
 }
 
-func (s *State) HasAPIKeyAuthSetting() bool {
+func (s *RuntimeState) HasAPIKeyAuthSetting() bool {
 	return s.Settings.HasAPIKeyAuthEnabled()
 }
 
-func (s *State) SetHeartbeatMaxFailures(n int) {
+func (s *RuntimeState) SetHeartbeatMaxFailures(n int) {
 	s.Settings.SetHeartbeatMaxFailures(n)
 	s.Settings.Save()
 }
 
-func (s *State) GetInstanceRemovalDelaySeconds() int {
+func (s *RuntimeState) GetInstanceRemovalDelaySeconds() int {
 	return s.Settings.GetInstanceRemovalDelaySeconds()
 }
 
-func (s *State) SetInstanceRemovalDelaySeconds(n int) {
+func (s *RuntimeState) SetInstanceRemovalDelaySeconds(n int) {
 	s.Settings.SetInstanceRemovalDelaySeconds(n)
 	s.Settings.Save()
 }
 
-func (s *State) SetAPIKeyAuthEnabled(enabled bool) {
+func (s *RuntimeState) SetAPIKeyAuthEnabled(enabled bool) {
 	s.Settings.SetAPIKeyAuthEnabled(enabled)
 	s.Settings.Save()
 }
 
-func (s *State) ListEvents() []*catalog.Event {
+func (s *RuntimeState) ListEvents() []*catalog.Event {
 	return s.Catalog.ListEvents()
 }
 
-func (s *State) MarkCritical(ttl time.Duration) ([]*catalog.Instance, []*catalog.Instance) {
+func (s *RuntimeState) MarkCritical(ttl time.Duration) ([]*catalog.Instance, []*catalog.Instance) {
 	maxFail := s.GetHeartbeatMaxFailures()
 	if maxFail <= 0 {
 		maxFail = 3
@@ -237,31 +237,31 @@ func (s *State) MarkCritical(ttl time.Duration) ([]*catalog.Instance, []*catalog
 	return s.Catalog.Instances.MarkCritical(ttl, maxFail, removalDelay)
 }
 
-func (s *State) ListNamespaces() []*catalog.Namespace {
+func (s *RuntimeState) ListNamespaces() []*catalog.Namespace {
 	return s.Catalog.ListNamespaces()
 }
 
-func (s *State) CreateNamespace(ns *catalog.Namespace) bool {
+func (s *RuntimeState) CreateNamespace(ns *catalog.Namespace) bool {
 	return s.Catalog.CreateNamespace(ns)
 }
 
-func (s *State) AppendEvent(eventType, service, instance, message string) {
+func (s *RuntimeState) AppendEvent(eventType, service, instance, message string) {
 	s.Catalog.AppendEvent(eventType, service, instance, message)
 }
 
-func (s *State) UpdateNamespace(ns *catalog.Namespace) bool {
+func (s *RuntimeState) UpdateNamespace(ns *catalog.Namespace) bool {
 	return s.Catalog.UpdateNamespace(ns)
 }
 
-func (s *State) DeleteNamespace(name string) bool {
+func (s *RuntimeState) DeleteNamespace(name string) bool {
 	return s.Catalog.DeleteNamespace(name)
 }
 
-func (s *State) SetInstanceStatus(namespace, serviceName, instanceID string, status catalog.HealthStatus) (*catalog.Instance, bool) {
+func (s *RuntimeState) SetInstanceStatus(namespace, serviceName, instanceID string, status catalog.HealthStatus) (*catalog.Instance, bool) {
 	return s.Catalog.SetInstanceStatus(namespace, serviceName, instanceID, status)
 }
 
-func (s *State) Snapshot() *SnapshotData {
+func (s *RuntimeState) Snapshot() *SnapshotData {
 	allServices := s.Catalog.Instances.GetAllNS()
 	servicesByNS := make(map[string]map[string][]*catalog.Instance, len(allServices))
 	for namespace, services := range allServices {
@@ -296,7 +296,7 @@ func (s *State) Snapshot() *SnapshotData {
 	}
 }
 
-func (s *State) Restore(data *SnapshotData) {
+func (s *RuntimeState) Restore(data *SnapshotData) {
 	if len(data.ServicesByNS) > 0 {
 		services := make(map[string]map[string]map[string]*catalog.Instance, len(data.ServicesByNS))
 		for namespace, namespaceServices := range data.ServicesByNS {

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 )
 
@@ -43,12 +42,12 @@ func BuildClusterMemberViews(cfg *config.Config, settings SettingsReader, cluste
 	raftMembersMap := make(map[string]map[string]string)
 	if mode == "cp" && env == "cluster" {
 		if raftMembers, err := cluster.GetMembers(); err == nil && raftMembers != nil {
-			var membersList []cp.ClusterMember
-			if ms, ok := raftMembers.([]cp.ClusterMember); ok {
+			var membersList []ClusterMember
+			if ms, ok := raftMembers.([]ClusterMember); ok {
 				membersList = ms
 			} else if ims, ok := raftMembers.([]interface{}); ok {
 				for _, item := range ims {
-					if m, ok := item.(cp.ClusterMember); ok {
+					if m, ok := item.(ClusterMember); ok {
 						membersList = append(membersList, m)
 					}
 				}

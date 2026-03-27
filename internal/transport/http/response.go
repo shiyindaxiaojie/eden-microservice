@@ -40,8 +40,8 @@ func (h *Handler) normalizeAddr(addr string) string {
 	return res
 }
 
-// handleLeaderRedirect returns a redirect response pointing to the current Raft leader if applicable.
-func (h *Handler) handleLeaderRedirect(w http.ResponseWriter, err error) {
+// writeLeaderRedirect returns a redirect response pointing to the current Raft leader if applicable.
+func (h *Handler) writeLeaderRedirect(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 
 	errMsg := err.Error()

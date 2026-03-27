@@ -9,84 +9,84 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	clustercmd "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/command"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
+	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
 )
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.
 type FSM struct {
-	state *state.State
+	state *clusterpkg.RuntimeState
 }
 
 // NewFSM creates a new FSM wrapping the registry.
-func NewFSM(runtimeState *state.State) *FSM {
+func NewFSM(runtimeState *clusterpkg.RuntimeState) *FSM {
 	return &FSM{state: runtimeState}
 }
 
 // Apply is called by Raft once a log entry is committed.
 func (f *FSM) Apply(l *hraft.Log) interface{} {
-	var cmd clustercmd.Command
+	var cmd replication.Command
 	if err := json.Unmarshal(l.Data, &cmd); err != nil {
 		logger.Error("[FSM] failed to unmarshal command: %v", err)
 		return err
 	}
 
 	switch cmd.Type {
-	case clustercmd.CmdRegister:
+	case replication.CmdRegister:
 		f.state.Register(fromReplicatedInstance(cmd.Instance))
 		return nil
-	case clustercmd.CmdDeregister:
+	case replication.CmdDeregister:
 		_, ok := f.state.Catalog.Instances.DeregisterNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		return ok
-	case clustercmd.CmdHeartbeat:
+	case replication.CmdHeartbeat:
 		inst, _ := f.state.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		if inst == nil {
 			return fmt.Errorf("instance not found")
 		}
 		return nil
-	case clustercmd.CmdAddAPIKey:
+	case replication.CmdAddAPIKey:
 		f.state.AddAPIKey(fromReplicatedAPIKey(cmd.APIKey))
 		return nil
-	case clustercmd.CmdDeleteAPIKey:
+	case replication.CmdDeleteAPIKey:
 		f.state.DeleteAPIKey(cmd.Key)
 		return nil
-	case clustercmd.CmdAddUser:
+	case replication.CmdAddUser:
 		f.state.AddUser(fromReplicatedUser(cmd.User))
 		return nil
-	case clustercmd.CmdDeleteUser:
+	case replication.CmdDeleteUser:
 		f.state.DeleteUser(cmd.Username)
 		return nil
-	case clustercmd.CmdSetMode:
+	case replication.CmdSetMode:
 		f.state.SetMode(cmd.Mode)
 		return nil
-	case clustercmd.CmdSetEnv:
+	case replication.CmdSetEnv:
 		f.state.SetEnvironment(cmd.Environment)
 		return nil
-	case clustercmd.CmdSetSeeds:
+	case replication.CmdSetSeeds:
 		f.state.SetSeeds(cmd.Seeds)
 		return nil
-	case clustercmd.CmdSetLogLevel:
+	case replication.CmdSetLogLevel:
 		f.state.SetLogLevel(cmd.LogLevel)
 		if lg, ok := logger.GetLogger().(*logger.Logger); ok {
 			lg.SetLevel(logger.ParseLevel(cmd.LogLevel))
 		}
 		return nil
-	case clustercmd.CmdSetEventRetentionDays:
+	case replication.CmdSetEventRetentionDays:
 		f.state.SetEventRetentionDays(cmd.IntValue)
 		return nil
-	case clustercmd.CmdSetLogRetentionDays:
+	case replication.CmdSetLogRetentionDays:
 		f.state.SetLogRetentionDays(cmd.IntValue)
 		return nil
-	case clustercmd.CmdSetEventTypes:
+	case replication.CmdSetEventTypes:
 		f.state.SetEventTypes(cmd.StringList)
 		return nil
-	case clustercmd.CmdSetHeartbeatMaxFailures:
+	case replication.CmdSetHeartbeatMaxFailures:
 		f.state.SetHeartbeatMaxFailures(cmd.IntValue)
 		return nil
-	case clustercmd.CmdSetInstanceRemovalDelaySeconds:
+	case replication.CmdSetInstanceRemovalDelaySeconds:
 		f.state.SetInstanceRemovalDelaySeconds(cmd.IntValue)
 		return nil
-	case clustercmd.CmdSetAPIKeyAuthEnabled:
+	case replication.CmdSetAPIKeyAuthEnabled:
 		f.state.SetAPIKeyAuthEnabled(cmd.BoolValue)
 		return nil
 	default:
@@ -103,7 +103,7 @@ func (f *FSM) Snapshot() (hraft.FSMSnapshot, error) {
 // Restore restores the FSM from a snapshot.
 func (f *FSM) Restore(rc io.ReadCloser) error {
 	defer rc.Close()
-	var sd state.SnapshotData
+	var sd clusterpkg.SnapshotData
 	if err := json.NewDecoder(rc).Decode(&sd); err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (f *FSM) Restore(rc io.ReadCloser) error {
 
 // fsmSnapshot implements raft.FSMSnapshot.
 type fsmSnapshot struct {
-	data *state.SnapshotData
+	data *clusterpkg.SnapshotData
 }
 
 func (s *fsmSnapshot) Persist(sink hraft.SnapshotSink) error {
@@ -131,7 +131,7 @@ func (s *fsmSnapshot) Persist(sink hraft.SnapshotSink) error {
 
 func (s *fsmSnapshot) Release() {}
 
-func fromReplicatedInstance(inst *clustercmd.Instance) *catalog.Instance {
+func fromReplicatedInstance(inst *replication.Instance) *catalog.Instance {
 	if inst == nil {
 		return nil
 	}
@@ -151,7 +151,7 @@ func fromReplicatedInstance(inst *clustercmd.Instance) *catalog.Instance {
 	}
 }
 
-func fromReplicatedUser(user *clustercmd.User) *auth.User {
+func fromReplicatedUser(user *replication.User) *auth.User {
 	if user == nil {
 		return nil
 	}
@@ -167,7 +167,7 @@ func fromReplicatedUser(user *clustercmd.User) *auth.User {
 	}
 }
 
-func fromReplicatedAPIKey(key *clustercmd.APIKey) *auth.APIKey {
+func fromReplicatedAPIKey(key *replication.APIKey) *auth.APIKey {
 	if key == nil {
 		return nil
 	}

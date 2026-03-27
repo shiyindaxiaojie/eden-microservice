@@ -1,4 +1,4 @@
-package clustercmd
+package replication
 
 import "time"
 
@@ -64,7 +64,7 @@ type APIKey struct {
 	Status      string `json:"status"`
 }
 
-// Command is the payload replicated through Raft and cluster fanout.
+// Command is the mutation envelope replicated through Raft and cluster fanout.
 type Command struct {
 	Type        CommandType `json:"type"`
 	Instance    *Instance   `json:"instance,omitempty"`

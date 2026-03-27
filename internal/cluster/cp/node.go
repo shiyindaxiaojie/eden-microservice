@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
+	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 
 	hraft "github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
 )
 
 // ServerID is a type alias for Raft server ID.
@@ -31,12 +31,12 @@ type Config struct {
 type Node struct {
 	Raft   *hraft.Raft
 	fsm    *FSM
-	State  *state.State
+	State  *clusterpkg.RuntimeState
 	config Config
 }
 
 // NewNode creates and starts a Raft node.
-func NewNode(cfg Config, runtimeState *state.State) (*Node, error) {
+func NewNode(cfg Config, runtimeState *clusterpkg.RuntimeState) (*Node, error) {
 	fsm := NewFSM(runtimeState)
 
 	raftConfig := hraft.DefaultConfig()
@@ -165,14 +165,6 @@ func (n *Node) Join(nodeID, addr string) error {
 	return nil
 }
 
-// ClusterMember represents a node in the Raft cluster.
-type ClusterMember struct {
-	ID      string `json:"id"`
-	Address string `json:"address"`
-	Role    string `json:"role"`   // "Leader", "Follower", "Candidate"
-	Status  string `json:"status"` // "Online", "Offline"
-}
-
 // Members returns the current cluster membership.
 func (n *Node) Members() (interface{}, error) {
 	configFuture := n.Raft.GetConfiguration()
@@ -181,7 +173,7 @@ func (n *Node) Members() (interface{}, error) {
 	}
 
 	leaderAddr, _ := n.Raft.LeaderWithID()
-	var members []ClusterMember
+	var members []clusterpkg.ClusterMember
 	for _, srv := range configFuture.Configuration().Servers {
 		role := "Follower"
 		if srv.Address == leaderAddr {
@@ -196,7 +188,7 @@ func (n *Node) Members() (interface{}, error) {
 			conn.Close()
 		}
 
-		members = append(members, ClusterMember{
+		members = append(members, clusterpkg.ClusterMember{
 			ID:      string(srv.ID),
 			Address: string(srv.Address),
 			Role:    role,

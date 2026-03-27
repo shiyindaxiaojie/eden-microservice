@@ -12,7 +12,7 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-logger"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	clustercmd "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/command"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 )
 
@@ -115,7 +115,7 @@ func applyRuntimeLogLevel(level string) {
 func (c *controller) AddUser(u *auth.User) error {
 	mode := c.profile.GetMode()
 	if mode == "cp" {
-		cmd := clustercmd.Command{Type: clustercmd.CmdAddUser, User: toReplicatedUser(u)}
+		cmd := replication.Command{Type: replication.CmdAddUser, User: toReplicatedUser(u)}
 		return c.cpNode.Apply(cmd, 5*time.Second)
 	}
 	if c.apNode != nil {
@@ -132,7 +132,7 @@ func (c *controller) GetUser(username string) (*auth.User, bool) {
 func (c *controller) DeleteUser(username string) error {
 	mode := c.profile.GetMode()
 	if mode == "cp" {
-		cmd := clustercmd.Command{Type: clustercmd.CmdDeleteUser, Username: username}
+		cmd := replication.Command{Type: replication.CmdDeleteUser, Username: username}
 		return c.cpNode.Apply(cmd, 5*time.Second)
 	}
 	if c.apNode != nil {
@@ -149,7 +149,7 @@ func (c *controller) ListUsers() ([]*auth.User, error) {
 func (c *controller) AddAPIKey(key *auth.APIKey) error {
 	mode := c.profile.GetMode()
 	if mode == "cp" {
-		cmd := clustercmd.Command{Type: clustercmd.CmdAddAPIKey, APIKey: toReplicatedAPIKey(key)}
+		cmd := replication.Command{Type: replication.CmdAddAPIKey, APIKey: toReplicatedAPIKey(key)}
 		return c.cpNode.Apply(cmd, 5*time.Second)
 	}
 	if c.apNode != nil {
@@ -162,7 +162,7 @@ func (c *controller) AddAPIKey(key *auth.APIKey) error {
 func (c *controller) DeleteAPIKey(key string) error {
 	mode := c.profile.GetMode()
 	if mode == "cp" {
-		cmd := clustercmd.Command{Type: clustercmd.CmdDeleteAPIKey, Key: key}
+		cmd := replication.Command{Type: replication.CmdDeleteAPIKey, Key: key}
 		return c.cpNode.Apply(cmd, 5*time.Second)
 	}
 	if c.apNode != nil {
@@ -176,11 +176,11 @@ func (c *controller) ListAPIKeys() ([]*auth.APIKey, error) {
 	return c.auth.ListAPIKeys(), nil
 }
 
-func toReplicatedUser(user *auth.User) *clustercmd.User {
+func toReplicatedUser(user *auth.User) *replication.User {
 	if user == nil {
 		return nil
 	}
-	return &clustercmd.User{
+	return &replication.User{
 		Username:  user.Username,
 		Password:  user.Password,
 		Nickname:  user.Nickname,
@@ -192,11 +192,11 @@ func toReplicatedUser(user *auth.User) *clustercmd.User {
 	}
 }
 
-func toReplicatedAPIKey(key *auth.APIKey) *clustercmd.APIKey {
+func toReplicatedAPIKey(key *auth.APIKey) *replication.APIKey {
 	if key == nil {
 		return nil
 	}
-	return &clustercmd.APIKey{
+	return &replication.APIKey{
 		Key:         key.Key,
 		Label:       key.Label,
 		Description: key.Description,
@@ -221,7 +221,7 @@ func (c *controller) SetMode(mode string) error {
 
 	currentEnv := c.profile.GetEnvironment()
 	if mode == "cp" && currentEnv == "cluster" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetMode, Mode: mode}
+		cmd := replication.Command{Type: replication.CmdSetMode, Mode: mode}
 		_ = c.cpNode.Apply(cmd, 5*time.Second)
 	}
 
@@ -269,7 +269,7 @@ func (c *controller) SetEnvironment(env string) error {
 	}
 	mode := c.profile.GetMode()
 	if mode == "cp" && env == "cluster" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetEnv, Environment: env}
+		cmd := replication.Command{Type: replication.CmdSetEnv, Environment: env}
 		_ = c.cpNode.Apply(cmd, 5*time.Second)
 	}
 	c.profile.SetEnvironment(env)
@@ -285,7 +285,7 @@ func (c *controller) SetLogLevel(level string) error {
 	level = NormalizeLogLevel(level)
 	mode := c.profile.GetMode()
 	if mode == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetLogLevel, LogLevel: level}
+		cmd := replication.Command{Type: replication.CmdSetLogLevel, LogLevel: level}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}
@@ -306,7 +306,7 @@ func (c *controller) SetEventRetentionDays(days int) error {
 	}
 	mode := c.profile.GetMode()
 	if mode == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetEventRetentionDays, IntValue: days}
+		cmd := replication.Command{Type: replication.CmdSetEventRetentionDays, IntValue: days}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}
@@ -332,7 +332,7 @@ func (c *controller) SetLogRetentionDays(days int) error {
 		return errors.New("invalid log retention days")
 	}
 	if c.profile.GetMode() == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetLogRetentionDays, IntValue: days}
+		cmd := replication.Command{Type: replication.CmdSetLogRetentionDays, IntValue: days}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}
@@ -356,7 +356,7 @@ func (c *controller) SetEventTypes(types []string) error {
 		normalized = nil
 	}
 	if c.profile.GetMode() == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetEventTypes, StringList: normalized}
+		cmd := replication.Command{Type: replication.CmdSetEventTypes, StringList: normalized}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}
@@ -379,7 +379,7 @@ func (c *controller) SetHeartbeatMaxFailures(n int) error {
 		return errors.New("invalid heartbeat max failures")
 	}
 	if c.profile.GetMode() == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetHeartbeatMaxFailures, IntValue: n}
+		cmd := replication.Command{Type: replication.CmdSetHeartbeatMaxFailures, IntValue: n}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}
@@ -402,7 +402,7 @@ func (c *controller) SetInstanceRemovalDelaySeconds(n int) error {
 		return errors.New("invalid instance removal delay seconds")
 	}
 	if c.profile.GetMode() == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetInstanceRemovalDelaySeconds, IntValue: n}
+		cmd := replication.Command{Type: replication.CmdSetInstanceRemovalDelaySeconds, IntValue: n}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}
@@ -634,7 +634,7 @@ func (c *controller) SetAPIKeyAuthEnabled(enabled bool) error {
 		return err
 	}
 	if c.profile.GetMode() == "cp" && c.cpNode != nil {
-		cmd := clustercmd.Command{Type: clustercmd.CmdSetAPIKeyAuthEnabled, BoolValue: enabled}
+		cmd := replication.Command{Type: replication.CmdSetAPIKeyAuthEnabled, BoolValue: enabled}
 		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
 			return err
 		}

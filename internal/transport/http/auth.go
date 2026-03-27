@@ -19,7 +19,7 @@ const (
 	RoleContextKey contextKey = "role"
 )
 
-// AuthMiddleware handles JWT authentication for the console.
+// Auth handles JWT authentication for the console.
 func (h *Handler) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.config.Auth.JWT.Enabled {
@@ -79,7 +79,7 @@ func (h *Handler) Auth(next http.Handler) http.Handler {
 	})
 }
 
-// RBACMiddleware checks if the user has the required roles.
+// RBAC checks if the user has the required roles.
 func (h *Handler) RBAC(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +112,7 @@ func (h *Handler) RBAC(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
-// APIKeyMiddleware handles API Key authentication for service registration.
+// APIKey handles API Key authentication for service registration.
 func (h *Handler) APIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		settings := h.settings.GetSystemSettings()
@@ -158,7 +158,7 @@ func (h *Handler) APIKey(next http.Handler) http.Handler {
 	})
 }
 
-// ConsolidatedAuthMiddleware allows EITHER a valid API Key OR a valid JWT with required roles.
+// ConsolidatedAuth allows EITHER a valid API Key OR a valid JWT with required roles.
 func (h *Handler) ConsolidatedAuth(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -231,8 +231,8 @@ func (h *Handler) GenerateToken(userID, role string) (string, error) {
 	return token.SignedString([]byte(h.config.Auth.JWT.Secret))
 }
 
-// handleLogin authenticates a user and returns a JWT token.
-func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
+// login authenticates a user and returns a JWT token.
+func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -274,8 +274,8 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	httpError(w, http.StatusUnauthorized, "invalid credentials")
 }
 
-// handleProfile handles retrieving and updating the user's basic profile.
-func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
+// profile handles retrieving and updating the user's basic profile.
+func (h *Handler) profile(w http.ResponseWriter, r *http.Request) {
 	username, _ := r.Context().Value(UserContextKey).(string)
 	if username == "" {
 		httpError(w, http.StatusUnauthorized, "unauthorized")
@@ -321,8 +321,8 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, "Profile updated")
 }
 
-// handleUpdatePassword updates the user's password.
-func (h *Handler) handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
+// updatePassword updates the user's password.
+func (h *Handler) updatePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return

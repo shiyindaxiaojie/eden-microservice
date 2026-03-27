@@ -9,7 +9,7 @@ import (
 
 // ---------- Namespace Handlers ----------
 
-func (h *Handler) handleListNamespaces(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listNamespaces(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpError(w, http.StatusMethodNotAllowed, "GET required")
 		return
@@ -18,7 +18,7 @@ func (h *Handler) handleListNamespaces(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, namespaces)
 }
 
-func (h *Handler) handleCreateNamespace(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createNamespace(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -41,7 +41,7 @@ func (h *Handler) handleCreateNamespace(w http.ResponseWriter, r *http.Request) 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleUpdateNamespace(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateNamespace(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		httpError(w, http.StatusMethodNotAllowed, "PUT required")
 		return
@@ -64,7 +64,7 @@ func (h *Handler) handleUpdateNamespace(w http.ResponseWriter, r *http.Request) 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleDeleteNamespace(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteNamespace(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		httpError(w, http.StatusMethodNotAllowed, "DELETE required")
 		return

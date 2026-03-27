@@ -6,6 +6,14 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 )
 
+// ClusterMember represents a node in the Raft cluster.
+type ClusterMember struct {
+	ID      string `json:"id"`
+	Address string `json:"address"`
+	Role    string `json:"role"`   // "Leader", "Follower", "Candidate"
+	Status  string `json:"status"` // "Online", "Offline"
+}
+
 type Membership interface {
 	JoinCluster(nodeID, addr string) error
 	GetMembers() (interface{}, error)

@@ -10,7 +10,7 @@ import (
 
 // ---------- Catalog Handlers (Service Registration & Discovery) ----------
 
-func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) registerService(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -28,14 +28,14 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.catalog.Register(&inst); err != nil {
-		h.handleLeaderRedirect(w, err)
+		h.writeLeaderRedirect(w, err)
 		return
 	}
 
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleSetInstanceStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) setInstanceStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -66,7 +66,7 @@ func (h *Handler) handleSetInstanceStatus(w http.ResponseWriter, r *http.Request
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -85,13 +85,13 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 			httpError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		h.handleLeaderRedirect(w, err)
+		h.writeLeaderRedirect(w, err)
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleReportTopology(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) reportTopology(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "POST required")
 		return
@@ -119,7 +119,7 @@ func (h *Handler) handleReportTopology(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleListServices(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listServices(w http.ResponseWriter, r *http.Request) {
 	namespace := r.URL.Query().Get("namespace")
 	services, err := h.catalog.ListServices(namespace)
 	if err != nil {
@@ -129,11 +129,11 @@ func (h *Handler) handleListServices(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, services)
 }
 
-func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Path[len("/v1/catalog/service/"):]
 	// Strip trailing /subscribers if present
 	if strings.HasSuffix(name, "/subscribers") {
-		h.handleGetSubscribers(w, r)
+		h.getSubscribers(w, r)
 		return
 	}
 	healthy := r.URL.Query().Get("passing") == "true"
@@ -167,7 +167,7 @@ func (h *Handler) handleGetService(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, instances)
 }
 
-func (h *Handler) handleGetSubscribers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getSubscribers(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[len("/v1/catalog/service/"):]
 	name := strings.TrimSuffix(path, "/subscribers")
 	namespace := r.URL.Query().Get("namespace")
@@ -179,7 +179,7 @@ func (h *Handler) handleGetSubscribers(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, subscribers)
 }
 
-func (h *Handler) handleDependencyGraph(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getDependencyGraph(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpError(w, http.StatusMethodNotAllowed, "GET required")
 		return
@@ -189,7 +189,7 @@ func (h *Handler) handleDependencyGraph(w http.ResponseWriter, r *http.Request) 
 	jsonOK(w, graph)
 }
 
-func (h *Handler) handleGetTopology(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getTopology(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpError(w, http.StatusMethodNotAllowed, "GET required")
 		return

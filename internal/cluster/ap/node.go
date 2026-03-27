@@ -12,14 +12,13 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
 	"google.golang.org/grpc"
 )
 
 // Node represents an AP mode node that broadcasts changes to seed peers.
 type Node struct {
 	Config *config.Config
-	State  *state.State
+	State  *cluster.RuntimeState
 	PM     *cluster.PeerManager
 }
 
@@ -30,7 +29,7 @@ type syncDiscoveryPayload struct {
 }
 
 // NewNode creates an AP mode node.
-func NewNode(cfg *config.Config, runtimeState *state.State) *Node {
+func NewNode(cfg *config.Config, runtimeState *cluster.RuntimeState) *Node {
 	n := &Node{
 		Config: cfg,
 		State:  runtimeState,

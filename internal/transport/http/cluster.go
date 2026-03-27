@@ -12,17 +12,16 @@ import (
 
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 )
 
 // ---------- Cluster Handlers (Membership & Stats) ----------
 
-func (h *Handler) handleNodeInfo(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) nodeInfo(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, h.config)
 }
 
-func (h *Handler) handleJoin(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) joinCluster(w http.ResponseWriter, r *http.Request) {
 	mode := h.settings.GetMode()
 	if mode == "ap" {
 		jsonOK(w, map[string]string{"status": "ignored_in_ap_mode"})
@@ -42,7 +41,7 @@ func (h *Handler) handleJoin(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listMembers(w http.ResponseWriter, r *http.Request) {
 	membersResults, err := clusterpkg.BuildClusterMemberViews(h.config, h.settings, h.cluster, &h.nodeCache)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
@@ -51,7 +50,7 @@ func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, membersResults)
 }
 
-func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) manageMember(w http.ResponseWriter, r *http.Request) {
 	mode := h.settings.GetMode()
 	if r.Method == http.MethodPost {
 		var req struct {
@@ -116,7 +115,7 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 					lastErr = fmt.Errorf("failed to join %s to raft: %v", addr, err)
 					// Don't continue, joining one raft node might redirect us to leader
 					if err.Error() == "not leader" {
-						h.handleLeaderRedirect(w, err)
+						h.writeLeaderRedirect(w, err)
 						return
 					}
 				}
@@ -172,7 +171,7 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := h.cluster.RemoveMember(nodeID); err != nil {
-				h.handleLeaderRedirect(w, err)
+				h.writeLeaderRedirect(w, err)
 				return
 			}
 		}
@@ -183,7 +182,7 @@ func (h *Handler) handleMember(w http.ResponseWriter, r *http.Request) {
 	httpError(w, http.StatusMethodNotAllowed, "method not allowed")
 }
 
-func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) clusterStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.cluster.GetStats()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
@@ -222,7 +221,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	if env == "cluster" {
 		if mode == "cp" {
 			res, _ := h.cluster.GetMembers()
-			if ms, ok := res.([]cp.ClusterMember); ok {
+			if ms, ok := res.([]clusterpkg.ClusterMember); ok {
 				nodeCount = len(ms)
 				healthyNodes = 0
 				for _, m := range ms {
@@ -238,7 +237,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 						if mm["status"] == "Online" {
 							healthyNodes++
 						}
-					} else if cm, ok := m.(cp.ClusterMember); ok {
+					} else if cm, ok := m.(clusterpkg.ClusterMember); ok {
 						if cm.Status == "Online" {
 							healthyNodes++
 						}
@@ -293,7 +292,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, result)
 }
 
-func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := h.cluster.ListEvents()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
@@ -302,7 +301,7 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, events)
 }
 
-func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateStorage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		EventRetention int      `json:"event_retention"`
 		LogLevel       string   `json:"log_level"`
@@ -318,37 +317,37 @@ func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
 
 	if req.EventRetention > 0 {
 		if err := h.settings.SetEventRetentionDays(req.EventRetention); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 	}
 	if req.LogLevel != "" {
 		if err := h.settings.SetLogLevel(req.LogLevel); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 	}
 	if req.LogRetention > 0 {
 		if err := h.settings.SetLogRetentionDays(req.LogRetention); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 	}
 	if req.EventTypes != nil {
 		if err := h.settings.SetEventTypes(req.EventTypes); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 	}
 	if req.HBMaxFail > 0 {
 		if err := h.settings.SetHeartbeatMaxFailures(req.HBMaxFail); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 	}
 	if req.RemovalDelay > 0 {
 		if err := h.settings.SetInstanceRemovalDelaySeconds(req.RemovalDelay); err != nil {
-			h.handleLeaderRedirect(w, err)
+			h.writeLeaderRedirect(w, err)
 			return
 		}
 	}
@@ -356,7 +355,7 @@ func (h *Handler) handleUpdateStorage(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleGetStorage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getStorage(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{
 		"log_level":                      h.settings.GetLogLevel(),
 		"event_retention":                h.settings.GetEventRetentionDays(),
@@ -367,7 +366,7 @@ func (h *Handler) handleGetStorage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleGetLogFiles(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listLogFiles(w http.ResponseWriter, r *http.Request) {
 	var files []map[string]string
 	for _, appender := range h.config.Log.Appenders {
 		if appender.FileName != "" {
@@ -387,7 +386,7 @@ func (h *Handler) handleGetLogFiles(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, files)
 }
 
-func (h *Handler) handleGetLogs(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getLogs(w http.ResponseWriter, r *http.Request) {
 	countStr := r.URL.Query().Get("count")
 	count := 100
 	if countStr != "" {
@@ -449,7 +448,7 @@ func (h *Handler) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 // Internal sync handlers
-func (h *Handler) handleInternalSyncSeeds(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncSeeds(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Seeds []string `json:"seeds"`
 	}
@@ -459,14 +458,14 @@ func (h *Handler) handleInternalSyncSeeds(w http.ResponseWriter, r *http.Request
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleInternalSyncUsers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncUser(w http.ResponseWriter, r *http.Request) {
 	var u auth.User
 	json.NewDecoder(r.Body).Decode(&u)
 	h.settings.SaveUserLocal(&u)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleInternalDeleteUser(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteSyncedUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 	}
@@ -475,14 +474,14 @@ func (h *Handler) handleInternalDeleteUser(w http.ResponseWriter, r *http.Reques
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleInternalSyncAPIKey(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncAPIKey(w http.ResponseWriter, r *http.Request) {
 	var k auth.APIKey
 	json.NewDecoder(r.Body).Decode(&k)
 	h.settings.SaveAPIKeyLocal(&k)
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleInternalDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteSyncedAPIKey(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Key string `json:"key"`
 	}
@@ -491,7 +490,7 @@ func (h *Handler) handleInternalDeleteAPIKey(w http.ResponseWriter, r *http.Requ
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) handleInternalSyncSettings(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncSettings(w http.ResponseWriter, r *http.Request) {
 	var req map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpError(w, http.StatusBadRequest, "invalid sync body")

@@ -29,7 +29,6 @@ import (
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/pkg/crypto"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/state"
 	grpcapi "github.com/shiyindaxiaojie/eden-go-registry/internal/transport/grpc"
 	httpapi "github.com/shiyindaxiaojie/eden-go-registry/internal/transport/http"
 	"golang.org/x/crypto/bcrypt"
@@ -77,7 +76,7 @@ func main() {
 	}
 
 	// 2. Create runtime state
-	runtimeState := state.New(cfg.DataDir)
+	runtimeState := platformcluster.NewRuntimeState(cfg.DataDir)
 	if !runtimeState.HasAPIKeyAuthSetting() {
 		runtimeState.SetAPIKeyAuthEnabled(cfg.Auth.APIKey.Enabled)
 	}
