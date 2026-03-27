@@ -99,6 +99,9 @@ func NewNode(cfg Config, runtimeState *clusterpkg.RuntimeState) (*Node, error) {
 
 // Apply submits a command through Raft consensus.
 func (n *Node) Apply(cmd interface{}, timeout time.Duration) error {
+	if n == nil || n.Raft == nil {
+		return fmt.Errorf("raft node not initialized")
+	}
 	t := timeout
 	if n.Raft.State() != hraft.Leader {
 		leader := n.Raft.Leader()
@@ -126,6 +129,9 @@ func (n *Node) Apply(cmd interface{}, timeout time.Duration) error {
 
 // RemoveServer removes a voter from the cluster.
 func (n *Node) RemoveServer(nodeID string) error {
+	if n == nil || n.Raft == nil {
+		return fmt.Errorf("raft node not initialized")
+	}
 	if n.Raft.State() != hraft.Leader {
 		return fmt.Errorf("not leader")
 	}
@@ -135,6 +141,9 @@ func (n *Node) RemoveServer(nodeID string) error {
 
 // Join adds a new voter to the cluster.
 func (n *Node) Join(nodeID, addr string) error {
+	if n == nil || n.Raft == nil {
+		return fmt.Errorf("raft node not initialized")
+	}
 	if n.Raft.State() != hraft.Leader {
 		return fmt.Errorf("not leader")
 	}
@@ -167,6 +176,9 @@ func (n *Node) Join(nodeID, addr string) error {
 
 // Members returns the current cluster membership.
 func (n *Node) Members() (interface{}, error) {
+	if n == nil || n.Raft == nil {
+		return nil, fmt.Errorf("raft node not initialized")
+	}
 	configFuture := n.Raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		return nil, err
@@ -200,17 +212,26 @@ func (n *Node) Members() (interface{}, error) {
 
 // IsLeader returns whether this node is the Raft leader.
 func (n *Node) IsLeader() bool {
+	if n == nil || n.Raft == nil {
+		return false
+	}
 	return n.Raft.State() == hraft.Leader
 }
 
 // LeaderAddr returns the current leader address.
 func (n *Node) LeaderAddr() string {
+	if n == nil || n.Raft == nil {
+		return ""
+	}
 	addr, _ := n.Raft.LeaderWithID()
 	return string(addr)
 }
 
 // LeaderID returns the node ID (HTTP address) of the current leader.
 func (n *Node) LeaderID() string {
+	if n == nil || n.Raft == nil {
+		return ""
+	}
 	leaderAddr, _ := n.Raft.LeaderWithID()
 	if leaderAddr == "" {
 		return ""

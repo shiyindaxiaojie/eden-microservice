@@ -192,8 +192,8 @@ func (h *Handler) clusterStats(w http.ResponseWriter, r *http.Request) {
 	mode := h.settings.GetMode()
 	env := h.settings.GetEnvironment()
 	localAddr := h.normalizeAddr(h.config.HTTPAddr)
-	isLeader := h.cluster.IsLeader()
-	leaderAddr := h.cluster.LeaderAddr()
+	isLeader := false
+	leaderAddr := ""
 
 	role := "Peer"
 	if env == "standalone" {
@@ -206,6 +206,8 @@ func (h *Handler) clusterStats(w http.ResponseWriter, r *http.Request) {
 		isLeader = false
 	} else {
 		// CP mode
+		isLeader = h.cluster.IsLeader()
+		leaderAddr = h.cluster.LeaderAddr()
 		if isLeader {
 			role = "Leader"
 		} else {

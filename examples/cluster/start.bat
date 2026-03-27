@@ -10,18 +10,18 @@ set WORKDIR=%~dp0..\..
 cd /d %WORKDIR%
 
 :: 0. Cleanup old processes
-echo [0/4] Cleaning up old processes...
+echo [0/5] Cleaning up old processes...
 taskkill /fi "windowtitle eq Eden-Node*" /im cmd.exe /t /f >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 :: 1. Clean old cluster data to avoid stale settings
-echo [1/4] Cleaning old cluster data...
+echo [1/5] Cleaning old cluster data...
 if exist "data\node1" rd /s /q "data\node1"
 if exist "data\node2" rd /s /q "data\node2"
 if exist "data\node3" rd /s /q "data\node3"
 
 :: 2. Pre-build the server binary (so go run doesn't slow down startup)
-echo [2/4] Building server binary...
+echo [2/5] Building server binary...
 go build -o eden-server.exe ./cmd/server/main.go
 if errorlevel 1 (
     echo ERROR: Build failed!
@@ -32,7 +32,7 @@ echo       Build successful.
 echo.
 
 :: --- Node 1 ---
-echo [3/4] Starting backend nodes...
+echo [3/5] Starting backend nodes...
 echo        Node 1 (HTTP: 8500)...
 start "Eden-Node1-Backend" cmd /c "eden-server.exe -config examples/cluster/configs/node1.yaml"
 timeout /t 3 /nobreak >nul
@@ -47,8 +47,19 @@ echo        Node 3 (HTTP: 8502)...
 start "Eden-Node3-Backend" cmd /c "eden-server.exe -config examples/cluster/configs/node3.yaml"
 timeout /t 2 /nobreak >nul
 
+:: --- Cluster membership ---
+echo [4/5] Registering cluster members through API...
+powershell -NoProfile -Command "$login = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8500/v1/auth/login' -ContentType 'application/json' -Body '{\"username\":\"admin\",\"password\":\"8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918\"}'; $headers = @{ Authorization = 'Bearer ' + $login.token }; Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8500/v1/cluster/member' -Headers $headers -ContentType 'application/json' -Body '{\"addresses\":[\"http://127.0.0.1:8501\",\"http://127.0.0.1:8502\"]}' | Out-Null"
+if errorlevel 1 (
+    echo ERROR: Failed to register cluster members!
+    pause
+    exit /b 1
+)
+echo        Cluster membership configured.
+echo.
+
 :: --- Frontends ---
-echo [4/4] Starting frontend dev servers...
+echo [5/5] Starting frontend dev servers...
 cd web
 start "Eden-Node1-Frontend" cmd /c "set VITE_PORT=2019&& set VITE_PROXY_TARGET=http://127.0.0.1:8500&& npx vite"
 timeout /t 1 /nobreak >nul

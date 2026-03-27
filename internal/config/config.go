@@ -11,21 +11,27 @@ import (
 
 // Config represents the registry configuration.
 type Config struct {
-	NodeID     string         `mapstructure:"node_id" json:"node_id"`
-	Mode       string         `mapstructure:"mode" json:"mode"` // "ap" or "cp"
-	HTTPAddr   string         `mapstructure:"http_addr" json:"http_addr"`
-	GRPCAddr   string         `mapstructure:"grpc_addr" json:"grpc_addr"`
-	QUICAddr   string         `mapstructure:"quic_addr" json:"quic_addr"`
-	RaftAddr   string         `mapstructure:"raft_addr" json:"raft_addr"`
-	DataDir    string         `mapstructure:"data_dir" json:"data_dir"`
-	Datacenter string         `mapstructure:"datacenter" json:"datacenter"`
-	Bootstrap  bool           `mapstructure:"bootstrap" json:"bootstrap"`
-	Join       string         `mapstructure:"join" json:"join"`
-	Seeds      []string       `mapstructure:"seeds" json:"seeds"`
-	Auth       Auth           `mapstructure:"auth" json:"auth"`
-	Log        LogConfig      `mapstructure:"log" json:"log"`
-	Storage    StorageConfig  `mapstructure:"storage" json:"storage"`
-	Registry   RegistryConfig `mapstructure:"registry" json:"registry"`
+	NodeID      string          `mapstructure:"node_id" json:"node_id"`
+	Mode        string          `mapstructure:"mode" json:"mode"` // "standalone" or "cluster"
+	Consistency string          `mapstructure:"consistency" json:"consistency"`
+	HTTPAddr    string          `mapstructure:"http_addr" json:"http_addr"`
+	GRPCAddr    string          `mapstructure:"grpc_addr" json:"grpc_addr"`
+	QUICAddr    string          `mapstructure:"quic_addr" json:"quic_addr"`
+	RaftAddr    string          `mapstructure:"raft_addr" json:"raft_addr"`
+	DataDir     string          `mapstructure:"data_dir" json:"data_dir"`
+	Datacenter  string          `mapstructure:"datacenter" json:"datacenter"`
+	Bootstrap   bool            `mapstructure:"bootstrap" json:"bootstrap"`
+	Auth        Auth            `mapstructure:"auth" json:"auth"`
+	Log         LogConfig       `mapstructure:"log" json:"log"`
+	Storage     StorageConfig   `mapstructure:"storage" json:"storage"`
+	Registry    RegistryConfig  `mapstructure:"registry" json:"registry"`
+	Transport   TransportConfig `mapstructure:"transport" json:"transport"`
+}
+
+type TransportConfig struct {
+	GRPC string `mapstructure:"grpc" json:"grpc"`
+	QUIC string `mapstructure:"quic" json:"quic"`
+	Raft string `mapstructure:"raft" json:"raft"`
 }
 
 type RegistryConfig struct {
@@ -113,9 +119,10 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Default values
 	viper.SetDefault("node_id", "node-1")
-	viper.SetDefault("mode", "ap")
+	viper.SetDefault("mode", "standalone")
+	viper.SetDefault("consistency", "ap")
 	viper.SetDefault("http_addr", ":8500")
-	viper.SetDefault("grpc_addr", "")
+	viper.SetDefault("grpc_addr", ":0")
 	viper.SetDefault("quic_addr", "")
 	viper.SetDefault("raft_addr", "")
 	viper.SetDefault("data_dir", "./data")
@@ -128,8 +135,10 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("auth.users", []map[string]string{
 		{"username": "admin", "password": "admin", "role": "admin"},
 	})
-	viper.SetDefault("join", "")
 	viper.SetDefault("bootstrap", false)
+	viper.SetDefault("transport.grpc", "auto")
+	viper.SetDefault("transport.quic", "auto")
+	viper.SetDefault("transport.raft", "auto")
 
 	// Default Storage Configuration
 	viper.SetDefault("storage.event_retention_days", 30)
@@ -160,12 +169,94 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
 	}
 
-	conf.Mode = strings.ToLower(conf.Mode)
-	if conf.Mode != "ap" && conf.Mode != "cp" {
-		conf.Mode = "ap"
-	}
+	conf.normalizeRuntime()
 
 	return &conf, nil
+}
+
+func normalizeTransportSetting(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "on":
+		return "on"
+	case "off":
+		return "off"
+	default:
+		return "auto"
+	}
+}
+
+func normalizeConsistency(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "cp") {
+		return "cp"
+	}
+	return "ap"
+}
+
+func normalizeMode(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "cluster") {
+		return "cluster"
+	}
+	return "standalone"
+}
+
+func (c *Config) normalizeRuntime() {
+	rawMode := strings.ToLower(strings.TrimSpace(c.Mode))
+	rawConsistency := strings.ToLower(strings.TrimSpace(c.Consistency))
+
+	// Backward compatibility for legacy configs where mode was "ap" / "cp".
+	if rawMode == "ap" || rawMode == "cp" {
+		if rawConsistency == "" {
+			rawConsistency = rawMode
+		}
+		if rawMode == "cp" || c.Bootstrap {
+			rawMode = "cluster"
+		} else {
+			rawMode = "standalone"
+		}
+	}
+
+	c.Mode = normalizeMode(rawMode)
+	if c.Mode != "cluster" {
+		c.Consistency = "ap"
+	} else {
+		c.Consistency = normalizeConsistency(rawConsistency)
+	}
+	c.Transport.GRPC = normalizeTransportSetting(c.Transport.GRPC)
+	c.Transport.QUIC = normalizeTransportSetting(c.Transport.QUIC)
+	c.Transport.Raft = normalizeTransportSetting(c.Transport.Raft)
+}
+
+func (c *Config) GRPCEnabled(mode string) bool {
+	switch normalizeTransportSetting(c.Transport.GRPC) {
+	case "on":
+		return true
+	case "off":
+		return false
+	default:
+		return true
+	}
+}
+
+func (c *Config) QUICEnabled(mode string) bool {
+	switch normalizeTransportSetting(c.Transport.QUIC) {
+	case "on":
+		return true
+	case "off":
+		return false
+	default:
+		return strings.TrimSpace(c.QUICAddr) != ""
+	}
+}
+
+func (c *Config) RaftEnabled(mode, consistency string) bool {
+	switch normalizeTransportSetting(c.Transport.Raft) {
+	case "on":
+		return true
+	case "off":
+		return false
+	default:
+		return normalizeMode(mode) == "cluster" && normalizeConsistency(consistency) == "cp"
+	}
 }
 
 func ToLoggerConfiguration(lc LogConfig) logger.Configuration {

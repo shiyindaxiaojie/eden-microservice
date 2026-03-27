@@ -101,12 +101,18 @@ func (n *Node) fullSync() {
 
 // SyncSeeds updates the internal peer map from registry seeds.
 func (n *Node) SyncSeeds() {
+	if n == nil || n.State == nil || n.PM == nil {
+		return
+	}
 	seeds := n.State.GetSeeds()
 	n.PM.UpdatePeers(seeds)
 }
 
 // GetConfig returns the node configuration.
 func (n *Node) GetConfig() *config.Config {
+	if n == nil {
+		return nil
+	}
 	return n.Config
 }
 
@@ -116,6 +122,9 @@ func (n *Node) GetPM() interface{} {
 }
 
 func (n *Node) GetLeaderConn(leaderID string) (*grpc.ClientConn, error) {
+	if n == nil || n.PM == nil {
+		return nil, fmt.Errorf("ap node not initialized")
+	}
 	var conn *grpc.ClientConn
 	var connErr error
 	n.PM.Range(func(peer *cluster.Peer) bool {
@@ -137,6 +146,9 @@ func (n *Node) GetLeaderConn(leaderID string) (*grpc.ClientConn, error) {
 // Apply executes the command locally and broadcasts it.
 // isReplicate flag prevents infinite broadcast loops.
 func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
+	if n == nil || n.State == nil {
+		return fmt.Errorf("ap node not initialized")
+	}
 	// Local execution
 	switch cmdType {
 	case "register":

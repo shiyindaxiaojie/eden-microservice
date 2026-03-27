@@ -38,10 +38,15 @@ import (
 
 func main() {
 	var (
-		cfgFile  = flag.String("config", "configs/config.yaml", "Path to configuration file")
-		dataDir  = flag.String("data-dir", "", "Override data directory")
-		nodeID   = flag.String("node-id", "", "Override node ID")
-		httpAddr = flag.String("http-addr", "", "Override HTTP listen address")
+		cfgFile         = flag.String("config", "configs/config.yaml", "Path to configuration file")
+		dataDir         = flag.String("data-dir", "", "Override data directory")
+		nodeID          = flag.String("node-id", "", "Override node ID")
+		httpAddr        = flag.String("http-addr", "", "Override HTTP listen address")
+		modeFlag        = flag.String("mode", "", "Override runtime mode: standalone or cluster")
+		consistencyFlag = flag.String("consistency", "", "Override consistency: ap or cp")
+		grpcFlag        = flag.String("grpc", "", "Override gRPC transport: auto, on, or off")
+		quicFlag        = flag.String("quic", "", "Override QUIC transport: auto, on, or off")
+		raftFlag        = flag.String("raft", "", "Override Raft transport: auto, on, or off")
 	)
 	flag.Parse()
 
@@ -50,12 +55,17 @@ func main() {
 	if err != nil {
 		logger.Warn("Failed to load config file: %v. Using defaults.", err)
 		cfg = &config.Config{
-			NodeID:   "node-1",
-			Mode:     "ap",
-			HTTPAddr: ":8500",
-			GRPCAddr: ":9000",
-			RaftAddr: "127.0.0.1:7000",
-			DataDir:  "./data",
+			NodeID:      "node-1",
+			Mode:        "standalone",
+			Consistency: "ap",
+			HTTPAddr:    ":8500",
+			GRPCAddr:    ":0",
+			DataDir:     "./data",
+			Transport: config.TransportConfig{
+				GRPC: "auto",
+				QUIC: "auto",
+				Raft: "auto",
+			},
 		}
 	}
 
@@ -69,14 +79,45 @@ func main() {
 	if *nodeID != "" {
 		cfg.NodeID = *nodeID
 	}
-
-	cfg.Mode = strings.ToLower(cfg.Mode)
-	if cfg.Mode != "ap" && cfg.Mode != "cp" {
-		cfg.Mode = "ap"
+	if *modeFlag != "" {
+		cfg.Mode = strings.ToLower(strings.TrimSpace(*modeFlag))
 	}
+	if *consistencyFlag != "" {
+		cfg.Consistency = strings.ToLower(strings.TrimSpace(*consistencyFlag))
+	}
+	if *grpcFlag != "" {
+		cfg.Transport.GRPC = strings.ToLower(strings.TrimSpace(*grpcFlag))
+	}
+	if *quicFlag != "" {
+		cfg.Transport.QUIC = strings.ToLower(strings.TrimSpace(*quicFlag))
+	}
+	if *raftFlag != "" {
+		cfg.Transport.Raft = strings.ToLower(strings.TrimSpace(*raftFlag))
+	}
+	cfg.Mode, cfg.Consistency = normalizeRuntimeSelection(cfg.Mode, cfg.Consistency)
+	cfg.Transport.GRPC = normalizeTransportSetting(cfg.Transport.GRPC)
+	cfg.Transport.QUIC = normalizeTransportSetting(cfg.Transport.QUIC)
+	cfg.Transport.Raft = normalizeTransportSetting(cfg.Transport.Raft)
 
 	// 2. Create runtime state
 	runtimeState := platformcluster.NewRuntimeState(cfg.DataDir)
+	bootMode := runtimeState.GetEnvironment()
+	bootConsistency := runtimeState.GetMode()
+	if !runtimeState.Settings.LoadedFromDisk() {
+		bootMode = cfg.Mode
+		bootConsistency = cfg.Consistency
+	}
+	if *modeFlag != "" {
+		bootMode = cfg.Mode
+	}
+	if *consistencyFlag != "" {
+		bootConsistency = cfg.Consistency
+	}
+	bootMode, bootConsistency = normalizeRuntimeSelection(bootMode, bootConsistency)
+	runtimeState.SetEnvironment(bootMode)
+	runtimeState.SetMode(bootConsistency)
+	cfg.Mode = bootMode
+	cfg.Consistency = bootConsistency
 	if !runtimeState.HasAPIKeyAuthSetting() {
 		runtimeState.SetAPIKeyAuthEnabled(cfg.Auth.APIKey.Enabled)
 	}
@@ -113,7 +154,7 @@ func main() {
 	}
 	runtimeState.Auth.SeedBuiltInUsers(builtInUsers)
 
-	// 3. Setup Consistency Mode (Initialize BOTH for online switching)
+	// 3. Setup runtime transports.
 	var cpNode *cp.Node
 	var apNode *ap.Node
 
@@ -164,28 +205,43 @@ func main() {
 		return fmt.Sprintf("%s:%s", host, port)
 	}
 
-	// Resolve Ports within preferred ranges
-	cfg.RaftAddr = resolvePortRange(cfg.RaftAddr, 7000, 7999, "tcp")
-	cfg.GRPCAddr = resolvePortRange(cfg.GRPCAddr, 9000, 9999, "tcp")
-	cfg.QUICAddr = resolvePortRange(cfg.QUICAddr, 10000, 10999, "udp")
+	raftEnabled := cfg.RaftEnabled(cfg.Mode, cfg.Consistency)
+	grpcEnabled := cfg.GRPCEnabled(cfg.Mode)
+	quicEnabled := cfg.QUICEnabled(cfg.Mode)
 
-	// Always setup CP (Raft)
-	raftCfg := cp.Config{
-		NodeID:    cfg.NodeID,
-		BindAddr:  cfg.RaftAddr,
-		DataDir:   cfg.DataDir,
-		Bootstrap: cfg.Bootstrap,
+	if raftEnabled {
+		cfg.RaftAddr = resolvePortRange(cfg.RaftAddr, 7000, 7999, "tcp")
+		raftCfg := cp.Config{
+			NodeID:    cfg.NodeID,
+			BindAddr:  cfg.RaftAddr,
+			DataDir:   cfg.DataDir,
+			Bootstrap: cfg.Bootstrap,
+		}
+		cpNode, err = cp.NewNode(raftCfg, runtimeState)
+		if err != nil {
+			logger.Fatal("Failed to start Raft node: %v", err)
+		}
+	} else {
+		cfg.RaftAddr = ""
 	}
-	cpNode, err = cp.NewNode(raftCfg, runtimeState)
-	if err != nil {
-		logger.Fatal("Failed to start Raft node: %v", err)
+
+	if grpcEnabled {
+		cfg.GRPCAddr = resolvePortRange(cfg.GRPCAddr, 9000, 9999, "tcp")
+	} else {
+		cfg.GRPCAddr = ""
+	}
+	if quicEnabled {
+		cfg.QUICAddr = resolvePortRange(cfg.QUICAddr, 10000, 10999, "udp")
+	} else {
+		cfg.QUICAddr = ""
 	}
 
 	logger.Info("========================================")
 	logger.Info("    Eden Go Registry")
 	logger.Info("========================================")
 	logger.Info("  Node ID   : %s", cfg.NodeID)
-	logger.Info("  Mode      : %s", strings.ToUpper(runtimeState.GetMode()))
+	logger.Info("  Mode      : %s", strings.ToUpper(cfg.Mode))
+	logger.Info("  Consistency: %s", strings.ToUpper(cfg.Consistency))
 	logger.Info("  HTTP Addr : %s", cfg.HTTPAddr)
 	logger.Info("  GRPC Addr : %s", cfg.GRPCAddr)
 	logger.Info("  QUIC Addr : %s", cfg.QUICAddr)
@@ -193,35 +249,13 @@ func main() {
 	logger.Info("  Data Dir  : %s", cfg.DataDir)
 	logger.Info("========================================")
 
-	if cfg.Join != "" {
-		go func() {
-			time.Sleep(3 * time.Second)
-			joinURL := fmt.Sprintf("%s/v1/cluster/join", cfg.Join)
-			body := fmt.Sprintf(`{"node_id":"%s","address":"%s"}`, cfg.NodeID, cfg.RaftAddr)
-			resp, err := http.Post(joinURL, "application/json", strings.NewReader(body))
-			if err != nil {
-				logger.Error("Failed to join CP cluster: %v", err)
-				return
-			}
-			resp.Body.Close()
-			logger.Info("Joined CP cluster via %s", cfg.Join)
-		}()
+	if cfg.Mode == "cluster" && grpcEnabled {
+		logger.Info("  AP Seeds  : %v", runtimeState.GetSeeds())
+		apNode = ap.NewNode(cfg, runtimeState)
+		apNode.SyncSeeds()
 	}
-
-	// Always setup AP (Gossip/HTTP)
-	logger.Info("  AP Seeds  : %v", cfg.Seeds)
-	apNode = ap.NewNode(cfg, runtimeState)
-	// If registry already has seeds, sync them
-	if len(runtimeState.GetSeeds()) == 0 && len(cfg.Seeds) > 0 {
-		runtimeState.SetSeeds(cfg.Seeds)
-	}
-	apNode.SyncSeeds()
-
-	// Set initial mode from config if metadata doesn't have it
-	if runtimeState.GetMode() == "" {
-		runtimeState.SetMode(cfg.Mode)
-	}
-	logger.Info("  Active Mode: %s", strings.ToUpper(runtimeState.GetMode()))
+	logger.Info("  Active Topology: %s", strings.ToUpper(runtimeState.GetEnvironment()))
+	logger.Info("  Active Consistency: %s", strings.ToUpper(runtimeState.GetMode()))
 
 	// 4. Start Health Checker
 	// Default TTL 30s, check every 10s if not specified in future config
@@ -229,54 +263,82 @@ func main() {
 	checker.Start()
 
 	// 5. Setup Specialized Services
-	catSvc := catalog.NewRegistry(runtimeState.Catalog, runtimeState.Settings, cpNode, apNode)
+	var catalogCPNode catalog.CPNode
+	var catalogAPNode catalog.APNode
+	var settingsCPNode settings.CPNode
+	var settingsAPNode settings.APNode
+	var membershipCPNode platformcluster.ConsensusNode
+	var clusterReplicator grpcapi.Replicator
+	if cpNode != nil {
+		catalogCPNode = cpNode
+		settingsCPNode = cpNode
+		membershipCPNode = cpNode
+	}
+	if apNode != nil {
+		catalogAPNode = apNode
+		settingsAPNode = apNode
+		clusterReplicator = apNode
+	}
+
+	catSvc := catalog.NewRegistry(runtimeState.Catalog, runtimeState.Settings, catalogCPNode, catalogAPNode)
 	authSvc := auth.NewAuthenticator(runtimeState.Auth)
-	setSvc := settings.NewController(runtimeState.Settings, runtimeState.Auth, cpNode, apNode, runtimeState.Catalog.Events)
-	clsSvc := platformcluster.NewMembership(runtimeState.Catalog, cpNode)
+	setSvc := settings.NewController(runtimeState.Settings, runtimeState.Auth, settingsCPNode, settingsAPNode, runtimeState.Catalog.Events, settings.StartupState{
+		Mode:        cfg.Mode,
+		Consistency: cfg.Consistency,
+		GRPCEnabled: grpcEnabled,
+		QUICEnabled: quicEnabled,
+		RaftEnabled: raftEnabled,
+	})
+	clsSvc := platformcluster.NewMembership(runtimeState.Catalog, membershipCPNode)
 
 	// 6. Start HTTP API
 	h := httpapi.NewHandler(cfg, catSvc, authSvc, setSvc, clsSvc)
 
-	// Start gRPC API
-	grpcServer := grpc.NewServer()
-	regServer := grpcapi.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
-	clusterServer := grpcapi.NewClusterServer(runtimeState, apNode)
-	pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
-	pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)
-	reflection.Register(grpcServer)
+	var grpcServer *grpc.Server
+	if grpcEnabled || quicEnabled {
+		grpcServer = grpc.NewServer()
+		regServer := grpcapi.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
+		clusterServer := grpcapi.NewClusterServer(runtimeState, clusterReplicator)
+		pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
+		pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)
+		reflection.Register(grpcServer)
+	}
 
-	go func() {
-		lis, err := net.Listen("tcp", cfg.GRPCAddr)
-		if err != nil {
-			logger.Fatal("Failed to listen for gRPC: %v", err)
-		}
-		logger.Info("gRPC server listening on %s", lis.Addr().String())
-		if err := grpcServer.Serve(lis); err != nil {
-			logger.Error("gRPC server error: %v", err)
-		}
-	}()
+	if grpcEnabled && grpcServer != nil {
+		go func() {
+			lis, err := net.Listen("tcp", cfg.GRPCAddr)
+			if err != nil {
+				logger.Fatal("Failed to listen for gRPC: %v", err)
+			}
+			logger.Info("gRPC server listening on %s", lis.Addr().String())
+			if err := grpcServer.Serve(lis); err != nil {
+				logger.Error("gRPC server error: %v", err)
+			}
+		}()
+	}
 
-	// Start QUIC gRPC server
-	go func() {
-		cert, err := generateSelfSignedCert()
-		if err != nil {
-			logger.Error("Failed to generate self-signed cert for QUIC: %v", err)
-			return
-		}
-		tlsConf := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			NextProtos:   []string{"h3"},
-		}
-		qlis, err := grpcapi.NewQUICListener(cfg.QUICAddr, tlsConf)
-		if err != nil {
-			logger.Error("Failed to listen for QUIC: %v", err)
-			return
-		}
-		logger.Info("gRPC over QUIC server listening on %s", qlis.Addr().String())
-		if err := grpcServer.Serve(qlis); err != nil {
-			logger.Error("QUIC gRPC server error: %v", err)
-		}
-	}()
+	if quicEnabled && grpcServer != nil {
+		go func() {
+			cert, err := generateSelfSignedCert()
+			if err != nil {
+				logger.Error("Failed to generate self-signed cert for QUIC: %v", err)
+				return
+			}
+			tlsConf := &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				NextProtos:   []string{"h3"},
+			}
+			qlis, err := grpcapi.NewQUICListener(cfg.QUICAddr, tlsConf)
+			if err != nil {
+				logger.Error("Failed to listen for QUIC: %v", err)
+				return
+			}
+			logger.Info("gRPC over QUIC server listening on %s", qlis.Addr().String())
+			if err := grpcServer.Serve(qlis); err != nil {
+				logger.Error("QUIC gRPC server error: %v", err)
+			}
+		}()
+	}
 
 	// Start HTTP API
 	logger.Info("HTTP API server listening on %s", cfg.HTTPAddr)
@@ -293,7 +355,10 @@ func main() {
 	logger.Info("Received signal %v, shutting down...", sig)
 
 	checker.Stop()
-	if cfg.Mode == "cp" && cpNode != nil {
+	if grpcServer != nil {
+		grpcServer.GracefulStop()
+	}
+	if raftEnabled && cpNode != nil {
 		if err := cpNode.Raft.Shutdown().Error(); err != nil {
 			logger.Error("Raft shutdown error: %v", err)
 		}
@@ -320,6 +385,39 @@ func applyLogRetentionDays(logCfg *config.LogConfig, days int) {
 			logCfg.Appenders[i].Rollover = &config.RolloverConfig{}
 		}
 		logCfg.Appenders[i].Rollover.Retention = retention
+	}
+}
+
+func normalizeModeSetting(mode string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), "cluster") {
+		return "cluster"
+	}
+	return "standalone"
+}
+
+func normalizeConsistencySetting(mode string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), "cp") {
+		return "cp"
+	}
+	return "ap"
+}
+
+func normalizeRuntimeSelection(mode, consistency string) (string, string) {
+	normalizedMode := normalizeModeSetting(mode)
+	if normalizedMode != "cluster" {
+		return normalizedMode, "ap"
+	}
+	return normalizedMode, normalizeConsistencySetting(consistency)
+}
+
+func normalizeTransportSetting(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "on":
+		return "on"
+	case "off":
+		return "off"
+	default:
+		return "auto"
 	}
 }
 

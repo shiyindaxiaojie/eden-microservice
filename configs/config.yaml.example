@@ -5,9 +5,12 @@
 # 节点基本标识
 node_id: "node-1"
 
-# 运行模式：ap (高性能/弱一致) 或 cp (强一致，基于Raft)
-# 可在控制台动态切换
-mode: "ap"
+# 部署模式：standalone(单机) 或 cluster(集群)
+mode: "standalone"
+
+# 一致性模式：ap(最终一致) 或 cp(强一致)
+# 仅在 mode=cluster 时有意义
+consistency: "ap"
 
 # 数据中心名称，用于多数据中心隔离
 datacenter: "dc1"
@@ -22,33 +25,42 @@ data_dir: "./data"
 # HTTP 管理API 和 控制台监听地址 (必须明确指定)
 http_addr: ":8500"
 
-# gRPC 监听地址 (用于数据同步)
-#   - 不填 或 填写 ":0" 则表示随机端口
-#   - 其他节点可通过 http_addr 获取此地址
+# gRPC 监听地址 (用于客户端接入和节点间同步)
+#   - transport.grpc=auto 时默认启用
+#   - 如需纯 HTTP 模式可显式设置 transport.grpc=off
+#   - 填写 ":0" 可自动分配端口
 grpc_addr: ":0"
 
-# QUIC 监听地址 (基于UDP的gRPC传输)
-#   - 不填 或 填写 ":0" 则表示随机端口
+# QUIC 监听地址 (基于 UDP 的 gRPC 传输)
+#   - 配置 quic_addr 时，transport.quic=auto 会自动启用
+#   - 留空时 auto 模式不会启用 QUIC
 quic_addr: ""
 
-# Raft 内部通信地址 (CP 模式必备)
-#   - 注意：Raft 要求必须有明确的 IP (如 127.0.0.1 或 局域网IP)
-#   - 建议填写 "127.0.0.1:7000" 或 留空以自动分配 "127.0.0.1:随机端口"
+# Raft 内部通信地址
+#   - 仅 mode=cluster 且 consistency=cp 且 transport.raft=auto/on 时启用
+#   - 注意：Raft 要求必须有明确的 IP (如 127.0.0.1 或 局域网 IP)
+#   - 建议填写 "127.0.0.1:7000" 或留空自动分配 "127.0.0.1:随机端口"
 #   - 错误写法: ":7000" 或 "0.0.0.0:7000" (会报错 not advertisable)
 raft_addr: ""
 
 ############################################################
-# 集群启动控制 (仅在 CP 模式下 node-1 使用)
+# 传输协议开关
+############################################################
+
+transport:
+  grpc: "auto" # auto | on | off
+  quic: "auto" # auto | on | off
+  raft: "auto" # auto | on | off
+
+############################################################
+# 集群启动控制
 ############################################################
 
 # 是否作为首个节点启动 Raft 集群
+# 仅 mode=cluster 且 consistency=cp 时有意义
 bootstrap: false
 
-# 加入已有集群的 HTTP 地址（例如 "http://127.0.0.1:8500"）
-join: ""
-
-# AP 模式下的种子节点列表（HTTP 地址）
-seeds: []
+# 节点加入与成员管理统一在控制台中完成
 
 ############################################################
 # 认证配置

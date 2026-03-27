@@ -94,8 +94,8 @@ export interface RegistryEvent {
 }
 
 export interface SystemSettings {
-  mode: 'ap' | 'cp'
-  environment: 'standalone' | 'cluster'
+  mode: 'standalone' | 'cluster'
+  consistency: 'ap' | 'cp'
   log_level: string
   event_retention_days: number
   log_retention_days: number
@@ -103,6 +103,12 @@ export interface SystemSettings {
   heartbeat_max_failures: number
   instance_removal_delay_seconds: number
   api_key_auth_enabled: boolean
+}
+
+export interface ApplySystemSettingsResult {
+  status: string
+  restart_required?: boolean
+  message?: string
 }
 
 export interface RbacUser {
@@ -149,4 +155,4 @@ export const getLogs = (file = '', count = 100) =>
 export const getStorage = () => api.get<any>('/v1/settings/storage')
 export const updateStorage = (data: any) => api.post('/v1/settings/storage', data)
 export const getSystemSettings = () => api.get<SystemSettings>('/v1/settings/system')
-export const updateSystemSettings = (data: SystemSettings) => api.post('/v1/settings/system', data)
+export const updateSystemSettings = (data: SystemSettings) => api.post<ApplySystemSettingsResult>('/v1/settings/system', data)

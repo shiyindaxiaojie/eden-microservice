@@ -122,32 +122,50 @@ func (h *Handler) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
-// ---------- Mode (Consistency) Handler ----------
+// ---------- Runtime Mode Handler ----------
 
 func (h *Handler) mode(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
+		systemSettings := h.settings.GetSystemSettings()
 		jsonOK(w, map[string]string{
-			"mode":      h.settings.GetMode(),
-			"env":       h.settings.GetEnvironment(),
-			"log_level": h.settings.GetLogLevel(),
+			"mode":        systemSettings.Mode,
+			"consistency": systemSettings.Consistency,
+			"log_level":   h.settings.GetLogLevel(),
 		})
 		return
 	}
 	if r.Method == http.MethodPost {
 		mode := r.URL.Query().Get("mode")
+		consistency := r.URL.Query().Get("consistency")
 		env := r.URL.Query().Get("env")
 		logLevel := r.URL.Query().Get("log_level")
 
+		if mode != "" {
+			logger.Info("[Settings] Changing topology to: %s", mode)
+			if err := h.settings.SetEnvironment(mode); err != nil {
+				h.writeLeaderRedirect(w, err)
+				return
+			}
+		}
+
 		if env != "" {
-			logger.Info("[Settings] Changing environment to: %s", env)
+			logger.Info("[Settings] Changing topology to: %s", env)
 			if err := h.settings.SetEnvironment(env); err != nil {
 				h.writeLeaderRedirect(w, err)
 				return
 			}
 		}
 
-		if mode != "" {
-			logger.Info("[Settings] Changing mode to: %s", mode)
+		if consistency != "" {
+			logger.Info("[Settings] Changing consistency to: %s", consistency)
+			if err := h.settings.SetMode(consistency); err != nil {
+				h.writeLeaderRedirect(w, err)
+				return
+			}
+		}
+
+		if mode == "ap" || mode == "cp" {
+			logger.Info("[Settings] Changing consistency to: %s", mode)
 			if err := h.settings.SetMode(mode); err != nil {
 				h.writeLeaderRedirect(w, err)
 				return
@@ -177,11 +195,12 @@ func (h *Handler) systemSettings(w http.ResponseWriter, r *http.Request) {
 			httpError(w, http.StatusBadRequest, "invalid body")
 			return
 		}
-		if err := h.settings.ApplySystemSettings(&req); err != nil {
+		result, err := h.settings.ApplySystemSettings(&req)
+		if err != nil {
 			h.writeLeaderRedirect(w, err)
 			return
 		}
-		jsonOK(w, map[string]string{"status": "ok"})
+		jsonOK(w, result)
 	default:
 		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
 	}

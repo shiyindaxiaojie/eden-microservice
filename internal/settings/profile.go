@@ -14,6 +14,7 @@ type Profile struct {
 	mu            sync.RWMutex
 	mode          string
 	environment   string
+	loaded        bool
 	seeds         []string
 	logLevel      string
 	eventRetDays  int
@@ -58,6 +59,12 @@ func (s *Profile) GetEnvironment() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.environment
+}
+
+func (s *Profile) LoadedFromDisk() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.loaded
 }
 
 func (s *Profile) SetEnvironment(e string) {
@@ -239,6 +246,7 @@ func (s *Profile) Load() {
 				s.apiKeyAuth = *meta.APIKeyAuthEnabled
 				s.apiKeyAuthSet = true
 			}
+			s.loaded = true
 		}
 	}
 	// Load nodes
@@ -256,6 +264,9 @@ func (s *Profile) Save() {
 		return
 	}
 	os.MkdirAll(s.dataPath, 0755)
+	s.mu.Lock()
+	s.loaded = true
+	s.mu.Unlock()
 
 	// Save settings
 	settingsFile := filepath.Join(s.dataPath, "json")

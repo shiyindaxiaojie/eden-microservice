@@ -1,4 +1,13 @@
 # Eden Registry Node 3 (Ports auto-resolved)
 node_id: "node-3"
+mode: "cluster"
+consistency: "cp"
 http_addr: ":8502"
+grpc_addr: ":0"
+quic_addr: ""
+raft_addr: ""
+transport:
+  grpc: "auto"
+  quic: "off"
+  raft: "auto"
 data_dir: "./data/node3"

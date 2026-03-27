@@ -55,7 +55,8 @@ curl "http://127.0.0.1:8500/v1/catalog/service/user-center?passing=true&namespac
 const apConfig: CodeSample = {
   lang: 'yaml',
   code: `node_id: "node-1"
-mode: "ap"
+mode: "cluster"
+consistency: "ap"
 datacenter: "dc1"
 data_dir: "./data"
 
@@ -63,9 +64,11 @@ http_addr: ":8500"
 grpc_addr: ":0"
 quic_addr: ""
 
-seeds:
-  - "http://127.0.0.1:8501"
-  - "http://127.0.0.1:8502"
+transport:
+  grpc: "auto"
+  quic: "off"
+  raft: "off"
+# 节点成员通过控制台添加
 
 auth:
   jwt:
@@ -79,7 +82,8 @@ auth:
 const cpBootstrapConfig: CodeSample = {
   lang: 'yaml',
   code: `node_id: "node-1"
-mode: "cp"
+mode: "cluster"
+consistency: "cp"
 datacenter: "dc1"
 data_dir: "./data"
 
@@ -88,14 +92,20 @@ grpc_addr: ":9000"
 quic_addr: ":10000"
 raft_addr: "127.0.0.1:7000"
 
+transport:
+  grpc: "auto"
+  quic: "on"
+  raft: "auto"
+
 bootstrap: true
-join: ""`
+# 其余节点通过控制台加入`
 }
 
 const cpJoinConfig: CodeSample = {
   lang: 'yaml',
   code: `node_id: "node-2"
-mode: "cp"
+mode: "cluster"
+consistency: "cp"
 datacenter: "dc1"
 data_dir: "./data/node-2"
 
@@ -104,8 +114,13 @@ grpc_addr: ":9001"
 quic_addr: ":10001"
 raft_addr: "127.0.0.1:7001"
 
+transport:
+  grpc: "auto"
+  quic: "on"
+  raft: "auto"
+
 bootstrap: false
-join: "http://127.0.0.1:8500"`
+# 启动后在 Leader 控制台中添加该节点`
 }
 
 const edenSdkSample: CodeSample = {

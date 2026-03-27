@@ -34,30 +34,33 @@ npm run dev
 
 ## 2. 配置说明
 
-### 2.1 AP 模式示例
+### 2.1 AP 集群节点示例
 
 ```yaml
 node_id: "node-1"
-mode: "ap"
+mode: "cluster"
+consistency: "ap"
 http_addr: ":8500"
-grpc_addr: ":9000"
-quic_addr: ":10000"
+grpc_addr: ":0"
+quic_addr: ""
 data_dir: "./data"
-seeds:
-  - "http://127.0.0.1:8501"
-  - "http://127.0.0.1:8502"
+transport:
+  grpc: "auto"
+  quic: "off"
+  raft: "off"
 ```
 
 说明：
 
-- `seeds` 配置的是其他节点的 HTTP 地址，而不是 gRPC 地址。
+- 集群成员统一在控制台的节点管理中维护，不再通过 `seeds` 写在常规配置里。
 - `grpc_addr` 与 `quic_addr` 可以留空或设为 `:0`，服务端会自动分配端口。
 
 ### 2.2 CP 首节点示例
 
 ```yaml
 node_id: "node-1"
-mode: "cp"
+mode: "cluster"
+consistency: "cp"
 http_addr: ":8500"
 grpc_addr: ":9000"
 raft_addr: "127.0.0.1:7000"
@@ -65,17 +68,22 @@ bootstrap: true
 data_dir: "./data"
 ```
 
-### 2.3 CP 加入节点示例
+### 2.3 CP 普通节点示例
 
 ```yaml
 node_id: "node-2"
-mode: "cp"
+mode: "cluster"
+consistency: "cp"
 http_addr: ":8501"
 grpc_addr: ":9001"
 raft_addr: "127.0.0.1:7001"
-join: "http://127.0.0.1:8500"
 data_dir: "./data/node-2"
 ```
+
+说明：
+
+- 其他 CP 节点启动后，通过 Leader 控制台的节点管理添加进集群。
+- `join` 不再作为常规配置项对外暴露。
 
 ## 3. 认证约定
 

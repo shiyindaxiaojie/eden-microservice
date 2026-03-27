@@ -10,6 +10,7 @@ import {
   Grid,
   InfoFilled,
   Key,
+  List,
   Message,
   Monitor,
   Operation,
@@ -79,8 +80,8 @@ const LOG_LEVEL_OPTIONS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
 
 function createDefaultSettings(): SystemSettings {
   return {
-    mode: 'ap',
-    environment: 'standalone',
+    mode: 'standalone',
+    consistency: 'ap',
     log_level: 'INFO',
     event_retention_days: 30,
     log_retention_days: 30,
@@ -119,9 +120,10 @@ function normalizeLogLevel(level?: string | null): string {
 
 function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettings {
   const defaults = createDefaultSettings()
+  const mode = input?.mode === 'cluster' ? 'cluster' : defaults.mode
   return {
-    mode: input?.mode === 'cp' ? 'cp' : defaults.mode,
-    environment: input?.environment === 'cluster' ? 'cluster' : defaults.environment,
+    mode,
+    consistency: mode === 'cluster' && input?.consistency === 'cp' ? 'cp' : 'ap',
     log_level: normalizeLogLevel(input?.log_level ?? defaults.log_level),
     event_retention_days: Math.max(1, input?.event_retention_days ?? defaults.event_retention_days),
     log_retention_days: Math.max(1, input?.log_retention_days ?? defaults.log_retention_days),
@@ -135,10 +137,10 @@ function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettin
 const appliedSettings = ref<SystemSettings>(createDefaultSettings())
 const draftSettings = ref<SystemSettings>(createDefaultSettings())
 
-const previewEnvironment = computed(() => draftSettings.value.environment)
-const previewMode = computed(() => draftSettings.value.mode)
-const appliedEnvironment = computed(() => appliedSettings.value.environment)
-const appliedMode = computed(() => appliedSettings.value.mode)
+const previewEnvironment = computed(() => draftSettings.value.mode)
+const previewMode = computed(() => draftSettings.value.consistency)
+const appliedEnvironment = computed(() => appliedSettings.value.mode)
+const appliedMode = computed(() => appliedSettings.value.consistency)
 
 const removalDelayMinutes = computed({
   get: () => Math.max(1, Math.round(draftSettings.value.instance_removal_delay_seconds / 60)),
@@ -174,10 +176,14 @@ async function saveSystemConfig() {
   saveLoading.value = true
   try {
     const payload = normalizeSettings(draftSettings.value)
-    await updateSystemSettings(payload)
+    const { data } = await updateSystemSettings(payload)
     appliedSettings.value = cloneSettings(payload)
     draftSettings.value = cloneSettings(payload)
-    ElMessage.success('系统设置已保存')
+    if (data.restart_required) {
+      ElMessage.warning(data.message || '当前变更需要重启后生效')
+    } else {
+      ElMessage.success('系统设置已保存')
+    }
   } catch (error: any) {
     const data = error.response?.data
     if (data?.error === 'not leader' && data?.leader) {
@@ -258,11 +264,14 @@ function formatDate(ts: number) {
 }
 
 function setDraftEnvironment(env: 'standalone' | 'cluster') {
-  draftSettings.value.environment = env
+  draftSettings.value.mode = env
+  if (env === 'standalone') {
+    draftSettings.value.consistency = 'ap'
+  }
 }
 
 function setDraftMode(mode: 'ap' | 'cp') {
-  draftSettings.value.mode = mode
+  draftSettings.value.consistency = mode
 }
 
 function resetDraftSettings() {
@@ -542,10 +551,24 @@ onMounted(() => {
           <div class="content-header credentials-header">
             <p class="content-desc credentials-desc">管理服务注册与控制台访问使用的 API Key，支持快速生成、复制与回收。</p>
             <div class="credentials-toolbar">
-              <el-radio-group v-model="credentialView" size="small" class="view-switch">
-                <el-radio-button label="list"><el-icon><Operation /></el-icon></el-radio-button>
-                <el-radio-button label="grid"><el-icon><Grid /></el-icon></el-radio-button>
-              </el-radio-group>
+              <div class="pill-group icon-pills credential-view-pills" aria-label="API Key 视图切换">
+                <button
+                  type="button"
+                  :class="{ active: credentialView === 'list' }"
+                  title="列表视图"
+                  @click="credentialView = 'list'"
+                >
+                  <el-icon><List /></el-icon>
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: credentialView === 'grid' }"
+                  title="卡片视图"
+                  @click="credentialView = 'grid'"
+                >
+                  <el-icon><Grid /></el-icon>
+                </button>
+              </div>
               <el-button type="primary" class="new-key-btn" @click="showDialog = true; generateRandKey()">
                 <el-icon style="margin-right: 4px"><Plus /></el-icon>
                 新建 API Key
@@ -699,13 +722,14 @@ onMounted(() => {
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="showDialog" title="新建 API Key" width="520px">
-      <el-form label-position="top" class="compact-form">
+    <el-dialog v-model="showDialog" title="新建 API Key" width="560px" top="6vh" class="glass-dialog credential-dialog">
+      <el-form label-position="top" class="compact-form credential-dialog-form">
         <el-form-item label="API Key">
-          <div class="key-input-container">
-            <el-input v-model="keyForm.key" readonly />
-            <el-button @click="generateRandKey" :icon="RefreshRight" />
+          <div class="key-preview-shell">
+            <div class="key-preview-value" :title="keyForm.key">{{ keyForm.key }}</div>
+            <el-button class="regenerate-key-btn" @click="generateRandKey" :icon="RefreshRight" />
           </div>
+          <div class="field-hint">创建前可重复生成，完整密钥会按原样展示。</div>
         </el-form-item>
 
         <el-form-item label="描述">
@@ -1138,7 +1162,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 7px;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -1319,6 +1343,48 @@ onMounted(() => {
   border-radius: 10px;
 }
 
+.pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.pill-group button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 34px;
+  height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.pill-group button:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.pill-group button.active {
+  background: var(--accent-blue);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.22);
+}
+
+.icon-pills button {
+  width: 42px;
+}
+
 .key-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -1405,15 +1471,105 @@ onMounted(() => {
   gap: 8px;
 }
 
-.key-input-container,
+.credential-dialog-form {
+  display: flex;
+  flex-direction: column;
+}
+
 .form-inline {
   display: flex;
   gap: 12px;
 }
 
+.key-preview-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.key-preview-value {
+  min-height: 54px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.92));
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-all;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.regenerate-key-btn {
+  width: 52px;
+  min-height: 54px;
+  border-radius: 14px;
+}
+
+.field-hint {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .form-inline :deep(.el-input),
 .form-inline :deep(.el-input-number) {
   flex: 1;
+}
+
+:deep(.credential-dialog.el-dialog) {
+  width: min(560px, calc(100vw - 24px)) !important;
+  max-height: 92vh;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+:deep(.credential-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding: 22px 22px 8px;
+}
+
+:deep(.credential-dialog .el-dialog__headerbtn) {
+  top: 20px;
+  right: 20px;
+}
+
+:deep(.credential-dialog .el-dialog__body) {
+  padding: 0 22px 8px;
+}
+
+:deep(.credential-dialog .el-dialog__footer) {
+  padding: 14px 22px 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+:deep(.credential-dialog .el-form-item) {
+  margin-bottom: 16px;
+}
+
+:deep(.credential-dialog .el-form-item__label) {
+  padding-bottom: 8px;
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+:deep(.credential-dialog .el-input__wrapper),
+:deep(.credential-dialog .el-select__wrapper) {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+:deep(.credential-dialog .el-textarea__inner) {
+  min-height: 96px !important;
+  border-radius: 12px;
 }
 
 .channel-radio {
@@ -1503,6 +1659,7 @@ onMounted(() => {
   .credentials-toolbar {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .save-actions {
@@ -1511,6 +1668,18 @@ onMounted(() => {
 
   .save-actions :deep(.el-button) {
     flex: 1;
+  }
+
+  .new-key-btn {
+    width: 100%;
+  }
+
+  .key-preview-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .regenerate-key-btn {
+    width: 100%;
   }
 }
 
