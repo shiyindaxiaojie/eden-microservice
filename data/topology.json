@@ -1,1 +1,29 @@
-{}
+{
+  "default": {
+    "custom-grpc-auth-center": {
+      "consumer_service": "custom-grpc-auth-center",
+      "providers": [
+        "custom-grpc-user-center"
+      ],
+      "checksum": "",
+      "updated_at": "2026-03-27T12:41:22+08:00"
+    },
+    "custom-grpc-order-center": {
+      "consumer_service": "custom-grpc-order-center",
+      "providers": [
+        "custom-grpc-auth-center",
+        "custom-grpc-user-center"
+      ],
+      "checksum": "",
+      "updated_at": "2026-03-27T12:41:23+08:00"
+    },
+    "custom-grpc-user-center": {
+      "consumer_service": "custom-grpc-user-center",
+      "providers": [
+        "custom-grpc-auth-center"
+      ],
+      "checksum": "",
+      "updated_at": "2026-03-27T12:41:22+08:00"
+    }
+  }
+}
