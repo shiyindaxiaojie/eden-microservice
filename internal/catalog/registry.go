@@ -20,6 +20,7 @@ type WatchEvent struct {
 
 type Registry interface {
 	Register(inst *Instance) error
+	Deregister(namespace, serviceName, instanceID string) error
 	SetInstanceStatus(namespace, serviceName, instanceID string, status string) error
 	Heartbeat(namespace, serviceName, instanceID string) error
 	ListServices(namespace string) ([]interface{}, error)
@@ -113,6 +114,30 @@ func (s *registry) Register(inst *Instance) error {
 	}
 	s.state.Register(inst)
 	s.state.AppendEvent(EventTypeServiceRegister, inst.ServiceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Instance registered")
+	return nil
+}
+
+func (s *registry) Deregister(namespace, serviceName, instanceID string) error {
+	mode := s.mode()
+	if mode == "cp" && s.cpNode != nil {
+		if !s.cpNode.IsLeader() {
+			return s.forwardToLeader("deregister", &Instance{Namespace: namespace}, serviceName, instanceID)
+		}
+		cmd := replication.Command{Type: replication.CmdDeregister, Namespace: namespace, ServiceName: serviceName, InstanceID: instanceID}
+		return s.cpNode.Apply(cmd, 5*time.Second)
+	}
+
+	data := map[string]string{"namespace": namespace, "service_name": serviceName, "instance_id": instanceID}
+	if s.apNode != nil {
+		return s.apNode.Apply("deregister", data, false)
+	}
+
+	inst, ok := s.state.Instances.DeregisterNS(namespace, serviceName, instanceID)
+	if !ok {
+		return fmt.Errorf("instance not found: %s/%s", serviceName, instanceID)
+	}
+
+	s.state.AppendEvent(EventTypeServiceOffline, serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Instance deregistered")
 	return nil
 }
 
@@ -614,6 +639,12 @@ func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, i
 				Metadata:    inst.Metadata,
 				Datacenter:  inst.Datacenter,
 			},
+		})
+	case "deregister":
+		_, err = client.Deregister(ctx, &grpc_registry.DeregisterRequest{
+			Namespace:   inst.Namespace,
+			ServiceName: serviceName,
+			InstanceId:  instanceID,
 		})
 	case "heartbeat":
 		_, err = client.Heartbeat(ctx, &grpc_registry.HeartbeatRequest{

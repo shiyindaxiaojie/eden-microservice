@@ -3,7 +3,7 @@ package consul
 import (
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/consul/api"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/api"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
 

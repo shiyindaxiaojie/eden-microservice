@@ -1,12 +1,20 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -204,4 +212,175 @@ func (h *Handler) systemSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
 	}
+}
+
+func (h *Handler) notificationConfig(w http.ResponseWriter, r *http.Request) {
+	if h.forwardedToNotifyAlertNode(w, r) {
+		return
+	}
+	namespace, ok := h.validatedNamespace(r)
+	if !ok {
+		httpError(w, http.StatusBadRequest, "namespace not found")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		cfg, err := h.notify.Load(namespace)
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonOK(w, cfg)
+	case http.MethodPost:
+		var cfg notify.Config
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			httpError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		if err := h.notify.Save(namespace, &cfg); err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		latest, err := h.notify.Load(namespace)
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonOK(w, latest)
+	default:
+		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
+	}
+}
+
+func (h *Handler) alertConfig(w http.ResponseWriter, r *http.Request) {
+	if h.forwardedToNotifyAlertNode(w, r) {
+		return
+	}
+	namespace, ok := h.validatedNamespace(r)
+	if !ok {
+		httpError(w, http.StatusBadRequest, "namespace not found")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		cfg, err := h.alerts.LoadConfig(namespace)
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonOK(w, cfg)
+	case http.MethodPost:
+		var cfg alert.Config
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			httpError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		if err := h.alerts.SaveConfig(namespace, &cfg); err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		latest, err := h.alerts.LoadConfig(namespace)
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonOK(w, latest)
+	default:
+		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
+	}
+}
+
+func (h *Handler) validatedNamespace(r *http.Request) (string, bool) {
+	namespace := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	if namespace == "" {
+		namespace = catalog.DefaultNamespace
+	}
+
+	for _, item := range h.catalog.ListNamespaces() {
+		if item != nil && item.Name == namespace {
+			return namespace, true
+		}
+	}
+	return "", false
+}
+
+func (h *Handler) forwardedToNotifyAlertNode(w http.ResponseWriter, r *http.Request) bool {
+	systemSettings := h.settings.GetSystemSettings()
+	if systemSettings == nil {
+		return false
+	}
+
+	targetNodeID := strings.TrimSpace(systemSettings.NotifyAlertNodeID)
+	if targetNodeID == "" || targetNodeID == h.config.NodeID {
+		return false
+	}
+
+	targetBase, err := h.notifyAlertNodeBaseURL(targetNodeID)
+	if err != nil {
+		httpError(w, http.StatusBadGateway, err.Error())
+		return true
+	}
+
+	if err := h.proxyRequest(w, r, targetBase); err != nil {
+		httpError(w, http.StatusBadGateway, err.Error())
+	}
+	return true
+}
+
+func (h *Handler) notifyAlertNodeBaseURL(nodeID string) (string, error) {
+	members, err := clusterpkg.BuildClusterMemberViews(h.config, h.settings, h.cluster, &h.nodeCache)
+	if err != nil {
+		return "", err
+	}
+
+	for _, member := range members {
+		if member == nil || member.ID != nodeID {
+			continue
+		}
+		if candidate := strings.TrimSpace(member.Address); candidate != "" {
+			return h.normalizeAddr(candidate), nil
+		}
+		if candidate := strings.TrimSpace(member.HTTPAddr); candidate != "" {
+			return h.normalizeAddr(candidate), nil
+		}
+	}
+	return "", fmt.Errorf("notify/alert node %s not found", nodeID)
+}
+
+func (h *Handler) proxyRequest(w http.ResponseWriter, r *http.Request, targetBase string) error {
+	var body []byte
+	if r.Body != nil {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			return err
+		}
+		body = data
+	}
+
+	targetURL := strings.TrimRight(targetBase, "/") + r.URL.RequestURI()
+	req, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header = r.Header.Clone()
+	req.Header.Set("X-Eden-Proxied-By", h.config.NodeID)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, err = io.Copy(w, resp.Body)
+	return err
 }

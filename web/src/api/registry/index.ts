@@ -103,12 +103,53 @@ export interface SystemSettings {
   heartbeat_max_failures: number
   instance_removal_delay_seconds: number
   api_key_auth_enabled: boolean
+  notify_alert_node_id?: string
 }
 
 export interface ApplySystemSettingsResult {
   status: string
   restart_required?: boolean
   message?: string
+}
+
+export interface NotificationChannel {
+  id: string
+  name: string
+  type: 'webhook' | 'email' | string
+  provider: 'generic' | 'dingtalk' | 'feishu' | 'wecom' | string
+  description?: string
+  enabled: boolean
+  config?: Record<string, any>
+}
+
+export interface NotificationConfig {
+  channels: NotificationChannel[]
+  updated_at?: string
+}
+
+export interface AlertTemplate {
+  id: string
+  name: string
+  channel_id: string
+  title_template?: string
+  body_template: string
+  enabled: boolean
+}
+
+export interface AlertRule {
+  id: string
+  name: string
+  event_code: string
+  threshold?: number
+  window_sec?: number
+  template_ids: string[]
+  enabled: boolean
+}
+
+export interface AlertConfig {
+  templates: AlertTemplate[]
+  rules: AlertRule[]
+  updated_at?: string
 }
 
 export interface RbacUser {
@@ -156,3 +197,11 @@ export const getStorage = () => api.get<any>('/v1/settings/storage')
 export const updateStorage = (data: any) => api.post('/v1/settings/storage', data)
 export const getSystemSettings = () => api.get<SystemSettings>('/v1/settings/system')
 export const updateSystemSettings = (data: SystemSettings) => api.post<ApplySystemSettingsResult>('/v1/settings/system', data)
+export const getNotificationConfig = (namespace = 'default') =>
+  api.get<NotificationConfig>(`/v1/notify/config?namespace=${encodeURIComponent(namespace)}`)
+export const updateNotificationConfig = (namespace: string, data: NotificationConfig) =>
+  api.post<NotificationConfig>(`/v1/notify/config?namespace=${encodeURIComponent(namespace)}`, data)
+export const getAlertConfig = (namespace = 'default') =>
+  api.get<AlertConfig>(`/v1/alert/config?namespace=${encodeURIComponent(namespace)}`)
+export const updateAlertConfig = (namespace: string, data: AlertConfig) =>
+  api.post<AlertConfig>(`/v1/alert/config?namespace=${encodeURIComponent(namespace)}`, data)

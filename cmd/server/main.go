@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -18,9 +19,11 @@ import (
 	"crypto/x509/pkix"
 	"math/big"
 
+	nacosgrpc "github.com/nacos-group/nacos-sdk-go/v2/api/grpc"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
 	pb_cluster "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
 	pb_reg "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
+	nacosadapter "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 	platformcluster "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
@@ -205,6 +208,52 @@ func main() {
 		return fmt.Sprintf("%s:%s", host, port)
 	}
 
+	isAutoPort := func(addr string) bool {
+		trimmed := strings.TrimSpace(addr)
+		if trimmed == "" || trimmed == ":0" {
+			return true
+		}
+		_, port, err := net.SplitHostPort(trimmed)
+		return err == nil && port == "0"
+	}
+
+	resolveCompanionAddr := func(baseAddr string, offset int, network string) string {
+		host, port, err := net.SplitHostPort(baseAddr)
+		if err != nil {
+			if strings.HasPrefix(baseAddr, ":") {
+				host = "127.0.0.1"
+				port = baseAddr[1:]
+			} else {
+				return ""
+			}
+		}
+		if host == "" || host == "0.0.0.0" || host == "[::]" {
+			host = "127.0.0.1"
+		}
+
+		basePort, err := strconv.Atoi(port)
+		if err != nil || basePort <= 0 {
+			return ""
+		}
+
+		candidate := fmt.Sprintf("%s:%d", host, basePort+offset)
+		if network == "udp" {
+			lis, err := net.ListenPacket("udp", candidate)
+			if err != nil {
+				return ""
+			}
+			lis.Close()
+			return candidate
+		}
+
+		lis, err := net.Listen("tcp", candidate)
+		if err != nil {
+			return ""
+		}
+		lis.Close()
+		return candidate
+	}
+
 	raftEnabled := cfg.RaftEnabled(cfg.Mode, cfg.Consistency)
 	grpcEnabled := cfg.GRPCEnabled(cfg.Mode)
 	quicEnabled := cfg.QUICEnabled(cfg.Mode)
@@ -226,7 +275,13 @@ func main() {
 	}
 
 	if grpcEnabled {
-		cfg.GRPCAddr = resolvePortRange(cfg.GRPCAddr, 9000, 9999, "tcp")
+		if isAutoPort(cfg.GRPCAddr) {
+			if companion := resolveCompanionAddr(cfg.HTTPAddr, 1000, "tcp"); companion != "" {
+				cfg.GRPCAddr = companion
+			} else {
+				cfg.GRPCAddr = resolvePortRange(cfg.GRPCAddr, 9000, 9999, "tcp")
+			}
+		}
 	} else {
 		cfg.GRPCAddr = ""
 	}
@@ -299,8 +354,11 @@ func main() {
 		grpcServer = grpc.NewServer()
 		regServer := grpcapi.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
 		clusterServer := grpcapi.NewClusterServer(runtimeState, clusterReplicator)
+		nacosServer := nacosadapter.NewNacosNamingServer(cfg, catSvc)
 		pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
 		pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)
+		nacosgrpc.RegisterRequestServer(grpcServer, nacosServer)
+		nacosgrpc.RegisterBiRequestStreamServer(grpcServer, nacosServer)
 		reflection.Register(grpcServer)
 	}
 

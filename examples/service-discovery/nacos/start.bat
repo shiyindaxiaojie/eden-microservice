@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ======================================================
-echo  pkg/nacos Service Discovery Demo
+echo  Official Nacos SDK Service Discovery Demo
 echo ======================================================
 echo.
 

@@ -38,7 +38,7 @@ const EDGE_LANE_GAP = 18
 const EDGE_SIBLING_GAP = 8
 const EDGE_PADDING_X = 24
 const EDGE_PADDING_Y = 14
-const NODE_SCALE_RATIO = 1
+const NODE_SCALE_RATIO = 0.6
 const INSTANCE_HEX_SYMBOL = 'path://M0 -1L0.866 -0.5L0.866 0.5L0 1L-0.866 0.5L-0.866 -0.5Z'
 
 const { locale } = useI18n()
@@ -620,9 +620,6 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
           },
         },
       },
-      emphasis: {
-        disabled: true,
-      },
     }
   })
 
@@ -660,9 +657,6 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
           shadowBlur: selectedParent ? 12 : 8,
         },
         label: { show: false },
-        emphasis: {
-          disabled: true,
-        },
       }
     })
   })
@@ -707,9 +701,6 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
         curveness: curve,
         width: relatedToSelection ? 2.8 : 1.9,
         opacity: relatedToSelection ? 1 : 0.94,
-      },
-      emphasis: {
-        disabled: true,
       },
     }
   })
@@ -787,9 +778,6 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
         },
         lineStyle: {
           opacity: 0.95,
-        },
-        emphasis: {
-          disabled: true,
         },
       },
     ],

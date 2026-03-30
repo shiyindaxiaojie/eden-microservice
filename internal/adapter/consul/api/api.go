@@ -7,7 +7,7 @@
 //	// import consulapi "github.com/hashicorp/consul/api"
 //
 //	// After (only change the import):
-//	import consulapi "github.com/shiyindaxiaojie/eden-go-registry/pkg/consul/api"
+//	import consulapi "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/api"
 //
 // No other code changes are required.
 package api
@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	consulcompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
 )
 
 // ---------- Config & Client ----------
@@ -88,6 +90,7 @@ func (c *Client) doPost(path string, body interface{}) error {
 	req.Header.Set("Content-Type", "application/json")
 	if c.config.Token != "" {
 		req.Header.Set("X-API-Key", c.config.Token)
+		req.Header.Set("X-Consul-Token", c.config.Token)
 	}
 
 	resp, err := c.client.Do(req)
@@ -108,6 +111,7 @@ func (c *Client) doGet(path string) ([]byte, error) {
 	req, _ := http.NewRequest("GET", url, nil)
 	if c.config.Token != "" {
 		req.Header.Set("X-API-Key", c.config.Token)
+		req.Header.Set("X-Consul-Token", c.config.Token)
 	}
 
 	resp, err := c.client.Do(req)
@@ -187,15 +191,15 @@ func (a *Agent) ServiceDeregister(serviceID string) error {
 		return err
 	}
 
-	var services []struct {
-		Name string `json:"name"`
+	services, err := consulcompat.DecodeServicesMap(data)
+	if err != nil {
+		return err
 	}
-	json.Unmarshal(data, &services)
 
 	// Try each service to find the instance
-	for _, svc := range services {
+	for serviceName := range services {
 		body := map[string]string{
-			"service_name": svc.Name,
+			"service_name": serviceName,
 			"instance_id":  serviceID,
 			"status":       "offline",
 		}
@@ -221,14 +225,14 @@ func (a *Agent) UpdateTTL(checkID, output, status string) error {
 		return err
 	}
 
-	var services []struct {
-		Name string `json:"name"`
+	services, err := consulcompat.DecodeServicesMap(data)
+	if err != nil {
+		return err
 	}
-	json.Unmarshal(data, &services)
 
-	for _, svc := range services {
+	for serviceName := range services {
 		body := map[string]string{
-			"service_name": svc.Name,
+			"service_name": serviceName,
 			"instance_id":  instanceID,
 		}
 		err := a.client.doPost("/v1/catalog/heartbeat", body)
@@ -284,24 +288,17 @@ func (c *Catalog) Service(service, tag string, q *QueryOptions) ([]*CatalogServi
 		return nil, nil, err
 	}
 
-	var edenInstances []struct {
-		ID          string            `json:"id"`
-		ServiceName string            `json:"service_name"`
-		Host        string            `json:"host"`
-		Port        int               `json:"port"`
-		Status      string            `json:"status"`
-		Metadata    map[string]string `json:"metadata"`
-		Datacenter  string            `json:"datacenter"`
+	instances, err := consulcompat.DecodeCatalogInstances(data)
+	if err != nil {
+		return nil, nil, err
 	}
-	json.Unmarshal(data, &edenInstances)
 
-	result := make([]*CatalogService, 0, len(edenInstances))
-	for _, ei := range edenInstances {
+	result := make([]*CatalogService, 0, len(instances))
+	for _, ei := range instances {
 		if tag != "" {
-			// Filter by tag if specified
 			found := false
-			for _, v := range ei.Metadata {
-				if v == tag {
+			for _, item := range ei.Tags {
+				if item == tag {
 					found = true
 					break
 				}
@@ -315,9 +312,10 @@ func (c *Catalog) Service(service, tag string, q *QueryOptions) ([]*CatalogServi
 			ID:          ei.ID,
 			ServiceID:   ei.ID,
 			ServiceName: ei.ServiceName,
-			Address:     ei.Host,
+			Address:     ei.Address,
 			ServicePort: ei.Port,
 			ServiceMeta: ei.Metadata,
+			ServiceTags: ei.Tags,
 			Datacenter:  ei.Datacenter,
 		})
 	}
@@ -381,25 +379,18 @@ func (h *Health) Service(service, tag string, passingOnly bool, q *QueryOptions)
 		return nil, nil, err
 	}
 
-	var edenInstances []struct {
-		ID          string            `json:"id"`
-		ServiceName string            `json:"service_name"`
-		Host        string            `json:"host"`
-		Port        int               `json:"port"`
-		Weight      int               `json:"weight"`
-		Status      string            `json:"status"`
-		Metadata    map[string]string `json:"metadata"`
-		Datacenter  string            `json:"datacenter"`
+	instances, err := consulcompat.DecodeCatalogInstances(data)
+	if err != nil {
+		return nil, nil, err
 	}
-	json.Unmarshal(data, &edenInstances)
 
 	h.mu.Lock()
 	h.index++
 	currentIndex := h.index
 	h.mu.Unlock()
 
-	entries := make([]*ServiceEntry, 0, len(edenInstances))
-	for _, ei := range edenInstances {
+	entries := make([]*ServiceEntry, 0, len(instances))
+	for _, ei := range instances {
 		weight := ei.Weight
 		if weight <= 0 {
 			weight = 1
@@ -408,14 +399,15 @@ func (h *Health) Service(service, tag string, passingOnly bool, q *QueryOptions)
 			Node: &Node{
 				ID:         ei.ID,
 				Node:       ei.ID,
-				Address:    ei.Host,
+				Address:    ei.Address,
 				Datacenter: ei.Datacenter,
 			},
 			Service: &AgentService{
 				ID:      ei.ID,
 				Service: ei.ServiceName,
-				Address: ei.Host,
+				Address: ei.Address,
 				Port:    ei.Port,
+				Tags:    ei.Tags,
 				Meta:    ei.Metadata,
 				Weights: AgentWeights{Passing: weight},
 			},

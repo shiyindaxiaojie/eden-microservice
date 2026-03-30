@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/clients/naming_client"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/common/constant"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/vo"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/clients/naming_client"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/common/constant"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/model"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/vo"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
 

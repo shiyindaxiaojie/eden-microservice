@@ -2,9 +2,9 @@ package factory
 
 import (
 	"fmt"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/consul"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/eden"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
 

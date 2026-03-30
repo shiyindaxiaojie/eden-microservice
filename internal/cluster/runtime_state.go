@@ -26,6 +26,7 @@ type SnapshotData struct {
 	HBMaxFail          int                                           `json:"heartbeat_max_failures"`
 	RemovalDelay       int                                           `json:"instance_removal_delay_seconds"`
 	APIKeyAuthEnabled  bool                                          `json:"api_key_auth_enabled"`
+	NotifyAlertNodeID  string                                        `json:"notify_alert_node_id,omitempty"`
 }
 
 // RuntimeState composes the domain modules that participate in node runtime and cluster replication.
@@ -224,6 +225,15 @@ func (s *RuntimeState) SetAPIKeyAuthEnabled(enabled bool) {
 	s.Settings.Save()
 }
 
+func (s *RuntimeState) GetNotifyAlertNodeID() string {
+	return s.Settings.GetNotifyAlertNodeID()
+}
+
+func (s *RuntimeState) SetNotifyAlertNodeID(nodeID string) {
+	s.Settings.SetNotifyAlertNodeID(nodeID)
+	s.Settings.Save()
+}
+
 func (s *RuntimeState) ListEvents() []*catalog.Event {
 	return s.Catalog.ListEvents()
 }
@@ -293,6 +303,7 @@ func (s *RuntimeState) Snapshot() *SnapshotData {
 		HBMaxFail:          s.Settings.GetHeartbeatMaxFailures(),
 		RemovalDelay:       s.Settings.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:  s.Settings.GetAPIKeyAuthEnabled(),
+		NotifyAlertNodeID:  s.Settings.GetNotifyAlertNodeID(),
 	}
 }
 
@@ -329,7 +340,7 @@ func (s *RuntimeState) Restore(data *SnapshotData) {
 		s.Catalog.Topology.Restore(data.TopologyReports)
 	}
 	s.Auth.Restore(data.Users, data.APIKeys)
-	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled)
+	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled, data.NotifyAlertNodeID)
 
 	s.Catalog.Instances.Save()
 	s.Auth.Save()

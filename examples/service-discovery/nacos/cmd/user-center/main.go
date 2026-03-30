@@ -13,25 +13,30 @@ import (
 	"syscall"
 	"time"
 
+	nacosclients "github.com/nacos-group/nacos-sdk-go/v2/clients"
+	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
+	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
+	nacoshelper "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/nacos/internal/nacosapi"
 )
 
 func main() {
 	logger.NewBuilder().AddConsole().Init()
 
 	// 初始化基于 Nacos 协议的注册中心适配器，后续通过统一的 registry 接口演示注册、发现、订阅和心跳。
-	reg, err := nacos.NewRegistry(&registry.Config{
-		Addresses: []string{envOr("NACOS_ADDR", "127.0.0.1:8500")},
-		Namespace: envOr("NACOS_NAMESPACE", "public"),
+	rawClient, err := nacosclients.NewNamingClient(vo.NacosClientParam{
+		ServerConfigs: []constant.ServerConfig{
+			nacoshelper.ParseServerConfig(envOr("NACOS_ADDR", "127.0.0.1:8500")),
+		},
+		ClientConfig: nacoshelper.DefaultClientConfig(envOr("NACOS_NAMESPACE", "public")),
 	})
 	if err != nil {
-		logger.Fatal("create registry failed: %v", err)
+		logger.Fatal("create nacos client failed: %v", err)
 	}
+	reg := nacoshelper.New(rawClient)
 
 	// 定义当前服务实例元信息，后续通过 Nacos 协议适配层写入注册中心并用于心跳续约。
-	instance := &registry.ServiceInstance{
+	instance := &nacoshelper.ServiceInstance{
 		ID:          envOr("SERVICE_ID", "nacos-user-center-1"),
 		ServiceName: "nacos-user-center",
 		Host:        envOr("SERVICE_HOST", "127.0.0.1"),
@@ -46,7 +51,7 @@ func main() {
 	logger.Info("registered %s on %s:%d", instance.ID, instance.Host, instance.Port)
 
 	// 订阅依赖服务的实例变化，演示适配层如何把注册中心变更事件回调到统一接口。
-	if err := reg.Subscribe("nacos-auth-center", func(items []*registry.ServiceInstance) {
+	if err := reg.Subscribe("nacos-auth-center", func(items []*nacoshelper.ServiceInstance) {
 		logger.Info("[subscribe] nacos-auth-center updated: %d instance(s)", len(items))
 	}); err != nil {
 		logger.Warn("subscribe nacos-auth-center failed: %v", err)
@@ -76,7 +81,7 @@ func main() {
 	_ = reg.Close()
 }
 
-func newUserCenterHandler(reg registry.Registry, instance *registry.ServiceInstance) http.Handler {
+func newUserCenterHandler(reg *nacoshelper.Client, instance *nacoshelper.ServiceInstance) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{
@@ -153,7 +158,7 @@ func shutdownHTTPServer(server *http.Server) {
 	_ = server.Shutdown(ctx)
 }
 
-func callJSON(reg registry.Registry, serviceName, path string) (interface{}, string, error) {
+func callJSON(reg *nacoshelper.Client, serviceName, path string) (interface{}, string, error) {
 	items, err := reg.Discovery(serviceName)
 	if err != nil {
 		return nil, "", err

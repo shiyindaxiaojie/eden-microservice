@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -11,7 +11,6 @@ import {
   InfoFilled,
   Key,
   List,
-  Message,
   Monitor,
   Operation,
   Plus,
@@ -21,9 +20,27 @@ import {
   Timer,
 } from '@element-plus/icons-vue'
 import api from '../api'
-import { getSystemSettings, updateSystemSettings, type SystemSettings } from '../api/registry'
+import {
+  getAlertConfig,
+  getClusterMembers,
+  getNotificationConfig,
+  getSystemSettings,
+  updateAlertConfig,
+  updateNotificationConfig,
+  updateSystemSettings,
+  type AlertConfig,
+  type AlertRule,
+  type AlertTemplate,
+  type ClusterMember,
+  type NotificationChannel,
+  type NotificationConfig,
+  type SystemSettings,
+} from '../api/registry'
 
 type CredentialView = 'grid' | 'list'
+type EditMode = 'create' | 'edit'
+
+type ChannelEditor = NotificationChannel & { configText: string }
 
 interface ApiKeyItem {
   key: string
@@ -42,30 +59,32 @@ const keysLoading = ref(false)
 const showDialog = ref(false)
 
 const keys = ref<ApiKeyItem[]>([])
+const members = ref<ClusterMember[]>([])
 const keyForm = ref({
   key: '',
   description: '',
   expDays: 0,
 })
 
-const webhookForm = ref({
-  url: '',
-  events: ['service_register', 'service_offline'],
-})
+const messageLoading = ref(false)
+const messageSaving = ref(false)
+const alertLoading = ref(false)
+const alertSaving = ref(false)
 
-const alarmForm = ref({
-  enabled: false,
-  threshold: 80,
-  contact: 'email',
-})
+const notifyConfig = ref<NotificationConfig>({ channels: [] })
+const alertConfig = ref<AlertConfig>({ templates: [], rules: [] })
+const notifySnapshot = ref('')
+const alertSnapshot = ref('')
 
-const smtpForm = ref({
-  host: 'smtp.example.com',
-  port: 465,
-  user: '',
-  pass: '',
-  from: '',
-})
+const channelDialogVisible = ref(false)
+const templateDialogVisible = ref(false)
+const ruleDialogVisible = ref(false)
+const channelMode = ref<EditMode>('create')
+const templateMode = ref<EditMode>('create')
+const ruleMode = ref<EditMode>('create')
+const channelForm = ref<ChannelEditor>(emptyChannel())
+const templateForm = ref<AlertTemplate>(emptyTemplate())
+const ruleForm = ref<AlertRule>(emptyRule())
 
 const EVENT_OPTIONS = [
   { value: 'service_register', label: '服务注册' },
@@ -78,6 +97,90 @@ const EVENT_OPTIONS = [
 
 const LOG_LEVEL_OPTIONS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
 
+const MESSAGE_PROVIDER_OPTIONS = [
+  { label: '通用 Webhook', value: 'generic' },
+  { label: '钉钉', value: 'dingtalk' },
+  { label: '飞书', value: 'feishu' },
+  { label: '企业微信', value: 'wecom' },
+]
+
+function serializeNotificationConfig(value: NotificationConfig) {
+  return JSON.stringify({ channels: value.channels })
+}
+
+function serializeAlertConfig(value: AlertConfig) {
+  return JSON.stringify({ templates: value.templates, rules: value.rules })
+}
+
+function createID(prefix: string) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function emptyChannel(item?: NotificationChannel): ChannelEditor {
+  return {
+    id: item?.id || '',
+    name: item?.name || '',
+    type: item?.type || 'webhook',
+    provider: item?.provider || 'generic',
+    description: item?.description || '',
+    enabled: item?.enabled ?? true,
+    config: item?.config || {},
+    configText: JSON.stringify(item?.config || {}, null, 2),
+  }
+}
+
+function emptyTemplate(item?: AlertTemplate): AlertTemplate {
+  return {
+    id: item?.id || '',
+    name: item?.name || '',
+    channel_id: item?.channel_id || '',
+    title_template: item?.title_template || '',
+    body_template: item?.body_template || '',
+    enabled: item?.enabled ?? true,
+  }
+}
+
+function emptyRule(item?: AlertRule): AlertRule {
+  return {
+    id: item?.id || '',
+    name: item?.name || '',
+    event_code: item?.event_code || 'service_offline',
+    threshold: item?.threshold || 1,
+    window_sec: item?.window_sec || 300,
+    template_ids: [...(item?.template_ids || [])],
+    enabled: item?.enabled ?? true,
+  }
+}
+
+function parseChannelConfig(textValue: string) {
+  const raw = textValue.trim()
+  if (!raw) return {}
+  const value = JSON.parse(raw)
+  if (!value || Array.isArray(value) || typeof value !== 'object') {
+    throw new Error('渠道配置必须是 JSON 对象')
+  }
+  return value as Record<string, any>
+}
+
+function formatConfigTime(value?: string) {
+  if (!value) return '未保存'
+  return new Date(value).toLocaleString('zh-CN')
+}
+
+function channelTarget(channel: NotificationChannel) {
+  const cfg = channel.config || {}
+  const recipients = Array.isArray(cfg.recipients) ? cfg.recipients.join(', ') : ''
+  return cfg.url || recipients || cfg.from || '-'
+}
+
+function channelName(channelID: string) {
+  return notifyConfig.value.channels.find((item) => item.id === channelID)?.name || '-'
+}
+
+function templateName(templateID: string) {
+  return alertConfig.value.templates.find((item) => item.id === templateID)?.name || '-'
+}
+
 function createDefaultSettings(): SystemSettings {
   return {
     mode: 'standalone',
@@ -89,6 +192,7 @@ function createDefaultSettings(): SystemSettings {
     heartbeat_max_failures: 3,
     instance_removal_delay_seconds: 600,
     api_key_auth_enabled: false,
+    notify_alert_node_id: '',
   }
 }
 
@@ -131,6 +235,7 @@ function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettin
     heartbeat_max_failures: Math.max(1, input?.heartbeat_max_failures ?? defaults.heartbeat_max_failures),
     instance_removal_delay_seconds: Math.max(60, input?.instance_removal_delay_seconds ?? defaults.instance_removal_delay_seconds),
     api_key_auth_enabled: Boolean(input?.api_key_auth_enabled ?? defaults.api_key_auth_enabled),
+    notify_alert_node_id: typeof input?.notify_alert_node_id === 'string' ? input.notify_alert_node_id : defaults.notify_alert_node_id,
   }
 }
 
@@ -157,16 +262,31 @@ const isDirty = computed(() => {
   return JSON.stringify(normalizeForCompare(draftSettings.value)) !== JSON.stringify(normalizeForCompare(appliedSettings.value))
 })
 
+const messageProviderOptions = computed(() =>
+  channelForm.value.type === 'email'
+    ? [{ label: 'SMTP', value: 'smtp' }]
+    : MESSAGE_PROVIDER_OPTIONS,
+)
+
+const enabledChannels = computed(() => notifyConfig.value.channels.filter((item) => item.enabled))
+const enabledTemplates = computed(() => alertConfig.value.templates.filter((item) => item.enabled))
+const messageDirty = computed(() => notifySnapshot.value !== serializeNotificationConfig(notifyConfig.value))
+const alertRuleDirty = computed(() => alertSnapshot.value !== serializeAlertConfig(alertConfig.value))
+
 async function fetchSystemConfig() {
   systemLoading.value = true
   try {
-    const { data } = await getSystemSettings()
+    const [{ data }, membersRes] = await Promise.all([getSystemSettings(), getClusterMembers()])
+    members.value = membersRes.data || []
     const normalized = normalizeSettings(data)
+    if (!normalized.notify_alert_node_id) {
+      normalized.notify_alert_node_id = members.value.find((item) => item.is_local)?.id || ''
+    }
     appliedSettings.value = cloneSettings(normalized)
     draftSettings.value = cloneSettings(normalized)
   } catch (error) {
     console.error('fetch system settings failed', error)
-    ElMessage.error('加载系统设置失败')
+    ElMessage.error('Failed to load system settings')
   } finally {
     systemLoading.value = false
   }
@@ -194,6 +314,220 @@ async function saveSystemConfig() {
   } finally {
     saveLoading.value = false
   }
+}
+
+async function fetchNotifyConfig() {
+  messageLoading.value = true
+  try {
+    const response = await getNotificationConfig('default')
+    notifyConfig.value = response.data || { channels: [] }
+    notifySnapshot.value = serializeNotificationConfig(notifyConfig.value)
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '加载消息渠道配置失败')
+  } finally {
+    messageLoading.value = false
+  }
+}
+
+async function saveNotifyConfig() {
+  messageSaving.value = true
+  try {
+    const response = await updateNotificationConfig('default', notifyConfig.value)
+    notifyConfig.value = response.data || notifyConfig.value
+    notifySnapshot.value = serializeNotificationConfig(notifyConfig.value)
+    ElMessage.success('消息渠道配置已保存')
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '保存消息渠道配置失败')
+  } finally {
+    messageSaving.value = false
+  }
+}
+
+async function reloadNotifyConfig() {
+  if (messageDirty.value) {
+    try {
+      await ElMessageBox.confirm('当前消息渠道有未保存变更，确认重新加载吗？', '重新加载确认', { type: 'warning' })
+    } catch {
+      return
+    }
+  }
+  await fetchNotifyConfig()
+}
+
+function openChannelDialog(mode: EditMode, item?: NotificationChannel) {
+  channelMode.value = mode
+  channelForm.value = emptyChannel(item)
+  if (channelForm.value.type === 'email') {
+    channelForm.value.provider = 'smtp'
+  }
+  channelDialogVisible.value = true
+}
+
+function saveChannelDraft() {
+  try {
+    const payload: NotificationChannel = {
+      id: channelForm.value.id || createID('channel'),
+      name: channelForm.value.name.trim(),
+      type: channelForm.value.type,
+      provider: channelForm.value.type === 'email' ? 'smtp' : channelForm.value.provider,
+      description: channelForm.value.description?.trim() || '',
+      enabled: channelForm.value.enabled,
+      config: parseChannelConfig(channelForm.value.configText),
+    }
+    if (!payload.name) {
+      ElMessage.warning('请填写渠道名称')
+      return
+    }
+
+    const channels = [...notifyConfig.value.channels]
+    const index = channels.findIndex((item) => item.id === payload.id)
+    if (index >= 0) channels[index] = payload
+    else channels.unshift(payload)
+    notifyConfig.value = { ...notifyConfig.value, channels }
+    channelDialogVisible.value = false
+  } catch (error: any) {
+    ElMessage.error(error.message || '渠道配置格式错误')
+  }
+}
+
+function removeChannel(channel: NotificationChannel) {
+  ElMessageBox.confirm(`确定删除渠道 ${channel.name} 吗？`, '删除确认', { type: 'warning' })
+    .then(() => {
+      const removedID = channel.id
+      notifyConfig.value = {
+        ...notifyConfig.value,
+        channels: notifyConfig.value.channels.filter((item) => item.id !== removedID),
+      }
+      alertConfig.value = {
+        ...alertConfig.value,
+        templates: alertConfig.value.templates.filter((item) => item.channel_id !== removedID),
+      }
+      ElMessage.success('渠道已删除')
+    })
+    .catch(() => {})
+}
+
+async function fetchAlertRuleConfig() {
+  alertLoading.value = true
+  try {
+    const response = await getAlertConfig('default')
+    alertConfig.value = response.data || { templates: [], rules: [] }
+    alertSnapshot.value = serializeAlertConfig(alertConfig.value)
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '加载告警配置失败')
+  } finally {
+    alertLoading.value = false
+  }
+}
+
+async function saveAlertRuleConfig() {
+  alertSaving.value = true
+  try {
+    const response = await updateAlertConfig('default', alertConfig.value)
+    alertConfig.value = response.data || alertConfig.value
+    alertSnapshot.value = serializeAlertConfig(alertConfig.value)
+    ElMessage.success('告警配置已保存')
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '保存告警配置失败')
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+async function reloadAlertRuleConfig() {
+  if (alertRuleDirty.value) {
+    try {
+      await ElMessageBox.confirm('当前告警配置有未保存变更，确认重新加载吗？', '重新加载确认', { type: 'warning' })
+    } catch {
+      return
+    }
+  }
+  await fetchAlertRuleConfig()
+}
+
+function openTemplateDialog(mode: EditMode, item?: AlertTemplate) {
+  templateMode.value = mode
+  templateForm.value = emptyTemplate(item)
+  templateDialogVisible.value = true
+}
+
+function saveTemplateDraft() {
+  const payload: AlertTemplate = {
+    id: templateForm.value.id || createID('tpl'),
+    name: templateForm.value.name.trim(),
+    channel_id: templateForm.value.channel_id,
+    title_template: templateForm.value.title_template?.trim() || '',
+    body_template: templateForm.value.body_template.trim(),
+    enabled: templateForm.value.enabled,
+  }
+  if (!payload.name || !payload.channel_id || !payload.body_template) {
+    ElMessage.warning('请完整填写告警模板')
+    return
+  }
+
+  const templates = [...alertConfig.value.templates]
+  const index = templates.findIndex((item) => item.id === payload.id)
+  if (index >= 0) templates[index] = payload
+  else templates.unshift(payload)
+  alertConfig.value = { ...alertConfig.value, templates }
+  templateDialogVisible.value = false
+}
+
+function removeTemplate(template: AlertTemplate) {
+  ElMessageBox.confirm(`确定删除模板 ${template.name} 吗？`, '删除确认', { type: 'warning' })
+    .then(() => {
+      alertConfig.value = {
+        ...alertConfig.value,
+        templates: alertConfig.value.templates.filter((item) => item.id !== template.id),
+        rules: alertConfig.value.rules.map((item) => ({
+          ...item,
+          template_ids: item.template_ids.filter((id) => id !== template.id),
+        })),
+      }
+      ElMessage.success('告警模板已删除')
+    })
+    .catch(() => {})
+}
+
+function openRuleDialog(mode: EditMode, item?: AlertRule) {
+  ruleMode.value = mode
+  ruleForm.value = emptyRule(item)
+  ruleDialogVisible.value = true
+}
+
+function saveRuleDraft() {
+  const payload: AlertRule = {
+    id: ruleForm.value.id || createID('rule'),
+    name: ruleForm.value.name.trim(),
+    event_code: ruleForm.value.event_code,
+    threshold: Math.max(1, ruleForm.value.threshold || 1),
+    window_sec: Math.max(60, ruleForm.value.window_sec || 300),
+    template_ids: [...ruleForm.value.template_ids],
+    enabled: ruleForm.value.enabled,
+  }
+  if (!payload.name || !payload.event_code || payload.template_ids.length === 0) {
+    ElMessage.warning('请完整填写告警规则')
+    return
+  }
+
+  const rules = [...alertConfig.value.rules]
+  const index = rules.findIndex((item) => item.id === payload.id)
+  if (index >= 0) rules[index] = payload
+  else rules.unshift(payload)
+  alertConfig.value = { ...alertConfig.value, rules }
+  ruleDialogVisible.value = false
+}
+
+function removeRule(rule: AlertRule) {
+  ElMessageBox.confirm(`确定删除规则 ${rule.name} 吗？`, '删除确认', { type: 'warning' })
+    .then(() => {
+      alertConfig.value = {
+        ...alertConfig.value,
+        rules: alertConfig.value.rules.filter((item) => item.id !== rule.id),
+      }
+      ElMessage.success('告警规则已删除')
+    })
+    .catch(() => {})
 }
 
 async function fetchKeys() {
@@ -278,13 +612,11 @@ function resetDraftSettings() {
   draftSettings.value = cloneSettings(appliedSettings.value)
 }
 
-function handleNonBlockingSave() {
-  ElMessage.info('这一页签暂未接入后端，这次已优先完善基础设置和注册中心配置')
-}
-
 onMounted(() => {
   fetchSystemConfig()
   fetchKeys()
+  fetchNotifyConfig()
+  fetchAlertRuleConfig()
 })
 </script>
 
@@ -417,6 +749,20 @@ onMounted(() => {
                       <div class="inline-switch-control">
                         <el-switch v-model="draftSettings.api_key_auth_enabled" />
                       </div>
+                    </el-form-item>
+
+                    <el-form-item>
+                      <template #label>
+                        <span class="label-with-tip">
+                          Notify/Alert Node
+                          <el-tooltip content="指定哪个节点持有通知渠道与告警配置，其他节点会转发到这里。" placement="top">
+                            <el-icon class="help-icon"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </span>
+                      </template>
+                      <el-select v-model="draftSettings.notify_alert_node_id" style="width: 100%">
+                        <el-option v-for="item in members" :key="item.id" :label="`${item.id}${item.is_local ? ' (Local)' : ''}`" :value="item.id" />
+                      </el-select>
                     </el-form-item>
 
                     <el-form-item>
@@ -639,84 +985,143 @@ onMounted(() => {
 
       <el-tab-pane name="channels">
         <template #label>
-          <span class="tab-label"><el-icon><Share /></el-icon>通知渠道</span>
+          <span class="tab-label"><el-icon><Share /></el-icon>消息渠道</span>
         </template>
 
-        <div class="tab-content channels-grid">
-          <section class="settings-section glass-card">
+        <div class="tab-content ops-settings-tab" v-loading="messageLoading">
+          <section class="settings-section glass-card ops-settings-section">
             <div class="section-header">
               <el-icon><Share /></el-icon>
-              <h4>Webhook 配置</h4>
+              <div class="section-title-with-tip">
+                <h4>消息渠道配置</h4>
+                <el-tooltip content="只保存基础渠道配置，不记录发送历史。" placement="top">
+                  <el-icon class="help-icon"><InfoFilled /></el-icon>
+                </el-tooltip>
+              </div>
+              <div class="section-actions">
+                <el-button :icon="RefreshRight" @click="reloadNotifyConfig">重新加载</el-button>
+                <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">新增渠道</el-button>
+              </div>
             </div>
-            <el-form label-position="top" class="compact-form">
-              <el-form-item label="Webhook 地址">
-                <el-input v-model="webhookForm.url" placeholder="https://api.example.com/webhook" />
-              </el-form-item>
-              <el-form-item label="触发事件">
-                <el-checkbox-group v-model="webhookForm.events" class="event-checkbox-grid">
-                  <el-checkbox label="service_register">服务注册</el-checkbox>
-                  <el-checkbox label="service_offline">服务下线</el-checkbox>
-                  <el-checkbox label="service_remove">服务移除</el-checkbox>
-                </el-checkbox-group>
-              </el-form-item>
-              <el-button type="primary" @click="handleNonBlockingSave" style="width: 100%">保存设置</el-button>
-            </el-form>
-          </section>
 
-          <section class="settings-section glass-card">
-            <div class="section-header">
-              <el-icon><Message /></el-icon>
-              <h4>SMTP 配置</h4>
+            <el-table :data="notifyConfig.channels" class="custom-table" empty-text="暂无消息渠道">
+              <el-table-column prop="name" label="名称" min-width="140" />
+              <el-table-column prop="type" label="类型" width="110" />
+              <el-table-column prop="provider" label="提供方" width="120" />
+              <el-table-column label="目标配置" min-width="240">
+                <template #default="{ row }">
+                  <span class="muted-text">{{ channelTarget(row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="140" align="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openChannelDialog('edit', row)">编辑</el-button>
+                  <el-button link type="danger" @click="removeChannel(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div class="ops-footer">
+              <span class="muted-text">最近保存：{{ formatConfigTime(notifyConfig.updated_at) }}</span>
+              <el-button type="primary" :loading="messageSaving" :disabled="!messageDirty" @click="saveNotifyConfig">
+                保存消息渠道
+              </el-button>
             </div>
-            <el-form label-position="top" class="compact-form">
-              <el-form-item label="SMTP Host">
-                <div class="form-inline">
-                  <el-input v-model="smtpForm.host" placeholder="smtp.example.com" />
-                  <el-input-number v-model="smtpForm.port" :controls="false" :min="1" :max="65535" />
-                </div>
-              </el-form-item>
-              <el-form-item label="用户名">
-                <el-input v-model="smtpForm.user" placeholder="user@example.com" />
-              </el-form-item>
-              <el-form-item label="密码">
-                <el-input v-model="smtpForm.pass" type="password" show-password />
-              </el-form-item>
-              <el-form-item label="发件人">
-                <el-input v-model="smtpForm.from" placeholder="Eden Registry <noreply@example.com>" />
-              </el-form-item>
-              <el-button type="primary" @click="handleNonBlockingSave" style="width: 100%">保存设置</el-button>
-            </el-form>
           </section>
         </div>
       </el-tab-pane>
 
       <el-tab-pane name="monitoring">
         <template #label>
-          <span class="tab-label"><el-icon><Monitor /></el-icon>告警监控</span>
+          <span class="tab-label"><el-icon><Monitor /></el-icon>告警配置</span>
         </template>
 
-        <div class="tab-content">
-          <section class="settings-section glass-card monitoring-card">
+        <div class="tab-content ops-settings-tab" v-loading="alertLoading">
+          <section class="settings-section glass-card ops-settings-section">
             <div class="section-header">
               <el-icon><Bell /></el-icon>
-              <h4>告警配置</h4>
-              <el-switch v-model="alarmForm.enabled" />
+              <div class="section-title-with-tip">
+                <h4>告警模板</h4>
+                <el-tooltip content="模板绑定消息渠道，用于拼装触发后的通知内容。" placement="top">
+                  <el-icon class="help-icon"><InfoFilled /></el-icon>
+                </el-tooltip>
+              </div>
+              <div class="section-actions">
+                <el-button type="primary" link @click="openTemplateDialog('create')">新增模板</el-button>
+              </div>
             </div>
-            <el-form label-position="top" class="compact-form" :disabled="!alarmForm.enabled">
-              <el-form-item label="健康阈值">
-                <div class="slider-row">
-                  <el-slider v-model="alarmForm.threshold" :min="10" :max="99" style="flex: 1" />
-                  <span class="val-text">{{ alarmForm.threshold }}%</span>
-                </div>
-              </el-form-item>
-              <el-form-item label="通知渠道">
-                <el-radio-group v-model="alarmForm.contact" class="channel-radio">
-                  <el-radio label="email" border>邮件</el-radio>
-                  <el-radio label="webhook" border>Webhook</el-radio>
-                </el-radio-group>
-              </el-form-item>
-              <el-button type="primary" @click="handleNonBlockingSave" style="width: 100%">保存设置</el-button>
-            </el-form>
+
+            <el-table :data="alertConfig.templates" class="custom-table" empty-text="暂无告警模板">
+              <el-table-column prop="name" label="名称" min-width="160" />
+              <el-table-column label="消息渠道" min-width="180">
+                <template #default="{ row }">{{ channelName(row.channel_id) }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="140" align="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openTemplateDialog('edit', row)">编辑</el-button>
+                  <el-button link type="danger" @click="removeTemplate(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+
+          <section class="settings-section glass-card ops-settings-section">
+            <div class="section-header">
+              <el-icon><Monitor /></el-icon>
+              <div class="section-title-with-tip">
+                <h4>事件阈值规则</h4>
+                <el-tooltip content="按事件类型、阈值次数和统计窗口触发告警，不保存历史记录。" placement="top">
+                  <el-icon class="help-icon"><InfoFilled /></el-icon>
+                </el-tooltip>
+              </div>
+              <div class="section-actions">
+                <el-button :icon="RefreshRight" @click="reloadAlertRuleConfig">重新加载</el-button>
+                <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">新增规则</el-button>
+              </div>
+            </div>
+
+            <el-table :data="alertConfig.rules" class="custom-table" empty-text="暂无告警规则">
+              <el-table-column prop="name" label="名称" min-width="160" />
+              <el-table-column prop="event_code" label="事件" min-width="160" />
+              <el-table-column label="触发阈值" width="180">
+                <template #default="{ row }">
+                  <span class="muted-text">{{ row.window_sec }} 秒内 {{ row.threshold }} 次</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="模板" min-width="220">
+                <template #default="{ row }">
+                  <span class="muted-text">{{ row.template_ids.map(templateName).join('、') || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="140" align="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openRuleDialog('edit', row)">编辑</el-button>
+                  <el-button link type="danger" @click="removeRule(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div class="ops-footer">
+              <span class="muted-text">最近保存：{{ formatConfigTime(alertConfig.updated_at) }}</span>
+              <el-button type="primary" :loading="alertSaving" :disabled="!alertRuleDirty" @click="saveAlertRuleConfig">
+                保存告警配置
+              </el-button>
+            </div>
           </section>
         </div>
       </el-tab-pane>
@@ -750,6 +1155,101 @@ onMounted(() => {
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
         <el-button type="primary" @click="handleGenerate">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="channelDialogVisible" :title="channelMode === 'create' ? '新增消息渠道' : '编辑消息渠道'" width="680px">
+      <el-form label-position="top" class="compact-form">
+        <div class="ops-form-grid">
+          <el-form-item label="名称">
+            <el-input v-model="channelForm.name" />
+          </el-form-item>
+          <el-form-item label="类型">
+            <el-select v-model="channelForm.type">
+              <el-option label="Webhook" value="webhook" />
+              <el-option label="Email" value="email" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="提供方">
+            <el-select v-model="channelForm.provider" :disabled="channelForm.type === 'email'">
+              <el-option v-for="item in messageProviderOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="启用">
+            <el-switch v-model="channelForm.enabled" />
+          </el-form-item>
+        </div>
+        <el-form-item label="描述">
+          <el-input v-model="channelForm.description" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="配置(JSON)">
+          <el-input v-model="channelForm.configText" type="textarea" :rows="8" placeholder='{"url":"https://example.com/webhook"}' />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="channelDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveChannelDraft">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="templateDialogVisible" :title="templateMode === 'create' ? '新增告警模板' : '编辑告警模板'" width="680px">
+      <el-form label-position="top" class="compact-form">
+        <div class="ops-form-grid">
+          <el-form-item label="模板名称">
+            <el-input v-model="templateForm.name" />
+          </el-form-item>
+          <el-form-item label="消息渠道">
+            <el-select v-model="templateForm.channel_id">
+              <el-option v-for="item in enabledChannels" :key="item.id" :label="item.name" :value="item.id" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <el-form-item label="标题模板">
+          <el-input v-model="templateForm.title_template" placeholder="例如：服务告警 - {{ event_code }}" />
+        </el-form-item>
+        <el-form-item label="内容模板">
+          <el-input v-model="templateForm.body_template" type="textarea" :rows="5" placeholder="例如：{{ event_code }} 在 {{ window_sec }} 秒内触发 {{ threshold }} 次" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="templateForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="templateDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveTemplateDraft">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="ruleDialogVisible" :title="ruleMode === 'create' ? '新增告警规则' : '编辑告警规则'" width="680px">
+      <el-form label-position="top" class="compact-form">
+        <div class="ops-form-grid">
+          <el-form-item label="规则名称">
+            <el-input v-model="ruleForm.name" />
+          </el-form-item>
+          <el-form-item label="事件类型">
+            <el-select v-model="ruleForm.event_code">
+              <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="阈值次数">
+            <el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="统计窗口(秒)">
+            <el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <el-form-item label="关联模板">
+          <el-select v-model="ruleForm.template_ids" multiple collapse-tags collapse-tags-tooltip>
+            <el-option v-for="item in enabledTemplates" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="ruleForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="ruleDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveRuleDraft">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -831,6 +1331,18 @@ onMounted(() => {
   max-width: 520px;
 }
 
+.ops-settings-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ops-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .glass-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -871,6 +1383,12 @@ onMounted(() => {
 .section-header .el-icon {
   font-size: 20px;
   color: var(--accent-blue);
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .help-icon {
@@ -1516,6 +2034,23 @@ onMounted(() => {
   line-height: 1.5;
 }
 
+.muted-text {
+  color: var(--text-secondary);
+}
+
+.ops-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ops-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
 .form-inline :deep(.el-input),
 .form-inline :deep(.el-input-number) {
   flex: 1;
@@ -1592,7 +2127,8 @@ onMounted(() => {
 @media (max-width: 1320px) {
   .basic-grid,
   .channels-grid,
-  .form-grid {
+  .form-grid,
+  .ops-form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1623,6 +2159,18 @@ onMounted(() => {
   .event-checkbox-grid,
   .channel-radio {
     grid-template-columns: 1fr;
+  }
+
+  .section-actions,
+  .ops-footer {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .section-actions :deep(.el-button),
+  .ops-footer :deep(.el-button) {
+    width: 100%;
   }
 
   .registry-form-grid {

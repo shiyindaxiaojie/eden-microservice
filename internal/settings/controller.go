@@ -52,6 +52,8 @@ type Controller interface {
 	SetInstanceRemovalDelaySeconds(n int) error
 	GetInstanceRemovalDelaySeconds() int
 	SetAPIKeyAuthEnabled(enabled bool) error
+	SetNotifyAlertNodeID(nodeID string) error
+	GetNotifyAlertNodeID() string
 }
 
 type CPNode interface {
@@ -526,6 +528,7 @@ func (c *controller) GetSystemSettings() *SystemSettings {
 		HeartbeatMaxFailures:        c.profile.GetHeartbeatMaxFailures(),
 		InstanceRemovalDelaySeconds: c.profile.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:           c.profile.GetAPIKeyAuthEnabled(),
+		NotifyAlertNodeID:           c.profile.GetNotifyAlertNodeID(),
 	}
 }
 
@@ -560,6 +563,9 @@ func (c *controller) ApplySystemSettings(systemSettings *SystemSettings) (*Apply
 	if target.InstanceRemovalDelaySeconds <= 0 {
 		target.InstanceRemovalDelaySeconds = c.profile.GetInstanceRemovalDelaySeconds()
 	}
+	if target.NotifyAlertNodeID == "" {
+		target.NotifyAlertNodeID = c.profile.GetNotifyAlertNodeID()
+	}
 	restartRequired, restartMessage := c.evaluateRestartRequirement(&target)
 
 	if err := c.SetEnvironment(target.Mode); err != nil {
@@ -587,6 +593,9 @@ func (c *controller) ApplySystemSettings(systemSettings *SystemSettings) (*Apply
 		return nil, err
 	}
 	if err := c.SetAPIKeyAuthEnabled(target.APIKeyAuthEnabled); err != nil {
+		return nil, err
+	}
+	if err := c.SetNotifyAlertNodeID(target.NotifyAlertNodeID); err != nil {
 		return nil, err
 	}
 	return &ApplySystemSettingsResult{
@@ -698,6 +707,10 @@ func (c *controller) SaveSettingLocalV2(key string, value interface{}) {
 		if v, ok := coerceBool(value); ok {
 			c.profile.SetAPIKeyAuthEnabled(v)
 		}
+	case "notify_alert_node_id":
+		if v, ok := value.(string); ok {
+			c.profile.SetNotifyAlertNodeID(strings.TrimSpace(v))
+		}
 	}
 	c.profile.Save()
 }
@@ -716,6 +729,27 @@ func (c *controller) SetAPIKeyAuthEnabled(enabled bool) error {
 	c.profile.Save()
 	c.syncSettingsToPeers(map[string]interface{}{"api_key_auth_enabled": enabled})
 	return nil
+}
+
+func (c *controller) SetNotifyAlertNodeID(nodeID string) error {
+	if err := c.ensureClusterWritable(); err != nil {
+		return err
+	}
+	nodeID = strings.TrimSpace(nodeID)
+	if c.profile.GetMode() == "cp" && c.cpNode != nil {
+		cmd := replication.Command{Type: replication.CmdSetNotifyAlertNodeID, NodeID: nodeID}
+		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	c.profile.SetNotifyAlertNodeID(nodeID)
+	c.profile.Save()
+	c.syncSettingsToPeers(map[string]interface{}{"notify_alert_node_id": nodeID})
+	return nil
+}
+
+func (c *controller) GetNotifyAlertNodeID() string {
+	return c.profile.GetNotifyAlertNodeID()
 }
 
 func (c *controller) SetSeeds(seeds []string) error {

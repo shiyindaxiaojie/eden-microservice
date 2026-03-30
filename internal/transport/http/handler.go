@@ -4,10 +4,13 @@ import (
 	"net/http"
 	"sync"
 
+	consuladapter "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
 )
 
@@ -18,6 +21,9 @@ type Handler struct {
 	auth      auth.Authenticator
 	settings  settings.Controller
 	cluster   cluster.Membership
+	notify    *notify.Store
+	alerts    *alert.Store
+	consul    *consuladapter.HTTPAdapter
 	nodeCache sync.Map // map[string]config.Config
 	mux       *http.ServeMux
 }
@@ -34,6 +40,9 @@ func NewHandler(cfg *config.Config,
 		auth:      authenticator,
 		settings:  settingsController,
 		cluster:   clusterMembership,
+		notify:    notify.NewStore(cfg.DataDir),
+		alerts:    alert.NewStore(cfg.DataDir),
+		consul:    consuladapter.NewHTTPAdapter(cfg, catalogRegistry),
 		nodeCache: sync.Map{},
 		mux:       http.NewServeMux(),
 	}
@@ -58,11 +67,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) registerRoutes() {
 	// --- Catalog API (Service Registration & Discovery) ---
 	h.mux.Handle("/v1/catalog/register", h.APIKey(http.HandlerFunc(h.registerService)))
+	h.mux.Handle("/v1/catalog/deregister", h.APIKey(http.HandlerFunc(h.consul.DeregisterCatalogService)))
 	h.mux.Handle("/v1/catalog/instance/status", h.ConsolidatedAuth("admin", "developer")(http.HandlerFunc(h.setInstanceStatus)))
 	h.mux.Handle("/v1/catalog/heartbeat", h.APIKey(http.HandlerFunc(h.heartbeat)))
 	h.mux.Handle("/v1/catalog/topology/report", h.APIKey(http.HandlerFunc(h.reportTopology)))
 	h.mux.HandleFunc("/v1/catalog/services", h.listServices)
 	h.mux.HandleFunc("/v1/catalog/service/", h.getService)
+	h.mux.HandleFunc("/v1/catalog/datacenters", h.consul.ListDatacenters)
+	h.mux.Handle("/v1/agent/service/register", h.APIKey(http.HandlerFunc(h.registerService)))
+	h.mux.Handle("/v1/agent/service/deregister/", h.APIKey(http.HandlerFunc(h.consul.DeregisterAgentService)))
+	h.mux.Handle("/v1/agent/check/update/", h.APIKey(http.HandlerFunc(h.consul.UpdateAgentCheck)))
+	h.mux.Handle("/v1/agent/check/", h.APIKey(http.HandlerFunc(h.consul.UpdateAgentCheckLegacy)))
+	h.mux.HandleFunc("/v1/health/service/", h.consul.GetHealthService)
+	h.registerNacosRoutes("")
+	h.registerNacosRoutes("/nacos")
 	h.mux.HandleFunc("/v1/catalog/dependency-graph", h.getDependencyGraph)
 	h.mux.HandleFunc("/v1/catalog/topology", h.getTopology)
 
@@ -116,6 +134,8 @@ func (h *Handler) registerRoutes() {
 			h.updateStorage(w, r)
 		}
 	}))))
+	h.mux.Handle("/v1/notify/config", h.Auth(adminOrDev(http.HandlerFunc(h.notificationConfig))))
+	h.mux.Handle("/v1/alert/config", h.Auth(adminOrDev(http.HandlerFunc(h.alertConfig))))
 
 	// --- Internal Sync (no auth, for inter-node communication) ---
 	h.mux.HandleFunc("/internal/sync/seeds", h.syncSeeds)

@@ -12,8 +12,10 @@ import (
 	"sync"
 	"time"
 
-	nacosmodel "github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/vo"
+	consulcompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
+	nacoscompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/compat"
+	nacosmodel "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/model"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/vo"
 )
 
 // INamingClient is the Nacos naming client interface.
@@ -60,22 +62,25 @@ func NewNamingClient(param vo.NacosClientParam) (INamingClient, error) {
 }
 
 func (c *NamingClient) RegisterInstance(param vo.RegisterInstanceParam) (bool, error) {
+	ref := nacoscompat.ParseService(param.ServiceName, param.GroupName)
+	metadata := nacoscompat.MetadataWithRuntime(param.Metadata, param.ClusterName, param.Ephemeral)
 	body := map[string]interface{}{
-		"id":           fmt.Sprintf("%s-%s-%d", param.ServiceName, param.Ip, param.Port),
-		"service_name": param.ServiceName,
+		"id":           nacoscompat.BuildInstanceID(ref, param.ClusterName, param.Ip, int(param.Port)),
+		"service_name": ref.FullName,
 		"host":         param.Ip,
 		"port":         param.Port,
 		"weight":       int(param.Weight),
-		"metadata":     param.Metadata,
+		"metadata":     metadata,
 	}
 	err := c.doPost("/v1/catalog/register", body)
 	return err == nil, err
 }
 
 func (c *NamingClient) DeregisterInstance(param vo.DeregisterInstanceParam) (bool, error) {
-	instanceID := fmt.Sprintf("%s-%s-%d", param.ServiceName, param.Ip, param.Port)
+	ref := nacoscompat.ParseService(param.ServiceName, param.GroupName)
+	instanceID := nacoscompat.BuildInstanceID(ref, param.Cluster, param.Ip, int(param.Port))
 	body := map[string]string{
-		"service_name": param.ServiceName,
+		"service_name": ref.FullName,
 		"instance_id":  instanceID,
 		"status":       "offline",
 	}
@@ -84,7 +89,7 @@ func (c *NamingClient) DeregisterInstance(param vo.DeregisterInstanceParam) (boo
 }
 
 func (c *NamingClient) GetService(param vo.GetServiceParam) (nacosmodel.ServiceInfo, error) {
-	instances, err := c.fetchInstances(param.ServiceName, false)
+	instances, err := c.fetchInstances(param.ServiceName, param.GroupName, false)
 	if err != nil {
 		return nacosmodel.ServiceInfo{}, err
 	}
@@ -95,15 +100,15 @@ func (c *NamingClient) GetService(param vo.GetServiceParam) (nacosmodel.ServiceI
 }
 
 func (c *NamingClient) SelectAllInstances(param vo.SelectAllInstancesParam) ([]nacosmodel.Instance, error) {
-	return c.fetchInstances(param.ServiceName, false)
+	return c.fetchInstances(param.ServiceName, param.GroupName, false)
 }
 
 func (c *NamingClient) SelectInstances(param vo.SelectInstancesParam) ([]nacosmodel.Instance, error) {
-	return c.fetchInstances(param.ServiceName, param.HealthyOnly)
+	return c.fetchInstances(param.ServiceName, param.GroupName, param.HealthyOnly)
 }
 
 func (c *NamingClient) SelectOneHealthyInstance(param vo.SelectOneHealthyInstanceParam) (*nacosmodel.Instance, error) {
-	instances, err := c.fetchInstances(param.ServiceName, true)
+	instances, err := c.fetchInstances(param.ServiceName, param.GroupName, true)
 	if err != nil {
 		return nil, err
 	}
@@ -114,9 +119,10 @@ func (c *NamingClient) SelectOneHealthyInstance(param vo.SelectOneHealthyInstanc
 }
 
 func (c *NamingClient) Subscribe(param *vo.SubscribeParam) error {
+	ref := nacoscompat.ParseService(param.ServiceName, param.GroupName)
 	stopCh := make(chan struct{})
 	c.mu.Lock()
-	c.subs[param.ServiceName] = stopCh
+	c.subs[ref.FullName] = stopCh
 	c.mu.Unlock()
 
 	go func() {
@@ -131,7 +137,7 @@ func (c *NamingClient) Subscribe(param *vo.SubscribeParam) error {
 			case <-c.stopCh:
 				return
 			case <-ticker.C:
-				instances, err := c.fetchInstances(param.ServiceName, false)
+				instances, err := c.fetchInstances(param.ServiceName, param.GroupName, false)
 				if err != nil {
 					param.SubscribeCallback(nil, err)
 					continue
@@ -148,11 +154,12 @@ func (c *NamingClient) Subscribe(param *vo.SubscribeParam) error {
 }
 
 func (c *NamingClient) Unsubscribe(param *vo.SubscribeParam) error {
+	ref := nacoscompat.ParseService(param.ServiceName, param.GroupName)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if ch, ok := c.subs[param.ServiceName]; ok {
+	if ch, ok := c.subs[ref.FullName]; ok {
 		close(ch)
-		delete(c.subs, param.ServiceName)
+		delete(c.subs, ref.FullName)
 	}
 	return nil
 }
@@ -163,14 +170,14 @@ func (c *NamingClient) GetAllServicesInfo(param vo.GetAllServiceInfoParam) (naco
 		return nacosmodel.ServiceList{}, err
 	}
 
-	var services []struct {
-		Name string `json:"name"`
+	services, err := consulcompat.DecodeServicesMap(data)
+	if err != nil {
+		return nacosmodel.ServiceList{}, err
 	}
-	json.Unmarshal(data, &services)
 
 	names := make([]string, 0, len(services))
-	for _, s := range services {
-		names = append(names, s.Name)
+	for name := range services {
+		names = append(names, name)
 	}
 
 	return nacosmodel.ServiceList{
@@ -181,8 +188,9 @@ func (c *NamingClient) GetAllServicesInfo(param vo.GetAllServiceInfoParam) (naco
 
 // --- internal helpers ---
 
-func (c *NamingClient) fetchInstances(serviceName string, healthyOnly bool) ([]nacosmodel.Instance, error) {
-	path := fmt.Sprintf("/v1/catalog/service/%s", serviceName)
+func (c *NamingClient) fetchInstances(serviceName, groupName string, healthyOnly bool) ([]nacosmodel.Instance, error) {
+	ref := nacoscompat.ParseService(serviceName, groupName)
+	path := fmt.Sprintf("/v1/catalog/service/%s", ref.FullName)
 	if healthyOnly {
 		path += "?passing=true"
 	}
@@ -191,29 +199,24 @@ func (c *NamingClient) fetchInstances(serviceName string, healthyOnly bool) ([]n
 		return nil, err
 	}
 
-	var edenInstances []struct {
-		ID          string            `json:"id"`
-		ServiceName string            `json:"service_name"`
-		Host        string            `json:"host"`
-		Port        int               `json:"port"`
-		Weight      int               `json:"weight"`
-		Status      string            `json:"status"`
-		Metadata    map[string]string `json:"metadata"`
+	instances, err := consulcompat.DecodeCatalogInstances(data)
+	if err != nil {
+		return nil, err
 	}
-	json.Unmarshal(data, &edenInstances)
 
-	result := make([]nacosmodel.Instance, 0, len(edenInstances))
-	for _, ei := range edenInstances {
+	result := make([]nacosmodel.Instance, 0, len(instances))
+	for _, ei := range instances {
+		serviceRef := nacoscompat.ParseService(ei.ServiceName, "")
 		result = append(result, nacosmodel.Instance{
 			InstanceId:  ei.ID,
-			Ip:          ei.Host,
+			Ip:          ei.Address,
 			Port:        uint64(ei.Port),
 			Weight:      float64(ei.Weight),
 			Healthy:     ei.Status == "passing",
 			Enable:      true,
 			Ephemeral:   true,
-			ServiceName: ei.ServiceName,
-			Metadata:    ei.Metadata,
+			ServiceName: serviceRef.Name,
+			Metadata:    nacoscompat.UserMetadata(ei.Metadata),
 		})
 	}
 	return result, nil

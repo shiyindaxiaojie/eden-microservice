@@ -136,6 +136,49 @@ function serviceHealthTextByState(state: ServiceHealthState) {
   }
 }
 
+
+function normalizeServicesPayload(payload: unknown, graph: TopologyGraph): ServiceSummary[] {
+  const summaries = new Map<string, ServiceSummary>()
+
+  for (const node of graph.nodes || []) {
+    summaries.set(node.name, {
+      name: node.name,
+      instance_count: node.instance_count || 0,
+      healthy_count: node.healthy_count || 0,
+    })
+  }
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      if (!item || typeof item !== 'object') continue
+
+      const row = item as Partial<ServiceSummary>
+      const name = typeof row.name === 'string' ? row.name : ''
+      if (!name) continue
+
+      const existing = summaries.get(name)
+      summaries.set(name, {
+        name,
+        instance_count: typeof row.instance_count === 'number' ? row.instance_count : existing?.instance_count || 0,
+        healthy_count: typeof row.healthy_count === 'number' ? row.healthy_count : existing?.healthy_count || 0,
+        subscriber_count: typeof row.subscriber_count === 'number' ? row.subscriber_count : existing?.subscriber_count,
+      })
+    }
+  } else if (payload && typeof payload === 'object') {
+    for (const name of Object.keys(payload as Record<string, unknown>)) {
+      if (!name) continue
+      const existing = summaries.get(name)
+      summaries.set(name, {
+        name,
+        instance_count: existing?.instance_count || 0,
+        healthy_count: existing?.healthy_count || 0,
+        subscriber_count: existing?.subscriber_count,
+      })
+    }
+  }
+
+  return [...summaries.values()].sort((left, right) => left.name.localeCompare(right.name))
+}
 const serviceEntries = computed<ServiceEntry[]>(() =>
   services.value.map((service) => {
     const topologyNode = topologyNodeMap.value[service.name]
@@ -252,8 +295,8 @@ async function fetchWorkspace(showLoading = true) {
       getTopology(currentNamespace.value),
     ])
 
-    services.value = servicesRes.data || []
     topology.value = topologyRes.data || { namespace: currentNamespace.value, nodes: [], edges: [] }
+    services.value = normalizeServicesPayload(servicesRes.data, topology.value)
 
     const subscribersEntries = await Promise.all(
       services.value.map(async (service) => {

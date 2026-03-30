@@ -13,26 +13,28 @@ import (
 	"syscall"
 	"time"
 
+	consulapi "github.com/hashicorp/consul/api"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/consul"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
+	consulhelper "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/consul/internal/consulapi"
 )
 
 func main() {
 	logger.NewBuilder().AddConsole().Init()
 
 	// 初始化基于 Consul API 的注册中心实现，后续通过统一的 registry 接口演示注册、发现、订阅和心跳。
-	reg, err := consul.NewRegistry(&registry.Config{
-		Addresses:  []string{envOr("CONSUL_ADDR", "127.0.0.1:8500")},
-		APIKey:     envOr("CONSUL_API_KEY", ""),
-		Datacenter: envOr("CONSUL_DATACENTER", "dc1"),
-	})
+	cfg := consulapi.DefaultConfig()
+	cfg.Address = envOr("CONSUL_ADDR", "127.0.0.1:8500")
+	cfg.Token = envOr("CONSUL_API_KEY", "")
+	cfg.Datacenter = envOr("CONSUL_DATACENTER", "dc1")
+
+	rawClient, err := consulapi.NewClient(cfg)
 	if err != nil {
-		logger.Fatal("create registry failed: %v", err)
+		logger.Fatal("create consul client failed: %v", err)
 	}
+	reg := consulhelper.New(rawClient)
 
 	// 定义当前服务实例元信息，注册和心跳都会复用这份数据。
-	instance := &registry.ServiceInstance{
+	instance := &consulhelper.ServiceInstance{
 		ID:          envOr("SERVICE_ID", "consul-user-center-1"),
 		ServiceName: "consul-user-center",
 		Host:        envOr("SERVICE_HOST", "127.0.0.1"),
@@ -47,7 +49,7 @@ func main() {
 	logger.Info("registered %s on %s:%d", instance.ID, instance.Host, instance.Port)
 
 	// 订阅依赖服务的实例变化，演示注册中心的变更通知能力。
-	if err := reg.Subscribe("consul-auth-center", func(items []*registry.ServiceInstance) {
+	if err := reg.Subscribe("consul-auth-center", func(items []*consulhelper.ServiceInstance) {
 		logger.Info("[subscribe] consul-auth-center updated: %d instance(s)", len(items))
 	}); err != nil {
 		logger.Warn("subscribe consul-auth-center failed: %v", err)
@@ -75,7 +77,7 @@ func main() {
 	_ = reg.Close()
 }
 
-func newUserCenterHandler(reg registry.Registry, instance *registry.ServiceInstance) http.Handler {
+func newUserCenterHandler(reg *consulhelper.Client, instance *consulhelper.ServiceInstance) http.Handler {
 	// HTTP 路由只是为了演示服务间调用链，本身不属于注册中心接入逻辑。
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +155,7 @@ func shutdownHTTPServer(server *http.Server) {
 	_ = server.Shutdown(ctx)
 }
 
-func callJSON(reg registry.Registry, serviceName, path string) (interface{}, string, error) {
+func callJSON(reg *consulhelper.Client, serviceName, path string) (interface{}, string, error) {
 	items, err := reg.Discovery(serviceName)
 	if err != nil {
 		return nil, "", err

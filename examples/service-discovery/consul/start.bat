@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ======================================================
-echo  pkg/consul Service Discovery Demo
+echo  Official Consul API Service Discovery Demo
 echo ======================================================
 echo.
 

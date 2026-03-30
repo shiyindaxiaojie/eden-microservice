@@ -24,6 +24,7 @@ type Profile struct {
 	removalDelay  int
 	apiKeyAuth    bool
 	apiKeyAuthSet bool
+	notifyAlertNodeID string
 	dataPath      string
 }
 
@@ -178,7 +179,19 @@ func (s *Profile) SetAPIKeyAuthEnabled(enabled bool) {
 	s.apiKeyAuthSet = true
 }
 
-func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool) {
+func (s *Profile) GetNotifyAlertNodeID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.notifyAlertNodeID
+}
+
+func (s *Profile) SetNotifyAlertNodeID(nodeID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.notifyAlertNodeID = nodeID
+}
+
+func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.mode = mode
@@ -202,6 +215,7 @@ func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, 
 	}
 	s.apiKeyAuth = apiKeyAuth
 	s.apiKeyAuthSet = true
+	s.notifyAlertNodeID = notifyAlertNodeID
 	s.Save()
 }
 
@@ -222,6 +236,7 @@ func (s *Profile) Load() {
 			HBMaxFail          int       `json:"heartbeat_max_failures"`
 			RemovalDelay       int       `json:"instance_removal_delay_seconds"`
 			APIKeyAuthEnabled  *bool     `json:"api_key_auth_enabled"`
+			NotifyAlertNodeID  string    `json:"notify_alert_node_id"`
 		}
 		if err := json.Unmarshal(data, &meta); err == nil {
 			s.mode = meta.Mode
@@ -246,6 +261,7 @@ func (s *Profile) Load() {
 				s.apiKeyAuth = *meta.APIKeyAuthEnabled
 				s.apiKeyAuthSet = true
 			}
+			s.notifyAlertNodeID = meta.NotifyAlertNodeID
 			s.loaded = true
 		}
 	}
@@ -280,6 +296,7 @@ func (s *Profile) Save() {
 		HBMaxFail          int      `json:"heartbeat_max_failures"`
 		RemovalDelay       int      `json:"instance_removal_delay_seconds"`
 		APIKeyAuthEnabled  bool     `json:"api_key_auth_enabled"`
+		NotifyAlertNodeID  string   `json:"notify_alert_node_id,omitempty"`
 	}{
 		Mode:               s.GetMode(),
 		Environment:        s.GetEnvironment(),
@@ -290,6 +307,7 @@ func (s *Profile) Save() {
 		HBMaxFail:          s.GetHeartbeatMaxFailures(),
 		RemovalDelay:       s.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:  s.GetAPIKeyAuthEnabled(),
+		NotifyAlertNodeID:  s.GetNotifyAlertNodeID(),
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(settingsFile, data, 0644)

@@ -1,13 +1,24 @@
-# pkg/nacos 集成示例
+# 官方 Nacos SDK 集成示例
 
-本目录是一套独立的 `pkg/nacos` 集成示例。这里的 `pkg/nacos` 是仓库内置的兼容层，底层走 Eden 的 HTTP 接口。
+本目录演示如何直接使用官方 `github.com/nacos-group/nacos-sdk-go/v2` 接入 Eden。
+
+目标效果是：
+
+- 保持正常的 Nacos SDK 调用方式
+- 只修改 `NACOS_ADDR`
+- 从真实 Nacos 切换到 Eden 时不需要改业务代码
+
+Eden 对外提供了 Nacos 兼容的 HTTP / gRPC 接口，示例里的三个服务直接使用官方 Naming Client 完成注册、发现和订阅。
 
 ## 目录结构
 
 - `cmd/auth-center`
 - `cmd/user-center`
 - `cmd/order-center`
+- `internal/nacosapi`
 - `start.bat`
+
+`internal/nacosapi` 只是一个很薄的示例 helper，用来复用三个服务的注册、发现和订阅流程；核心调用仍然是官方 Nacos SDK。
 
 ## 启动方式
 
@@ -23,7 +34,7 @@ NACOS_ADDR=127.0.0.1:8500
 ./examples/service-discovery/nacos/start.bat
 ```
 
-服务名：
+## 服务名
 
 - `nacos-auth-center`
 - `nacos-user-center`
@@ -31,9 +42,9 @@ NACOS_ADDR=127.0.0.1:8500
 
 实例端口：
 
-- `auth-center`：`23002`、`23012`、`23022`
-- `user-center`：`23001`、`23011`
-- `order-center`：`23003`、`23013`
+- `auth-center`: `23002`, `23012`, `23022`
+- `user-center`: `23001`, `23011`
+- `order-center`: `23003`, `23013`
 
 ## 服务依赖关系
 

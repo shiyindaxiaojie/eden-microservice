@@ -115,10 +115,11 @@ func (h *Handler) RBAC(roles ...string) func(http.Handler) http.Handler {
 // APIKey handles API Key authentication for service registration.
 func (h *Handler) APIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		settings := h.settings.GetSystemSettings()
 		apiKeyEnabled := h.config.Auth.APIKey.Enabled
-		if settings != nil {
-			apiKeyEnabled = settings.APIKeyAuthEnabled
+		if h.settings != nil {
+			if systemSettings := h.settings.GetSystemSettings(); systemSettings != nil {
+				apiKeyEnabled = systemSettings.APIKeyAuthEnabled
+			}
 		}
 		if !apiKeyEnabled {
 			next.ServeHTTP(w, r)
@@ -126,6 +127,9 @@ func (h *Handler) APIKey(next http.Handler) http.Handler {
 		}
 
 		key := r.Header.Get("X-API-Key")
+		if key == "" {
+			key = r.Header.Get("X-Consul-Token")
+		}
 		if key == "" {
 			key = r.URL.Query().Get("api_key")
 		}
@@ -143,7 +147,7 @@ func (h *Handler) APIKey(next http.Handler) http.Handler {
 			}
 		}
 
-		if !valid {
+		if !valid && h.auth != nil {
 			if _, ok := h.auth.VerifyAPIKey(key); ok {
 				valid = true
 			}
@@ -164,6 +168,9 @@ func (h *Handler) ConsolidatedAuth(roles ...string) func(http.Handler) http.Hand
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get("X-API-Key")
 			if key == "" {
+				key = r.Header.Get("X-Consul-Token")
+			}
+			if key == "" {
 				key = r.URL.Query().Get("api_key")
 			}
 
@@ -175,7 +182,7 @@ func (h *Handler) ConsolidatedAuth(roles ...string) func(http.Handler) http.Hand
 						break
 					}
 				}
-				if !valid {
+				if !valid && h.auth != nil {
 					if _, ok := h.auth.VerifyAPIKey(key); ok {
 						valid = true
 					}

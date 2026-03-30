@@ -146,17 +146,21 @@ watch(
 )
 
 const navItems = computed(() => {
-  const items = [
+
+  const baseItems = [
     { path: '/', label: t.value.nav.dashboard, icon: 'Odometer' },
     { path: '/services', label: t.value.nav.services, icon: 'Grid' },
     { path: '/namespaces', label: t.value.nav.namespaces, icon: 'Collection' },
     { path: '/cluster', label: t.value.nav.cluster, icon: 'Connection' },
+  ]
+  const adminItems = [
     { path: '/rbac', label: t.value.nav.accessControl, icon: 'Lock' },
     { path: '/settings', label: t.value.nav.settings, icon: 'Setting' },
   ]
 
-  if (userRole.value === 'admin') return items
-  return items.filter((item) => ['/', '/services', '/namespaces', '/cluster'].includes(item.path))
+  if (userRole.value === 'admin') return [...baseItems, ...adminItems]
+  if (userRole.value === 'developer') return baseItems
+  return baseItems
 })
 
 const currentTitle = computed(() => {

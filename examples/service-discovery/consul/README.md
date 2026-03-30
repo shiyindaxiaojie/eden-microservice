@@ -1,47 +1,50 @@
-# pkg/consul 集成示例
+# Consul Integration Example
 
-本目录是一套独立的 `pkg/consul` 集成示例。这里的 `pkg/consul` 是仓库内置的兼容层，底层走 Eden 的 HTTP 接口。
+This example now uses the official [`github.com/hashicorp/consul/api`](https://pkg.go.dev/github.com/hashicorp/consul/api) client directly.
 
-## 目录结构
+The point of the demo is:
+
+- keep normal Consul client code
+- only change `CONSUL_ADDR`
+- switch from real Consul to Eden without changing business logic
+
+## Layout
 
 - `cmd/auth-center`
 - `cmd/user-center`
 - `cmd/order-center`
+- `internal/consulapi`
 - `start.bat`
 
-## 启动方式
+`internal/consulapi` is only a tiny demo helper around the official Consul client so the three services can share the same register/discovery/heartbeat flow.
 
-默认注册中心地址：
+## Start
+
+Default registry address:
 
 ```text
 CONSUL_ADDR=127.0.0.1:8500
 ```
 
-启动：
+Run:
 
 ```bash
 ./examples/service-discovery/consul/start.bat
 ```
 
-服务名：
+## Services
 
 - `consul-auth-center`
 - `consul-user-center`
 - `consul-order-center`
 
-实例端口：
+Ports:
 
-- `auth-center`：`22002`、`22012`、`22022`
-- `user-center`：`22001`、`22011`
-- `order-center`：`22003`、`22013`
+- `auth-center`: `22002`, `22012`, `22022`
+- `user-center`: `22001`, `22011`
+- `order-center`: `22003`, `22013`
 
-## 服务依赖关系
-
-- `auth-center` 依赖 `user-center`
-- `user-center` 依赖 `auth-center`
-- `order-center` 同时依赖 `auth-center` 和 `user-center`
-
-## HTTP 测试接口
+## HTTP Endpoints
 
 - `GET /api/auth/token?user_id=1`
 - `GET /api/auth/permissions/{userId}`
@@ -52,7 +55,7 @@ CONSUL_ADDR=127.0.0.1:8500
 - `GET /api/orders/demo?user_id=1`
 - `GET /api/health`
 
-测试示例：
+Examples:
 
 ```bash
 curl "http://127.0.0.1:22002/api/auth/token?user_id=1"

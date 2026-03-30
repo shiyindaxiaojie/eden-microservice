@@ -11,6 +11,7 @@ type SystemSettings struct {
 	HeartbeatMaxFailures        int      `json:"heartbeat_max_failures"`
 	InstanceRemovalDelaySeconds int      `json:"instance_removal_delay_seconds"`
 	APIKeyAuthEnabled           bool     `json:"api_key_auth_enabled"`
+	NotifyAlertNodeID           string   `json:"notify_alert_node_id,omitempty"`
 }
 
 type ApplySystemSettingsResult struct {

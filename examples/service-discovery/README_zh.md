@@ -6,31 +6,25 @@
 - `user-center`
 - `order-center`
 
-每套示例都会为每个服务启动 2 到 3 个实例，并暴露 HTTP 接口，方便直接验证注册、发现、订阅以及服务间调用链路。
+每套示例都会启动 2 到 3 个服务实例，并暴露 HTTP 接口，方便直接验证注册、发现、订阅和服务间调用链路。
 
 ## 示例分类
 
 - `eden`
-  使用原生 Eden 客户端，演示直接接入 Eden 服务发现。
+  使用原生 Eden 客户端，演示直接接入 Eden 的方式。
 - `consul`
-  使用 Consul 兼容适配层，演示通过统一注册中心接口进行集成。
+  使用官方 `github.com/hashicorp/consul/api` 客户端，对接 Eden 提供的 Consul 兼容 HTTP 接口。目标效果是只改注册中心地址，业务代码不动。
 - `nacos`
-  使用 Nacos 兼容适配层，演示通过统一注册中心接口进行集成。
+  使用官方 `github.com/nacos-group/nacos-sdk-go/v2` 命名客户端，对接 Eden 提供的 Nacos 兼容 HTTP / gRPC 接口。目标效果同样是只改注册中心地址，业务代码不动。
 - `custom`
-  把示例视为“外部项目”。它不依赖仓库里的 `pkg/registry` 和根目录下的 proto 包，而是只按公开的 HTTP / gRPC 协议集成，并在 `custom/internal` 下保留自己的本地协议资产。
-
-## 目录约定
-
-- 每套示例都是自包含的。
-- 每个服务都把集成主流程放在各自的 `main.go` 中。
-- 启动脚本位于各自示例目录内。
-- `examples/service-discovery/internal` 下没有共享示例辅助代码。
+  把示例视为外部项目，只通过公开的 HTTP / gRPC 协议接入，不依赖仓库内的 `pkg/registry` 或根目录 proto 包。
 
 ## 如何选择
 
-- 如果想看原生 Eden 客户端接入，优先读 `eden`。
-- 如果想看适配器式接入，读 `consul` 或 `nacos`。
-- 如果想看“外部项目只按协议集成”的写法，读 `custom`。
+- 想看 Eden 原生接入，读 `eden`。
+- 想看官方 Consul SDK 无缝切换，读 `consul`。
+- 想看官方 Nacos SDK 无缝切换，读 `nacos`。
+- 想看外部项目按协议自行集成，读 `custom`。
 
 ## 示例入口
 

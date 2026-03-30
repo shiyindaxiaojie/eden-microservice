@@ -4,8 +4,8 @@
 package vo
 
 import (
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/common/constant"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/model"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/common/constant"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/model"
 )
 
 // NacosClientParam holds the params for creating a Nacos client.

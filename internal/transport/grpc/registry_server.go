@@ -55,10 +55,10 @@ func (s *RegistryServer) Register(ctx context.Context, req *pb.RegisterRequest) 
 }
 
 func (s *RegistryServer) Deregister(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	err := s.catalog.SetInstanceStatus(req.Namespace, req.ServiceName, req.InstanceId, "offline")
+	err := s.catalog.Deregister(req.Namespace, req.ServiceName, req.InstanceId)
 	success := err == nil
 
-	logger.Info("[gRPC] Set instance offline (legacy): %s (%s) namespace=%s success=%v", req.ServiceName, req.InstanceId, req.Namespace, success)
+	logger.Info("[gRPC] Deregistered instance: %s (%s) namespace=%s success=%v", req.ServiceName, req.InstanceId, req.Namespace, success)
 	if err != nil {
 		return &pb.DeregisterResponse{Success: false}, err
 	}

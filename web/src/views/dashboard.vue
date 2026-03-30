@@ -78,35 +78,6 @@ const autoScrollLogs = ref(true)
 const logsScrollRef = ref<HTMLDivElement | null>(null)
 let timer: ReturnType<typeof setInterval> | null = null
 
-const serviceHealthText = computed(() => {
-  if (!stats.value) return '-'
-  return `${locale.value === 'zh' ? '健康实例' : 'Healthy'} ${stats.value.healthy_count}/${stats.value.instance_count}`
-})
-
-const healthStatusText = computed(() => {
-  if (!stats.value) return '-'
-  const unhealthyCount = Math.max(0, stats.value.instance_count - stats.value.healthy_count)
-  if (unhealthyCount === 0) {
-    return locale.value === 'zh' ? '全部健康' : 'All healthy'
-  }
-
-  return locale.value === 'zh' ? `${unhealthyCount} 个异常` : `${unhealthyCount} unhealthy`
-})
-
-const clusterModeText = computed(() => {
-  if (!stats.value) return ''
-
-  const environment = stats.value.environment === 'cluster'
-    ? (locale.value === 'zh' ? '集群模式' : 'Cluster')
-    : (locale.value === 'zh' ? '单机模式' : 'Standalone')
-
-  return `${environment} / ${stats.value.mode.toUpperCase()}`
-})
-
-const refreshBadgeText = computed(() =>
-  locale.value === 'zh' ? '每 10 秒自动刷新' : 'Auto refresh every 10s',
-)
-
 const leaderNoteText = computed(() => {
   if (!stats.value) return '-'
   if (stats.value.is_leader) {
@@ -119,7 +90,6 @@ const leaderNoteText = computed(() => {
 
 const eventsTabText = computed(() => (locale.value === 'zh' ? '事件' : 'Events'))
 const logsTabText = computed(() => (locale.value === 'zh' ? '日志' : 'Logs'))
-const currentNodeText = computed(() => (locale.value === 'zh' ? '当前节点' : 'Current node'))
 const logSelectPlaceholder = computed(() =>
   locale.value === 'zh' ? '选择日志文件' : 'Select log file',
 )
@@ -150,10 +120,6 @@ const eventSummaryText = computed(() => {
 
   return isFiltered ? `${filtered} filtered / ${total} total` : `${total} total`
 })
-
-const refreshChipText = computed(() =>
-  locale.value === 'zh' ? '10s 刷新' : '10s refresh',
-)
 
 const localizedRoleText = computed(() => {
   const role = (stats.value?.role || '').toLowerCase()
@@ -194,64 +160,9 @@ const namespaceUnitText = computed(() =>
   locale.value === 'zh' ? '个命名空间' : 'namespaces',
 )
 
-const userUnitText = computed(() =>
-  locale.value === 'zh' ? '个用户' : 'users',
-)
-
-const serviceScaleText = computed(() => {
-  if (!stats.value) return '-'
-  if (stats.value.instance_count === 0) {
-    return locale.value === 'zh' ? '当前没有已注册实例' : 'No registered instances yet'
-  }
-
-  return locale.value === 'zh'
-    ? `实例总数 ${stats.value.instance_count}`
-    : `${stats.value.instance_count} instances total`
-})
-
-const healthSubtitleText = computed(() => {
-  if (!stats.value) return '-'
-  if (stats.value.instance_count === 0) {
-    return locale.value === 'zh' ? '当前没有可统计实例' : 'No instances to evaluate'
-  }
-
-  return locale.value === 'zh'
-    ? `健康率 ${stats.value.health_rate.toFixed(1)}%`
-    : `${stats.value.health_rate.toFixed(1)}% health rate`
-})
-
-const resourceSubtitleText = computed(() => {
-  if (!stats.value) return '-'
-  if (stats.value.environment === 'standalone') {
-    return locale.value === 'zh' ? '当前节点本地资源占用' : 'Resource usage of the current node'
-  }
-
-  return leaderNoteText.value
-})
-
-const registryStatusText = computed(() => {
-  if (!stats.value) return '-'
-  if (stats.value.service_count === 0) {
-    return locale.value === 'zh' ? '暂无服务' : 'No services'
-  }
-
-  return locale.value === 'zh' ? '已有注册' : 'Registry active'
-})
-
 const serviceHealthRateValue = computed(() => {
   if (!stats.value?.instance_count) return 0
   return Math.min(100, Math.max(0, stats.value.health_rate))
-})
-
-const serviceOverviewText = computed(() => {
-  if (!stats.value) return '-'
-  if (stats.value.instance_count === 0) {
-    return locale.value === 'zh' ? '暂无已注册实例' : 'No registered instances yet'
-  }
-
-  return locale.value === 'zh'
-    ? `共 ${stats.value.instance_count} 个实例，健康 ${stats.value.healthy_count} 个`
-    : `${stats.value.instance_count} instances, ${stats.value.healthy_count} healthy`
 })
 
 const serviceHealthComparisonText = computed(() => {
@@ -272,47 +183,6 @@ const namespaceLabelText = computed(() => {
   }
 
   return locale.value === 'zh' ? '已创建的命名空间' : 'Created namespaces'
-})
-
-const namespaceNoteText = computed(() => {
-  if (namespaceCount.value == null) {
-    return locale.value === 'zh' ? '命名空间数据暂时不可用' : 'Namespace data unavailable'
-  }
-
-  if (namespaceCount.value === 0) {
-    return locale.value === 'zh' ? '可以先创建命名空间做环境隔离' : 'Create namespaces first to isolate services'
-  }
-
-  if (defaultNamespaceCount.value === 0) {
-    return locale.value === 'zh' ? '未检测到 default 命名空间' : 'No default namespace detected'
-  }
-
-  return locale.value === 'zh'
-    ? `默认 ${defaultNamespaceCount.value} 个，自定义 ${customNamespaceCount.value} 个`
-    : `${defaultNamespaceCount.value} default, ${customNamespaceCount.value} custom`
-})
-
-const userLabelText = computed(() => {
-  if (userCount.value == null) return '-'
-  if (userCount.value === 0) {
-    return locale.value === 'zh' ? '暂无可登录用户' : 'No console users yet'
-  }
-
-  return locale.value === 'zh' ? '控制台可登录用户' : 'Console users'
-})
-
-const userNoteText = computed(() => {
-  if (userCount.value == null) {
-    return locale.value === 'zh' ? '用户数据暂时不可用' : 'User data unavailable'
-  }
-
-  if (userCount.value === 0) {
-    return locale.value === 'zh' ? '可在访问控制中按需添加用户' : 'Add users in access control when needed'
-  }
-
-  return locale.value === 'zh'
-    ? `内置 ${builtinUserCount.value} 个，自定义 ${customUserCount.value} 个`
-    : `${builtinUserCount.value} built-in, ${customUserCount.value} custom`
 })
 
 const memoryTrendModel = computed(() => {
@@ -366,13 +236,9 @@ const memoryTrendModel = computed(() => {
     lastSample: samples.at(-1) ?? null,
     min,
     max,
-    delta: samples.length > 1 ? (samples.at(-1)?.value ?? 0) - samples[0].value : null,
+    delta: samples.length > 1 ? (samples.at(-1)?.value ?? 0) - (samples[0]?.value ?? 0) : null,
   }
 })
-
-const memoryTrendWindowText = computed(() =>
-  locale.value === 'zh' ? '近 10 分钟内存趋势，每 10 秒刷新一次' : 'Last 10 minutes, refreshed every 10s',
-)
 
 const memoryTrendMinText = computed(() =>
   memoryTrendModel.value.min == null ? '-' : formatMemory(memoryTrendModel.value.min),
@@ -395,25 +261,9 @@ const memoryTrendDeltaText = computed(() => {
     : `${prefix}${value} vs 10m ago`
 })
 
-const memoryTrendDeltaClass = computed(() => {
-  const delta = memoryTrendModel.value.delta
-  if (delta == null || delta === 0) return 'is-flat'
-  return delta > 0 ? 'is-up' : 'is-down'
-})
-
 const memoryTrendEmptyText = computed(() =>
   locale.value === 'zh' ? '采样几次后将显示趋势' : 'The trend will appear after a few samples',
 )
-
-const memoryTrendStartLabel = computed(() => {
-  if (!memoryTrendModel.value.firstSample) return '--:--'
-  return formatClock(memoryTrendModel.value.firstSample.timestamp)
-})
-
-const memoryTrendEndLabel = computed(() => {
-  if (!memoryTrendModel.value.lastSample) return '--:--'
-  return formatClock(memoryTrendModel.value.lastSample.timestamp)
-})
 
 const memoryTrendPolyline = computed(() => memoryTrendModel.value.polyline)
 const memoryTrendAreaPath = computed(() => memoryTrendModel.value.areaPath)
@@ -600,14 +450,6 @@ function formatMemory(bytes: number | undefined) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
-
-function formatClock(ts: number) {
-  return new Date(ts).toLocaleTimeString(locale.value === 'zh' ? 'zh-CN' : 'en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
 }
 
 function recordMemorySample(bytes: number | undefined) {

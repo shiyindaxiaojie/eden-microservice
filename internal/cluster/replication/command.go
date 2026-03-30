@@ -23,6 +23,7 @@ const (
 	CmdSetHeartbeatMaxFailures        CommandType = "set_heartbeat_max_failures"
 	CmdSetInstanceRemovalDelaySeconds CommandType = "set_instance_removal_delay_seconds"
 	CmdSetAPIKeyAuthEnabled           CommandType = "set_api_key_auth_enabled"
+	CmdSetNotifyAlertNodeID           CommandType = "set_notify_alert_node_id"
 )
 
 // Instance mirrors the replicated service-instance payload.
@@ -82,4 +83,5 @@ type Command struct {
 	IntValue    int         `json:"int_value,omitempty"`
 	StringList  []string    `json:"string_list,omitempty"`
 	BoolValue   bool        `json:"bool_value,omitempty"`
+	NodeID      string      `json:"node_id,omitempty"`
 }

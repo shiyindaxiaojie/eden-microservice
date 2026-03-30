@@ -8,12 +8,12 @@
 //	// import "github.com/nacos-group/nacos-sdk-go/v2/clients"
 //
 //	// After (only change the import):
-//	import "github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/clients"
+//	import "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/clients"
 package clients
 
 import (
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/clients/naming_client"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/nacos/vo"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/clients/naming_client"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/vo"
 )
 
 // NewNamingClient creates a new naming client backed by Eden Registry.

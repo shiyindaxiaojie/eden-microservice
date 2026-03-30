@@ -2,29 +2,49 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
+	consulcompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
 )
 
 // ---------- Catalog Handlers (Service Registration & Discovery) ----------
 
 func (h *Handler) registerService(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpError(w, http.StatusMethodNotAllowed, "POST required")
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		httpError(w, http.StatusMethodNotAllowed, "POST or PUT required")
 		return
 	}
 
-	var inst catalog.Instance
-	if err := json.NewDecoder(r.Body).Decode(&inst); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		httpError(w, http.StatusBadRequest, "invalid body: "+err.Error())
 		return
 	}
 
-	// Set default datacenter if not provided
+	compatInst, err := consulcompat.DecodeRegisterRequest(body, h.requestDatacenter(r), h.requestNamespace(r))
+	if err != nil {
+		httpError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+		return
+	}
+
+	inst := catalog.Instance{
+		ID:          compatInst.ID,
+		ServiceName: compatInst.ServiceName,
+		Namespace:   compatInst.Namespace,
+		Host:        compatInst.Address,
+		Port:        compatInst.Port,
+		Weight:      compatInst.Weight,
+		Datacenter:  compatInst.Datacenter,
+		Metadata:    compatInst.Metadata,
+	}
 	if inst.Datacenter == "" {
 		inst.Datacenter = h.config.Datacenter
+	}
+	if inst.Namespace == "" {
+		inst.Namespace = h.requestNamespace(r)
 	}
 
 	if err := h.catalog.Register(&inst); err != nil {
@@ -120,13 +140,27 @@ func (h *Handler) reportTopology(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listServices(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	namespace := h.requestNamespace(r)
 	services, err := h.catalog.ListServices(namespace)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	jsonOK(w, services)
+
+	names := make([]string, 0, len(services))
+	for _, item := range services {
+		service, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := service["name"].(string)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+
+	consulcompat.ApplyHeaders(w, uint64(len(names)))
+	jsonOK(w, consulcompat.BuildServicesMap(names))
 }
 
 func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
@@ -136,8 +170,8 @@ func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
 		h.getSubscribers(w, r)
 		return
 	}
-	healthy := r.URL.Query().Get("passing") == "true"
-	namespace := r.URL.Query().Get("namespace")
+	healthy := r.URL.Query().Get("passing") == "true" || r.URL.Query().Get("passing") == "1"
+	namespace := h.requestNamespace(r)
 	consumerService := r.URL.Query().Get("consumer_service")
 	if consumerService != "" {
 		h.catalog.RecordDependency(namespace, consumerService, name)
@@ -153,7 +187,10 @@ func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// DC filtering
-	dc := r.URL.Query().Get("dc")
+	dc := h.requestDatacenter(r)
+	if dc == h.config.Datacenter && r.URL.Query().Get("dc") == "" && r.URL.Query().Get("datacenter") == "" {
+		dc = ""
+	}
 	if dc != "" {
 		filtered := []*catalog.Instance{}
 		for _, inst := range instances {
@@ -164,7 +201,23 @@ func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
 		instances = filtered
 	}
 
-	jsonOK(w, instances)
+	compatInstances := make([]consulcompat.Instance, 0, len(instances))
+	for _, inst := range instances {
+		compatInstances = append(compatInstances, consulcompat.Instance{
+			ID:          inst.ID,
+			ServiceName: inst.ServiceName,
+			Namespace:   inst.Namespace,
+			Address:     inst.Host,
+			Port:        inst.Port,
+			Weight:      inst.Weight,
+			Metadata:    inst.Metadata,
+			Status:      string(inst.Status),
+			Datacenter:  inst.Datacenter,
+		})
+	}
+
+	consulcompat.ApplyHeaders(w, uint64(len(compatInstances)))
+	jsonOK(w, consulcompat.BuildCatalogServiceEnvelopes(compatInstances, h.requestTags(r)))
 }
 
 func (h *Handler) getSubscribers(w http.ResponseWriter, r *http.Request) {

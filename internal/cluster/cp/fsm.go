@@ -89,6 +89,9 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 	case replication.CmdSetAPIKeyAuthEnabled:
 		f.state.SetAPIKeyAuthEnabled(cmd.BoolValue)
 		return nil
+	case replication.CmdSetNotifyAlertNodeID:
+		f.state.SetNotifyAlertNodeID(cmd.NodeID)
+		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
 	}
