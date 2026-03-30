@@ -40,7 +40,25 @@ import {
 type CredentialView = 'grid' | 'list'
 type EditMode = 'create' | 'edit'
 
-type ChannelEditor = NotificationChannel & { configText: string }
+interface ChannelEditor extends NotificationChannel {
+  webhookUrl: string
+  webhookSecret: string
+  emailHost: string
+  emailPort: number
+  emailUsername: string
+  emailPassword: string
+  emailFrom: string
+  emailRecipientsText: string
+  emailUseTLS: boolean
+  extraConfigText: string
+}
+
+interface TemplatePreset {
+  id: string
+  label: string
+  title: string
+  body: string
+}
 
 interface ApiKeyItem {
   key: string
@@ -68,6 +86,7 @@ const keyForm = ref({
 
 const messageLoading = ref(false)
 const messageSaving = ref(false)
+const notifyNodeSaving = ref(false)
 const alertLoading = ref(false)
 const alertSaving = ref(false)
 
@@ -76,15 +95,12 @@ const alertConfig = ref<AlertConfig>({ templates: [], rules: [] })
 const notifySnapshot = ref('')
 const alertSnapshot = ref('')
 
-const channelDialogVisible = ref(false)
-const templateDialogVisible = ref(false)
-const ruleDialogVisible = ref(false)
+const channelEditorVisible = ref(false)
+const templateEditorVisible = ref(false)
+const ruleEditorVisible = ref(false)
 const channelMode = ref<EditMode>('create')
 const templateMode = ref<EditMode>('create')
 const ruleMode = ref<EditMode>('create')
-const channelForm = ref<ChannelEditor>(emptyChannel())
-const templateForm = ref<AlertTemplate>(emptyTemplate())
-const ruleForm = ref<AlertRule>(emptyRule())
 
 const EVENT_OPTIONS = [
   { value: 'service_register', label: '服务注册' },
@@ -104,6 +120,168 @@ const MESSAGE_PROVIDER_OPTIONS = [
   { label: '企业微信', value: 'wecom' },
 ]
 
+const WEBHOOK_CONFIG_KEYS = new Set(['url', 'secret'])
+const EMAIL_CONFIG_KEYS = new Set([
+  'host',
+  'port',
+  'username',
+  'password',
+  'from',
+  'recipients',
+  'tls',
+  'use_tls',
+  'secure',
+  'user',
+  'pass',
+  'smtp_host',
+  'smtp_port',
+  'smtp_user',
+  'smtp_pass',
+  'smtp_from',
+  'to',
+])
+
+const TEMPLATE_PRESETS: TemplatePreset[] = [
+  {
+    id: 'default',
+    label: '默认告警',
+    title: 'Eden 告警 - {{ event_code }}',
+    body: ['事件：{{ event_code }}', '触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次', '请尽快检查对应服务实例与节点状态。'].join('\n'),
+  },
+  {
+    id: 'compact',
+    label: '简洁通知',
+    title: '',
+    body: ['[Eden] {{ event_code }}', '{{ window_sec }} 秒内累计 {{ threshold }} 次'].join('\n'),
+  },
+  {
+    id: 'email',
+    label: '邮件详情',
+    title: 'Eden Registry 告警通知 - {{ event_code }}',
+    body: ['告警事件：{{ event_code }}', '统计窗口：{{ window_sec }} 秒', '触发次数：{{ threshold }} 次', '', '建议登录控制台进一步排查。'].join('\n'),
+  },
+]
+
+function cloneConfig(input?: Record<string, any>) {
+  return input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {}
+}
+
+function firstNonEmptyString(...values: any[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
+}
+
+function firstPositiveNumber(fallback: number, ...values: any[]) {
+  for (const value of values) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed
+    }
+  }
+  return fallback
+}
+
+function firstBoolean(fallback: boolean, ...values: any[]) {
+  for (const value of values) {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (['true', '1', 'yes', 'on'].includes(normalized)) return true
+      if (['false', '0', 'no', 'off'].includes(normalized)) return false
+    }
+  }
+  return fallback
+}
+
+function normalizeRecipients(value: any): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/[\n,;]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+function omitConfigKeys(config: Record<string, any>, keys: Set<string>) {
+  return Object.entries(config).reduce<Record<string, any>>((result, [key, value]) => {
+    if (!keys.has(key)) {
+      result[key] = value
+    }
+    return result
+  }, {})
+}
+
+function stringifyExtraConfig(value: Record<string, any>) {
+  return Object.keys(value).length ? JSON.stringify(value, null, 2) : ''
+}
+
+function cleanConfigValue(value: any) {
+  if (value === undefined || value === null) return undefined
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? trimmed : undefined
+  }
+  if (Array.isArray(value)) {
+    return value.length ? value : undefined
+  }
+  return value
+}
+
+function parseExtraConfig(textValue: string) {
+  const raw = textValue.trim()
+  if (!raw) return {}
+  const value = JSON.parse(raw)
+  if (!value || Array.isArray(value) || typeof value !== 'object') {
+    throw new Error('扩展字段必须是 JSON 对象')
+  }
+  return value as Record<string, any>
+}
+
+function buildChannelConfig(input: ChannelEditor) {
+  const extraConfig = parseExtraConfig(input.extraConfigText)
+  if (input.type === 'email') {
+    const recipients = normalizeRecipients(input.emailRecipientsText)
+    return Object.entries({
+      ...extraConfig,
+      host: input.emailHost,
+      port: input.emailPort,
+      username: input.emailUsername,
+      password: input.emailPassword,
+      from: input.emailFrom,
+      recipients,
+      tls: input.emailUseTLS,
+    }).reduce<Record<string, any>>((result, [key, value]) => {
+      const cleaned = cleanConfigValue(value)
+      if (cleaned !== undefined) {
+        result[key] = cleaned
+      }
+      return result
+    }, {})
+  }
+
+  return Object.entries({
+    ...extraConfig,
+    url: input.webhookUrl,
+    secret: input.webhookSecret,
+  }).reduce<Record<string, any>>((result, [key, value]) => {
+    const cleaned = cleanConfigValue(value)
+    if (cleaned !== undefined) {
+      result[key] = cleaned
+    }
+    return result
+  }, {})
+}
+
 function serializeNotificationConfig(value: NotificationConfig) {
   return JSON.stringify({ channels: value.channels })
 }
@@ -117,6 +295,8 @@ function createID(prefix: string) {
 }
 
 function emptyChannel(item?: NotificationChannel): ChannelEditor {
+  const config = cloneConfig(item?.config)
+  const isEmail = item?.type === 'email'
   return {
     id: item?.id || '',
     name: item?.name || '',
@@ -124,18 +304,28 @@ function emptyChannel(item?: NotificationChannel): ChannelEditor {
     provider: item?.provider || 'generic',
     description: item?.description || '',
     enabled: item?.enabled ?? true,
-    config: item?.config || {},
-    configText: JSON.stringify(item?.config || {}, null, 2),
+    config,
+    webhookUrl: firstNonEmptyString(config.url),
+    webhookSecret: firstNonEmptyString(config.secret),
+    emailHost: firstNonEmptyString(config.host, config.smtp_host),
+    emailPort: firstPositiveNumber(465, config.port, config.smtp_port),
+    emailUsername: firstNonEmptyString(config.username, config.user, config.smtp_user),
+    emailPassword: firstNonEmptyString(config.password, config.pass, config.smtp_pass),
+    emailFrom: firstNonEmptyString(config.from, config.smtp_from),
+    emailRecipientsText: normalizeRecipients(config.recipients ?? config.to).join('\n'),
+    emailUseTLS: firstBoolean(true, config.tls, config.use_tls, config.secure),
+    extraConfigText: stringifyExtraConfig(omitConfigKeys(config, isEmail ? EMAIL_CONFIG_KEYS : WEBHOOK_CONFIG_KEYS)),
   }
 }
 
 function emptyTemplate(item?: AlertTemplate): AlertTemplate {
+  const preset = TEMPLATE_PRESETS[0] || { title: '', body: '' }
   return {
     id: item?.id || '',
     name: item?.name || '',
     channel_id: item?.channel_id || '',
-    title_template: item?.title_template || '',
-    body_template: item?.body_template || '',
+    title_template: item?.title_template ?? preset.title,
+    body_template: item?.body_template ?? preset.body,
     enabled: item?.enabled ?? true,
   }
 }
@@ -152,15 +342,9 @@ function emptyRule(item?: AlertRule): AlertRule {
   }
 }
 
-function parseChannelConfig(textValue: string) {
-  const raw = textValue.trim()
-  if (!raw) return {}
-  const value = JSON.parse(raw)
-  if (!value || Array.isArray(value) || typeof value !== 'object') {
-    throw new Error('渠道配置必须是 JSON 对象')
-  }
-  return value as Record<string, any>
-}
+const channelForm = ref<ChannelEditor>(emptyChannel())
+const templateForm = ref<AlertTemplate>(emptyTemplate())
+const ruleForm = ref<AlertRule>(emptyRule())
 
 function formatConfigTime(value?: string) {
   if (!value) return '未保存'
@@ -169,8 +353,13 @@ function formatConfigTime(value?: string) {
 
 function channelTarget(channel: NotificationChannel) {
   const cfg = channel.config || {}
-  const recipients = Array.isArray(cfg.recipients) ? cfg.recipients.join(', ') : ''
-  return cfg.url || recipients || cfg.from || '-'
+  if (channel.type === 'email') {
+    const recipients = normalizeRecipients(cfg.recipients ?? cfg.to).join(', ')
+    const host = firstNonEmptyString(cfg.host, cfg.smtp_host)
+    const from = firstNonEmptyString(cfg.from, cfg.smtp_from)
+    return [from ? `发件人 ${from}` : '', recipients ? `收件人 ${recipients}` : '', host ? `SMTP ${host}` : ''].filter(Boolean).join(' · ') || '-'
+  }
+  return firstNonEmptyString(cfg.url) || '-'
 }
 
 function channelName(channelID: string) {
@@ -179,6 +368,18 @@ function channelName(channelID: string) {
 
 function templateName(templateID: string) {
   return alertConfig.value.templates.find((item) => item.id === templateID)?.name || '-'
+}
+
+function providerLabel(provider: string) {
+  return MESSAGE_PROVIDER_OPTIONS.find((item) => item.value === provider)?.label || provider || '-'
+}
+
+function channelTypeLabel(type: string) {
+  return type === 'email' ? '邮件' : 'Webhook'
+}
+
+function eventLabel(code: string) {
+  return EVENT_OPTIONS.find((item) => item.value === code)?.label || code
 }
 
 function createDefaultSettings(): SystemSettings {
@@ -268,10 +469,23 @@ const messageProviderOptions = computed(() =>
     : MESSAGE_PROVIDER_OPTIONS,
 )
 
-const enabledChannels = computed(() => notifyConfig.value.channels.filter((item) => item.enabled))
-const enabledTemplates = computed(() => alertConfig.value.templates.filter((item) => item.enabled))
+const notifyNodeDirty = computed(() => (draftSettings.value.notify_alert_node_id || '') !== (appliedSettings.value.notify_alert_node_id || ''))
+const templateChannelOptions = computed(() => notifyConfig.value.channels)
+const ruleTemplateOptions = computed(() => alertConfig.value.templates)
 const messageDirty = computed(() => notifySnapshot.value !== serializeNotificationConfig(notifyConfig.value))
 const alertRuleDirty = computed(() => alertSnapshot.value !== serializeAlertConfig(alertConfig.value))
+const channelEditorTitle = computed(() => (channelMode.value === 'create' ? '新增消息渠道' : '编辑消息渠道'))
+const templateEditorTitle = computed(() => (templateMode.value === 'create' ? '新增告警模板' : '编辑告警模板'))
+const ruleEditorTitle = computed(() => (ruleMode.value === 'create' ? '新增告警规则' : '编辑告警规则'))
+
+function handleSettingsSaveError(error: any, fallback: string) {
+  const data = error.response?.data
+  if (data?.error === 'not leader' && data?.leader) {
+    ElMessage.warning(`当前节点不是 Leader，请到 ${data.leader} 节点执行保存`)
+  } else {
+    ElMessage.error(data?.error || fallback)
+  }
+}
 
 async function fetchSystemConfig() {
   systemLoading.value = true
@@ -305,14 +519,34 @@ async function saveSystemConfig() {
       ElMessage.success('系统设置已保存')
     }
   } catch (error: any) {
-    const data = error.response?.data
-    if (data?.error === 'not leader' && data?.leader) {
-      ElMessage.warning(`当前节点不是 Leader，请到 ${data.leader} 节点执行保存`)
-    } else {
-      ElMessage.error(data?.error || '保存系统设置失败')
-    }
+    handleSettingsSaveError(error, '保存系统设置失败')
   } finally {
     saveLoading.value = false
+  }
+}
+
+async function saveNotifyAlertNode() {
+  notifyNodeSaving.value = true
+  try {
+    const payload = normalizeSettings({
+      ...appliedSettings.value,
+      notify_alert_node_id: draftSettings.value.notify_alert_node_id,
+    })
+    const { data } = await updateSystemSettings(payload)
+    appliedSettings.value = {
+      ...cloneSettings(appliedSettings.value),
+      notify_alert_node_id: payload.notify_alert_node_id,
+    }
+    draftSettings.value.notify_alert_node_id = payload.notify_alert_node_id
+    if (data.restart_required) {
+      ElMessage.warning(data.message || '通知配置节点修改后需要重启生效')
+    } else {
+      ElMessage.success('通知配置节点已保存')
+    }
+  } catch (error: any) {
+    handleSettingsSaveError(error, '保存通知配置节点失败')
+  } finally {
+    notifyNodeSaving.value = false
   }
 }
 
@@ -360,11 +594,30 @@ function openChannelDialog(mode: EditMode, item?: NotificationChannel) {
   if (channelForm.value.type === 'email') {
     channelForm.value.provider = 'smtp'
   }
-  channelDialogVisible.value = true
+  channelEditorVisible.value = true
+}
+
+function closeChannelEditor() {
+  channelEditorVisible.value = false
+  channelForm.value = emptyChannel()
+}
+
+function handleChannelTypeChange(value: string) {
+  if (value === 'email') {
+    channelForm.value.type = 'email'
+    channelForm.value.provider = 'smtp'
+    channelForm.value.emailPort = channelForm.value.emailPort || 465
+    return
+  }
+  channelForm.value.type = 'webhook'
+  if (channelForm.value.provider === 'smtp') {
+    channelForm.value.provider = 'generic'
+  }
 }
 
 function saveChannelDraft() {
   try {
+    const config = buildChannelConfig(channelForm.value)
     const payload: NotificationChannel = {
       id: channelForm.value.id || createID('channel'),
       name: channelForm.value.name.trim(),
@@ -372,10 +625,31 @@ function saveChannelDraft() {
       provider: channelForm.value.type === 'email' ? 'smtp' : channelForm.value.provider,
       description: channelForm.value.description?.trim() || '',
       enabled: channelForm.value.enabled,
-      config: parseChannelConfig(channelForm.value.configText),
+      config,
     }
     if (!payload.name) {
       ElMessage.warning('请填写渠道名称')
+      return
+    }
+    if (payload.type === 'email') {
+      if (!firstNonEmptyString(config.host)) {
+        ElMessage.warning('请填写 SMTP 主机')
+        return
+      }
+      if (!firstPositiveNumber(0, config.port)) {
+        ElMessage.warning('请填写 SMTP 端口')
+        return
+      }
+      if (!firstNonEmptyString(config.from)) {
+        ElMessage.warning('请填写发件人邮箱')
+        return
+      }
+      if (normalizeRecipients(config.recipients).length === 0) {
+        ElMessage.warning('请至少填写一个收件人邮箱')
+        return
+      }
+    } else if (!firstNonEmptyString(config.url)) {
+      ElMessage.warning('请填写 Webhook 地址')
       return
     }
 
@@ -384,7 +658,8 @@ function saveChannelDraft() {
     if (index >= 0) channels[index] = payload
     else channels.unshift(payload)
     notifyConfig.value = { ...notifyConfig.value, channels }
-    channelDialogVisible.value = false
+    channelEditorVisible.value = false
+    channelForm.value = emptyChannel(payload)
   } catch (error: any) {
     ElMessage.error(error.message || '渠道配置格式错误')
   }
@@ -401,6 +676,9 @@ function removeChannel(channel: NotificationChannel) {
       alertConfig.value = {
         ...alertConfig.value,
         templates: alertConfig.value.templates.filter((item) => item.channel_id !== removedID),
+      }
+      if (channelEditorVisible.value && channelForm.value.id === removedID) {
+        closeChannelEditor()
       }
       ElMessage.success('渠道已删除')
     })
@@ -446,9 +724,26 @@ async function reloadAlertRuleConfig() {
 }
 
 function openTemplateDialog(mode: EditMode, item?: AlertTemplate) {
+  if (mode === 'create' && notifyConfig.value.channels.length === 0) {
+    activeTab.value = 'channels'
+    ElMessage.warning('请先新增一个消息渠道，再创建告警模板')
+    return
+  }
   templateMode.value = mode
   templateForm.value = emptyTemplate(item)
-  templateDialogVisible.value = true
+  templateEditorVisible.value = true
+}
+
+function closeTemplateEditor() {
+  templateEditorVisible.value = false
+  templateForm.value = emptyTemplate()
+}
+
+function applyTemplatePreset(presetID: string) {
+  const preset = TEMPLATE_PRESETS.find((item) => item.id === presetID)
+  if (!preset) return
+  templateForm.value.title_template = preset.title
+  templateForm.value.body_template = preset.body
 }
 
 function saveTemplateDraft() {
@@ -470,7 +765,8 @@ function saveTemplateDraft() {
   if (index >= 0) templates[index] = payload
   else templates.unshift(payload)
   alertConfig.value = { ...alertConfig.value, templates }
-  templateDialogVisible.value = false
+  templateEditorVisible.value = false
+  templateForm.value = emptyTemplate(payload)
 }
 
 function removeTemplate(template: AlertTemplate) {
@@ -484,15 +780,27 @@ function removeTemplate(template: AlertTemplate) {
           template_ids: item.template_ids.filter((id) => id !== template.id),
         })),
       }
+      if (templateEditorVisible.value && templateForm.value.id === template.id) {
+        closeTemplateEditor()
+      }
       ElMessage.success('告警模板已删除')
     })
     .catch(() => {})
 }
 
 function openRuleDialog(mode: EditMode, item?: AlertRule) {
+  if (mode === 'create' && alertConfig.value.templates.length === 0) {
+    ElMessage.warning('请先创建告警模板，再新增规则')
+    return
+  }
   ruleMode.value = mode
   ruleForm.value = emptyRule(item)
-  ruleDialogVisible.value = true
+  ruleEditorVisible.value = true
+}
+
+function closeRuleEditor() {
+  ruleEditorVisible.value = false
+  ruleForm.value = emptyRule()
 }
 
 function saveRuleDraft() {
@@ -515,7 +823,8 @@ function saveRuleDraft() {
   if (index >= 0) rules[index] = payload
   else rules.unshift(payload)
   alertConfig.value = { ...alertConfig.value, rules }
-  ruleDialogVisible.value = false
+  ruleEditorVisible.value = false
+  ruleForm.value = emptyRule(payload)
 }
 
 function removeRule(rule: AlertRule) {
@@ -524,6 +833,9 @@ function removeRule(rule: AlertRule) {
       alertConfig.value = {
         ...alertConfig.value,
         rules: alertConfig.value.rules.filter((item) => item.id !== rule.id),
+      }
+      if (ruleEditorVisible.value && ruleForm.value.id === rule.id) {
+        closeRuleEditor()
       }
       ElMessage.success('告警规则已删除')
     })
@@ -725,7 +1037,7 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Connection /></el-icon>
                   <div class="section-title-with-tip">
-                    <h4>注册中心配置</h4>
+                    <h4>实例存活策略</h4>
                     <el-tooltip
                       content="注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。"
                       placement="top"
@@ -749,20 +1061,6 @@ onMounted(() => {
                       <div class="inline-switch-control">
                         <el-switch v-model="draftSettings.api_key_auth_enabled" />
                       </div>
-                    </el-form-item>
-
-                    <el-form-item>
-                      <template #label>
-                        <span class="label-with-tip">
-                          Notify/Alert Node
-                          <el-tooltip content="指定哪个节点持有通知渠道与告警配置，其他节点会转发到这里。" placement="top">
-                            <el-icon class="help-icon"><InfoFilled /></el-icon>
-                          </el-tooltip>
-                        </span>
-                      </template>
-                      <el-select v-model="draftSettings.notify_alert_node_id" style="width: 100%">
-                        <el-option v-for="item in members" :key="item.id" :label="`${item.id}${item.is_local ? ' (Local)' : ''}`" :value="item.id" />
-                      </el-select>
                     </el-form-item>
 
                     <el-form-item>
@@ -994,37 +1292,154 @@ onMounted(() => {
               <el-icon><Share /></el-icon>
               <div class="section-title-with-tip">
                 <h4>消息渠道配置</h4>
-                <el-tooltip content="只保存基础渠道配置，不记录发送历史。" placement="top">
+                <el-tooltip content="当前版本先保存渠道配置本身，不记录发送历史，也暂未提供测试发送按钮。" placement="top">
                   <el-icon class="help-icon"><InfoFilled /></el-icon>
                 </el-tooltip>
               </div>
-              <div class="section-actions">
+              <div class="section-actions channel-toolbar">
+                <div class="notify-node-inline">
+                  <span class="inline-label">配置节点</span>
+                  <el-select v-model="draftSettings.notify_alert_node_id" class="notify-node-select">
+                    <el-option v-for="item in members" :key="item.id" :label="`${item.id}${item.is_local ? '（当前节点）' : ''}`" :value="item.id" />
+                  </el-select>
+                  <el-button type="primary" :loading="notifyNodeSaving" :disabled="!notifyNodeDirty" @click="saveNotifyAlertNode">
+                    保存
+                  </el-button>
+                </div>
                 <el-button :icon="RefreshRight" @click="reloadNotifyConfig">重新加载</el-button>
                 <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">新增渠道</el-button>
               </div>
             </div>
 
-            <el-table :data="notifyConfig.channels" class="custom-table" empty-text="暂无消息渠道">
-              <el-table-column prop="name" label="名称" min-width="140" />
-              <el-table-column prop="type" label="类型" width="110" />
-              <el-table-column prop="provider" label="提供方" width="120" />
-              <el-table-column label="目标配置" min-width="240">
-                <template #default="{ row }">
-                  <span class="muted-text">{{ channelTarget(row) }}</span>
+            <div class="ops-workbench">
+              <div class="ops-list-panel">
+                <div v-if="notifyConfig.channels.length > 0" class="entity-list">
+                  <div
+                    v-for="item in notifyConfig.channels"
+                    :key="item.id"
+                    class="entity-card"
+                    :class="{ active: channelEditorVisible && channelForm.id === item.id }"
+                    @click="openChannelDialog('edit', item)"
+                  >
+                    <div class="entity-card-head">
+                      <div>
+                        <div class="entity-title">{{ item.name }}</div>
+                        <div class="entity-subline">{{ channelTypeLabel(item.type) }} · {{ providerLabel(item.provider) }}</div>
+                      </div>
+                      <el-tag :type="item.enabled ? 'success' : 'info'" size="small">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                    </div>
+                    <div class="entity-detail">{{ channelTarget(item) }}</div>
+                    <div class="entity-actions">
+                      <el-button link type="primary" @click.stop="openChannelDialog('edit', item)">编辑</el-button>
+                      <el-button link type="danger" @click.stop="removeChannel(item)">删除</el-button>
+                    </div>
+                  </div>
+                </div>
+                <el-empty v-else description="还没有消息渠道">
+                  <template #description>
+                    <div class="empty-copy">先新增一个 Webhook 或邮件渠道，后面模板和规则都会基于这里关联。</div>
+                  </template>
+                  <el-button type="primary" @click="openChannelDialog('create')">新增第一个渠道</el-button>
+                </el-empty>
+              </div>
+
+              <div class="ops-editor-panel glass-subcard">
+                <template v-if="channelEditorVisible">
+                  <div class="editor-head">
+                    <div>
+                      <div class="editor-title">{{ channelEditorTitle }}</div>
+                      <div class="editor-subtitle">直接在页面里编辑，不再弹窗。</div>
+                    </div>
+                    <div class="editor-actions">
+                      <el-button @click="closeChannelEditor">取消</el-button>
+                      <el-button type="primary" @click="saveChannelDraft">保存</el-button>
+                    </div>
+                  </div>
+
+                  <el-form label-position="top" class="compact-form editor-form">
+                    <div class="ops-form-grid">
+                      <el-form-item label="名称">
+                        <el-input v-model="channelForm.name" placeholder="例如：生产环境飞书告警" />
+                      </el-form-item>
+                      <el-form-item label="类型">
+                        <el-select v-model="channelForm.type" @change="handleChannelTypeChange">
+                          <el-option label="Webhook" value="webhook" />
+                          <el-option label="邮件" value="email" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="提供方">
+                        <el-select v-model="channelForm.provider" :disabled="channelForm.type === 'email'">
+                          <el-option v-for="item in messageProviderOptions" :key="item.value" :label="item.label" :value="item.value" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="启用">
+                        <el-switch v-model="channelForm.enabled" />
+                      </el-form-item>
+                    </div>
+
+                    <el-form-item label="描述">
+                      <el-input v-model="channelForm.description" type="textarea" :rows="2" placeholder="可选，用于说明这个渠道的用途" />
+                    </el-form-item>
+
+                    <template v-if="channelForm.type === 'webhook'">
+                      <div class="ops-form-grid">
+                        <el-form-item label="Webhook 地址">
+                          <el-input v-model="channelForm.webhookUrl" placeholder="https://your-webhook-endpoint" />
+                        </el-form-item>
+                        <el-form-item label="签名密钥">
+                          <el-input v-model="channelForm.webhookSecret" show-password placeholder="可选" />
+                        </el-form-item>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="ops-form-grid channel-email-grid">
+                        <el-form-item label="SMTP 主机">
+                          <el-input v-model="channelForm.emailHost" placeholder="例如：smtp.example.com" />
+                        </el-form-item>
+                        <el-form-item label="SMTP 端口">
+                          <el-input-number v-model="channelForm.emailPort" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+                        </el-form-item>
+                        <el-form-item label="用户名">
+                          <el-input v-model="channelForm.emailUsername" placeholder="可选" />
+                        </el-form-item>
+                        <el-form-item label="密码">
+                          <el-input v-model="channelForm.emailPassword" show-password placeholder="可选" />
+                        </el-form-item>
+                        <el-form-item label="发件人邮箱">
+                          <el-input v-model="channelForm.emailFrom" placeholder="例如：noreply@example.com" />
+                        </el-form-item>
+                        <el-form-item label="启用 TLS">
+                          <el-switch v-model="channelForm.emailUseTLS" />
+                        </el-form-item>
+                      </div>
+
+                      <el-form-item label="收件人列表">
+                        <el-input
+                          v-model="channelForm.emailRecipientsText"
+                          type="textarea"
+                          :rows="4"
+                          placeholder="ops@example.com&#10;owner@example.com"
+                        />
+                      </el-form-item>
+                    </template>
+
+                    <el-form-item label="扩展字段(JSON)">
+                      <el-input
+                        v-model="channelForm.extraConfigText"
+                        type="textarea"
+                        :rows="4"
+                        placeholder='可选，例如：{"headers":{"X-Token":"abc"}}'
+                      />
+                    </el-form-item>
+                  </el-form>
                 </template>
-              </el-table-column>
-              <el-table-column label="状态" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="140" align="right">
-                <template #default="{ row }">
-                  <el-button link type="primary" @click="openChannelDialog('edit', row)">编辑</el-button>
-                  <el-button link type="danger" @click="removeChannel(row)">删除</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+                <div v-else class="editor-empty">
+                  <div class="editor-empty-title">选择左侧渠道进行编辑</div>
+                  <div class="editor-empty-desc">或者直接新建一个渠道。</div>
+                  <el-button type="primary" @click="openChannelDialog('create')">新增渠道</el-button>
+                </div>
+              </div>
+            </div>
 
             <div class="ops-footer">
               <span class="muted-text">最近保存：{{ formatConfigTime(notifyConfig.updated_at) }}</span>
@@ -1052,27 +1467,102 @@ onMounted(() => {
                 </el-tooltip>
               </div>
               <div class="section-actions">
-                <el-button type="primary" link @click="openTemplateDialog('create')">新增模板</el-button>
+                <el-button type="primary" :icon="Plus" @click="openTemplateDialog('create')">新增模板</el-button>
               </div>
             </div>
 
-            <el-table :data="alertConfig.templates" class="custom-table" empty-text="暂无告警模板">
-              <el-table-column prop="name" label="名称" min-width="160" />
-              <el-table-column label="消息渠道" min-width="180">
-                <template #default="{ row }">{{ channelName(row.channel_id) }}</template>
-              </el-table-column>
-              <el-table-column label="状态" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+            <div class="ops-workbench">
+              <div class="ops-list-panel">
+                <div v-if="alertConfig.templates.length > 0" class="entity-list">
+                  <div
+                    v-for="item in alertConfig.templates"
+                    :key="item.id"
+                    class="entity-card"
+                    :class="{ active: templateEditorVisible && templateForm.id === item.id }"
+                    @click="openTemplateDialog('edit', item)"
+                  >
+                    <div class="entity-card-head">
+                      <div>
+                        <div class="entity-title">{{ item.name }}</div>
+                        <div class="entity-subline">{{ channelName(item.channel_id) }}</div>
+                      </div>
+                      <el-tag :type="item.enabled ? 'success' : 'info'" size="small">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                    </div>
+                    <div class="entity-detail multiline-clamp">{{ item.body_template }}</div>
+                    <div class="entity-actions">
+                      <el-button link type="primary" @click.stop="openTemplateDialog('edit', item)">编辑</el-button>
+                      <el-button link type="danger" @click.stop="removeTemplate(item)">删除</el-button>
+                    </div>
+                  </div>
+                </div>
+                <el-empty v-else description="还没有告警模板">
+                  <template #description>
+                    <div class="empty-copy">模板决定消息标题和正文内容，可以直接从预设起步。</div>
+                  </template>
+                  <el-button type="primary" @click="openTemplateDialog('create')">新增第一个模板</el-button>
+                </el-empty>
+              </div>
+
+              <div class="ops-editor-panel glass-subcard">
+                <template v-if="templateEditorVisible">
+                  <div class="editor-head">
+                    <div>
+                      <div class="editor-title">{{ templateEditorTitle }}</div>
+                      <div class="editor-subtitle">模板和渠道直接绑定，规则只负责触发条件。</div>
+                    </div>
+                    <div class="editor-actions">
+                      <el-button @click="closeTemplateEditor">取消</el-button>
+                      <el-button type="primary" @click="saveTemplateDraft">保存</el-button>
+                    </div>
+                  </div>
+
+                  <el-form label-position="top" class="compact-form editor-form">
+                    <div class="inline-preset-row">
+                      <span class="inline-label">快速套用</span>
+                      <button v-for="preset in TEMPLATE_PRESETS" :key="preset.id" type="button" class="preset-chip" @click="applyTemplatePreset(preset.id)">
+                        {{ preset.label }}
+                      </button>
+                    </div>
+
+                    <div class="ops-form-grid">
+                      <el-form-item label="模板名称">
+                        <el-input v-model="templateForm.name" placeholder="例如：服务下线通知" />
+                      </el-form-item>
+                      <el-form-item label="消息渠道">
+                        <el-select v-model="templateForm.channel_id">
+                          <el-option
+                            v-for="item in templateChannelOptions"
+                            :key="item.id"
+                            :label="item.enabled ? item.name : `${item.name}（已停用）`"
+                            :value="item.id"
+                          />
+                        </el-select>
+                      </el-form-item>
+                    </div>
+
+                    <el-form-item label="标题模板">
+                      <el-input v-model="templateForm.title_template" placeholder="例如：Eden 告警 - {{ event_code }}" />
+                    </el-form-item>
+                    <el-form-item label="内容模板">
+                      <el-input
+                        v-model="templateForm.body_template"
+                        type="textarea"
+                        :rows="8"
+                        placeholder="例如：事件：{{ event_code }}&#10;触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次"
+                      />
+                    </el-form-item>
+                    <el-form-item label="启用">
+                      <el-switch v-model="templateForm.enabled" />
+                    </el-form-item>
+                  </el-form>
                 </template>
-              </el-table-column>
-              <el-table-column label="操作" width="140" align="right">
-                <template #default="{ row }">
-                  <el-button link type="primary" @click="openTemplateDialog('edit', row)">编辑</el-button>
-                  <el-button link type="danger" @click="removeTemplate(row)">删除</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+                <div v-else class="editor-empty">
+                  <div class="editor-empty-title">选择左侧模板进行编辑</div>
+                  <div class="editor-empty-desc">也可以先用预设快速新建一个模板。</div>
+                  <el-button type="primary" @click="openTemplateDialog('create')">新增模板</el-button>
+                </div>
+              </div>
+            </div>
           </section>
 
           <section class="settings-section glass-card ops-settings-section">
@@ -1090,31 +1580,91 @@ onMounted(() => {
               </div>
             </div>
 
-            <el-table :data="alertConfig.rules" class="custom-table" empty-text="暂无告警规则">
-              <el-table-column prop="name" label="名称" min-width="160" />
-              <el-table-column prop="event_code" label="事件" min-width="160" />
-              <el-table-column label="触发阈值" width="180">
-                <template #default="{ row }">
-                  <span class="muted-text">{{ row.window_sec }} 秒内 {{ row.threshold }} 次</span>
+            <div class="ops-workbench">
+              <div class="ops-list-panel">
+                <div v-if="alertConfig.rules.length > 0" class="entity-list">
+                  <div
+                    v-for="item in alertConfig.rules"
+                    :key="item.id"
+                    class="entity-card"
+                    :class="{ active: ruleEditorVisible && ruleForm.id === item.id }"
+                    @click="openRuleDialog('edit', item)"
+                  >
+                    <div class="entity-card-head">
+                      <div>
+                        <div class="entity-title">{{ item.name }}</div>
+                        <div class="entity-subline">{{ eventLabel(item.event_code) }}</div>
+                      </div>
+                      <el-tag :type="item.enabled ? 'success' : 'info'" size="small">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                    </div>
+                    <div class="entity-detail">{{ item.window_sec }} 秒内累计 {{ item.threshold }} 次 · {{ item.template_ids.map(templateName).join('、') || '-' }}</div>
+                    <div class="entity-actions">
+                      <el-button link type="primary" @click.stop="openRuleDialog('edit', item)">编辑</el-button>
+                      <el-button link type="danger" @click.stop="removeRule(item)">删除</el-button>
+                    </div>
+                  </div>
+                </div>
+                <el-empty v-else description="还没有告警规则">
+                  <template #description>
+                    <div class="empty-copy">规则把事件、次数窗口和模板关联起来。</div>
+                  </template>
+                  <el-button type="primary" @click="openRuleDialog('create')">新增第一条规则</el-button>
+                </el-empty>
+              </div>
+
+              <div class="ops-editor-panel glass-subcard">
+                <template v-if="ruleEditorVisible">
+                  <div class="editor-head">
+                    <div>
+                      <div class="editor-title">{{ ruleEditorTitle }}</div>
+                      <div class="editor-subtitle">规则决定什么事件在什么阈值下触发哪些模板。</div>
+                    </div>
+                    <div class="editor-actions">
+                      <el-button @click="closeRuleEditor">取消</el-button>
+                      <el-button type="primary" @click="saveRuleDraft">保存</el-button>
+                    </div>
+                  </div>
+
+                  <el-form label-position="top" class="compact-form editor-form">
+                    <div class="ops-form-grid">
+                      <el-form-item label="规则名称">
+                        <el-input v-model="ruleForm.name" placeholder="例如：服务下线连续告警" />
+                      </el-form-item>
+                      <el-form-item label="事件类型">
+                        <el-select v-model="ruleForm.event_code">
+                          <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="阈值次数">
+                        <el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100%" />
+                      </el-form-item>
+                      <el-form-item label="统计窗口(秒)">
+                        <el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 100%" />
+                      </el-form-item>
+                    </div>
+
+                    <el-form-item label="关联模板">
+                      <el-select v-model="ruleForm.template_ids" multiple collapse-tags collapse-tags-tooltip>
+                        <el-option
+                          v-for="item in ruleTemplateOptions"
+                          :key="item.id"
+                          :label="item.enabled ? item.name : `${item.name}（已停用）`"
+                          :value="item.id"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="启用">
+                      <el-switch v-model="ruleForm.enabled" />
+                    </el-form-item>
+                  </el-form>
                 </template>
-              </el-table-column>
-              <el-table-column label="模板" min-width="220">
-                <template #default="{ row }">
-                  <span class="muted-text">{{ row.template_ids.map(templateName).join('、') || '-' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="140" align="right">
-                <template #default="{ row }">
-                  <el-button link type="primary" @click="openRuleDialog('edit', row)">编辑</el-button>
-                  <el-button link type="danger" @click="removeRule(row)">删除</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+                <div v-else class="editor-empty">
+                  <div class="editor-empty-title">选择左侧规则进行编辑</div>
+                  <div class="editor-empty-desc">或者新建一条规则。</div>
+                  <el-button type="primary" @click="openRuleDialog('create')">新增规则</el-button>
+                </div>
+              </div>
+            </div>
 
             <div class="ops-footer">
               <span class="muted-text">最近保存：{{ formatConfigTime(alertConfig.updated_at) }}</span>
@@ -1158,100 +1708,6 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="channelDialogVisible" :title="channelMode === 'create' ? '新增消息渠道' : '编辑消息渠道'" width="680px">
-      <el-form label-position="top" class="compact-form">
-        <div class="ops-form-grid">
-          <el-form-item label="名称">
-            <el-input v-model="channelForm.name" />
-          </el-form-item>
-          <el-form-item label="类型">
-            <el-select v-model="channelForm.type">
-              <el-option label="Webhook" value="webhook" />
-              <el-option label="Email" value="email" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="提供方">
-            <el-select v-model="channelForm.provider" :disabled="channelForm.type === 'email'">
-              <el-option v-for="item in messageProviderOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="启用">
-            <el-switch v-model="channelForm.enabled" />
-          </el-form-item>
-        </div>
-        <el-form-item label="描述">
-          <el-input v-model="channelForm.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="配置(JSON)">
-          <el-input v-model="channelForm.configText" type="textarea" :rows="8" placeholder='{"url":"https://example.com/webhook"}' />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="channelDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveChannelDraft">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="templateDialogVisible" :title="templateMode === 'create' ? '新增告警模板' : '编辑告警模板'" width="680px">
-      <el-form label-position="top" class="compact-form">
-        <div class="ops-form-grid">
-          <el-form-item label="模板名称">
-            <el-input v-model="templateForm.name" />
-          </el-form-item>
-          <el-form-item label="消息渠道">
-            <el-select v-model="templateForm.channel_id">
-              <el-option v-for="item in enabledChannels" :key="item.id" :label="item.name" :value="item.id" />
-            </el-select>
-          </el-form-item>
-        </div>
-        <el-form-item label="标题模板">
-          <el-input v-model="templateForm.title_template" placeholder="例如：服务告警 - {{ event_code }}" />
-        </el-form-item>
-        <el-form-item label="内容模板">
-          <el-input v-model="templateForm.body_template" type="textarea" :rows="5" placeholder="例如：{{ event_code }} 在 {{ window_sec }} 秒内触发 {{ threshold }} 次" />
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="templateForm.enabled" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="templateDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveTemplateDraft">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="ruleDialogVisible" :title="ruleMode === 'create' ? '新增告警规则' : '编辑告警规则'" width="680px">
-      <el-form label-position="top" class="compact-form">
-        <div class="ops-form-grid">
-          <el-form-item label="规则名称">
-            <el-input v-model="ruleForm.name" />
-          </el-form-item>
-          <el-form-item label="事件类型">
-            <el-select v-model="ruleForm.event_code">
-              <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="阈值次数">
-            <el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100%" />
-          </el-form-item>
-          <el-form-item label="统计窗口(秒)">
-            <el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 100%" />
-          </el-form-item>
-        </div>
-        <el-form-item label="关联模板">
-          <el-select v-model="ruleForm.template_ids" multiple collapse-tags collapse-tags-tooltip>
-            <el-option v-for="item in enabledTemplates" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="ruleForm.enabled" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="ruleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveRuleDraft">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -1335,12 +1791,162 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .ops-settings-section {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.ops-workbench {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.05fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.ops-list-panel {
+  min-width: 0;
+}
+
+.ops-editor-panel {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.glass-subcard {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+}
+
+.entity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entity-card {
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.entity-card:hover {
+  border-color: rgba(59, 130, 246, 0.28);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
+}
+
+.entity-card.active {
+  border-color: rgba(59, 130, 246, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.entity-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entity-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.entity-subline {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.entity-detail {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.entity-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 0;
+}
+
+.editor-title {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.editor-subtitle {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editor-form {
+  padding: 14px 18px 18px;
+}
+
+.editor-empty {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.editor-empty-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.editor-empty-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.multiline-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .glass-card {
@@ -1389,6 +1995,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.channel-toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .help-icon {
@@ -2038,6 +2649,12 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
+.empty-copy {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .ops-footer {
   display: flex;
   align-items: center;
@@ -2049,6 +2666,60 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 16px;
+}
+
+.channel-email-grid {
+  align-items: start;
+}
+
+.notify-node-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.notify-node-select {
+  width: 240px;
+  max-width: 100%;
+}
+
+.inline-preset-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.inline-label {
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preset-chip {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--accent-blue);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-chip:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .form-inline :deep(.el-input),
@@ -2132,6 +2803,14 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .ops-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-editor-panel {
+    position: static;
+  }
+
   .registry-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2162,7 +2841,8 @@ onMounted(() => {
   }
 
   .section-actions,
-  .ops-footer {
+  .ops-footer,
+  .editor-head {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
@@ -2171,6 +2851,15 @@ onMounted(() => {
   .section-actions :deep(.el-button),
   .ops-footer :deep(.el-button) {
     width: 100%;
+  }
+
+  .notify-node-select {
+    width: 100%;
+  }
+
+  .notify-node-inline {
+    width: 100%;
+    border-radius: 14px;
   }
 
   .registry-form-grid {
@@ -2229,6 +2918,7 @@ onMounted(() => {
   .regenerate-key-btn {
     width: 100%;
   }
+
 }
 
 @media (max-height: 760px) {
