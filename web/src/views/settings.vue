@@ -93,11 +93,11 @@ const alertSaving = ref(false)
 const notifyConfig = ref<NotificationConfig>({ channels: [] })
 const alertConfig = ref<AlertConfig>({ templates: [], rules: [] })
 const notifySnapshot = ref('')
-const alertSnapshot = ref('')
 
 const channelEditorVisible = ref(false)
 const templateEditorVisible = ref(false)
 const ruleEditorVisible = ref(false)
+const alertSubTab = ref<'templates' | 'rules'>('templates')
 const channelMode = ref<EditMode>('create')
 const templateMode = ref<EditMode>('create')
 const ruleMode = ref<EditMode>('create')
@@ -286,10 +286,6 @@ function serializeNotificationConfig(value: NotificationConfig) {
   return JSON.stringify({ channels: value.channels })
 }
 
-function serializeAlertConfig(value: AlertConfig) {
-  return JSON.stringify({ templates: value.templates, rules: value.rules })
-}
-
 function createID(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -345,22 +341,6 @@ function emptyRule(item?: AlertRule): AlertRule {
 const channelForm = ref<ChannelEditor>(emptyChannel())
 const templateForm = ref<AlertTemplate>(emptyTemplate())
 const ruleForm = ref<AlertRule>(emptyRule())
-
-function formatConfigTime(value?: string) {
-  if (!value) return '未保存'
-  return new Date(value).toLocaleString('zh-CN')
-}
-
-function channelTarget(channel: NotificationChannel) {
-  const cfg = channel.config || {}
-  if (channel.type === 'email') {
-    const recipients = normalizeRecipients(cfg.recipients ?? cfg.to).join(', ')
-    const host = firstNonEmptyString(cfg.host, cfg.smtp_host)
-    const from = firstNonEmptyString(cfg.from, cfg.smtp_from)
-    return [from ? `发件人 ${from}` : '', recipients ? `收件人 ${recipients}` : '', host ? `SMTP ${host}` : ''].filter(Boolean).join(' · ') || '-'
-  }
-  return firstNonEmptyString(cfg.url) || '-'
-}
 
 function channelName(channelID: string) {
   return notifyConfig.value.channels.find((item) => item.id === channelID)?.name || '-'
@@ -473,7 +453,6 @@ const notifyNodeDirty = computed(() => (draftSettings.value.notify_alert_node_id
 const templateChannelOptions = computed(() => notifyConfig.value.channels)
 const ruleTemplateOptions = computed(() => alertConfig.value.templates)
 const messageDirty = computed(() => notifySnapshot.value !== serializeNotificationConfig(notifyConfig.value))
-const alertRuleDirty = computed(() => alertSnapshot.value !== serializeAlertConfig(alertConfig.value))
 const channelEditorTitle = computed(() => (channelMode.value === 'create' ? '新增消息渠道' : '编辑消息渠道'))
 const templateEditorTitle = computed(() => (templateMode.value === 'create' ? '新增告警模板' : '编辑告警模板'))
 const ruleEditorTitle = computed(() => (ruleMode.value === 'create' ? '新增告警规则' : '编辑告警规则'))
@@ -569,23 +548,14 @@ async function saveNotifyConfig() {
     const response = await updateNotificationConfig('default', notifyConfig.value)
     notifyConfig.value = response.data || notifyConfig.value
     notifySnapshot.value = serializeNotificationConfig(notifyConfig.value)
+    const alertResponse = await updateAlertConfig('default', alertConfig.value)
+    alertConfig.value = alertResponse.data || alertConfig.value
     ElMessage.success('消息渠道配置已保存')
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || '保存消息渠道配置失败')
   } finally {
     messageSaving.value = false
   }
-}
-
-async function reloadNotifyConfig() {
-  if (messageDirty.value) {
-    try {
-      await ElMessageBox.confirm('当前消息渠道有未保存变更，确认重新加载吗？', '重新加载确认', { type: 'warning' })
-    } catch {
-      return
-    }
-  }
-  await fetchNotifyConfig()
 }
 
 function openChannelDialog(mode: EditMode, item?: NotificationChannel) {
@@ -690,7 +660,6 @@ async function fetchAlertRuleConfig() {
   try {
     const response = await getAlertConfig('default')
     alertConfig.value = response.data || { templates: [], rules: [] }
-    alertSnapshot.value = serializeAlertConfig(alertConfig.value)
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || '加载告警配置失败')
   } finally {
@@ -698,29 +667,19 @@ async function fetchAlertRuleConfig() {
   }
 }
 
-async function saveAlertRuleConfig() {
+async function persistAlertConfig(nextConfig: AlertConfig, successMessage: string) {
   alertSaving.value = true
   try {
-    const response = await updateAlertConfig('default', alertConfig.value)
-    alertConfig.value = response.data || alertConfig.value
-    alertSnapshot.value = serializeAlertConfig(alertConfig.value)
-    ElMessage.success('告警配置已保存')
+    const response = await updateAlertConfig('default', nextConfig)
+    alertConfig.value = response.data || nextConfig
+    ElMessage.success(successMessage)
+    return true
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || '保存告警配置失败')
+    return false
   } finally {
     alertSaving.value = false
   }
-}
-
-async function reloadAlertRuleConfig() {
-  if (alertRuleDirty.value) {
-    try {
-      await ElMessageBox.confirm('当前告警配置有未保存变更，确认重新加载吗？', '重新加载确认', { type: 'warning' })
-    } catch {
-      return
-    }
-  }
-  await fetchAlertRuleConfig()
 }
 
 function openTemplateDialog(mode: EditMode, item?: AlertTemplate) {
@@ -729,6 +688,7 @@ function openTemplateDialog(mode: EditMode, item?: AlertTemplate) {
     ElMessage.warning('请先新增一个消息渠道，再创建告警模板')
     return
   }
+  ruleEditorVisible.value = false
   templateMode.value = mode
   templateForm.value = emptyTemplate(item)
   templateEditorVisible.value = true
@@ -746,7 +706,7 @@ function applyTemplatePreset(presetID: string) {
   templateForm.value.body_template = preset.body
 }
 
-function saveTemplateDraft() {
+async function saveTemplateDraft() {
   const payload: AlertTemplate = {
     id: templateForm.value.id || createID('tpl'),
     name: templateForm.value.name.trim(),
@@ -764,15 +724,21 @@ function saveTemplateDraft() {
   const index = templates.findIndex((item) => item.id === payload.id)
   if (index >= 0) templates[index] = payload
   else templates.unshift(payload)
-  alertConfig.value = { ...alertConfig.value, templates }
+
+  const success = await persistAlertConfig(
+    { ...alertConfig.value, templates },
+    templateMode.value === 'create' ? '告警模板已创建' : '告警模板已保存',
+  )
+  if (!success) return
+
   templateEditorVisible.value = false
-  templateForm.value = emptyTemplate(payload)
+  templateForm.value = emptyTemplate()
 }
 
 function removeTemplate(template: AlertTemplate) {
   ElMessageBox.confirm(`确定删除模板 ${template.name} 吗？`, '删除确认', { type: 'warning' })
-    .then(() => {
-      alertConfig.value = {
+    .then(async () => {
+      const nextConfig: AlertConfig = {
         ...alertConfig.value,
         templates: alertConfig.value.templates.filter((item) => item.id !== template.id),
         rules: alertConfig.value.rules.map((item) => ({
@@ -780,10 +746,12 @@ function removeTemplate(template: AlertTemplate) {
           template_ids: item.template_ids.filter((id) => id !== template.id),
         })),
       }
+      const success = await persistAlertConfig(nextConfig, '告警模板已删除')
+      if (!success) return
+
       if (templateEditorVisible.value && templateForm.value.id === template.id) {
         closeTemplateEditor()
       }
-      ElMessage.success('告警模板已删除')
     })
     .catch(() => {})
 }
@@ -793,6 +761,7 @@ function openRuleDialog(mode: EditMode, item?: AlertRule) {
     ElMessage.warning('请先创建告警模板，再新增规则')
     return
   }
+  templateEditorVisible.value = false
   ruleMode.value = mode
   ruleForm.value = emptyRule(item)
   ruleEditorVisible.value = true
@@ -803,7 +772,7 @@ function closeRuleEditor() {
   ruleForm.value = emptyRule()
 }
 
-function saveRuleDraft() {
+async function saveRuleDraft() {
   const payload: AlertRule = {
     id: ruleForm.value.id || createID('rule'),
     name: ruleForm.value.name.trim(),
@@ -822,22 +791,30 @@ function saveRuleDraft() {
   const index = rules.findIndex((item) => item.id === payload.id)
   if (index >= 0) rules[index] = payload
   else rules.unshift(payload)
-  alertConfig.value = { ...alertConfig.value, rules }
+
+  const success = await persistAlertConfig(
+    { ...alertConfig.value, rules },
+    ruleMode.value === 'create' ? '告警规则已创建' : '告警规则已保存',
+  )
+  if (!success) return
+
   ruleEditorVisible.value = false
-  ruleForm.value = emptyRule(payload)
+  ruleForm.value = emptyRule()
 }
 
 function removeRule(rule: AlertRule) {
   ElMessageBox.confirm(`确定删除规则 ${rule.name} 吗？`, '删除确认', { type: 'warning' })
-    .then(() => {
-      alertConfig.value = {
+    .then(async () => {
+      const nextConfig: AlertConfig = {
         ...alertConfig.value,
         rules: alertConfig.value.rules.filter((item) => item.id !== rule.id),
       }
+      const success = await persistAlertConfig(nextConfig, '告警规则已删除')
+      if (!success) return
+
       if (ruleEditorVisible.value && ruleForm.value.id === rule.id) {
         closeRuleEditor()
       }
-      ElMessage.success('告警规则已删除')
     })
     .catch(() => {})
 }
@@ -1020,10 +997,10 @@ onMounted(() => {
                     <el-icon><InfoFilled /></el-icon>
                     <div class="bubble-content">
                       <template v-if="previewEnvironment === 'standalone'">
-                        <strong>单机模式:</strong> 本地闭环，适用于开发测试或边缘单点场景。
+                        <strong>单机模式:</strong> 本地闭环，用于开发测试或边缘单点场景。
                       </template>
                       <template v-else-if="previewMode === 'ap'">
-                        <strong>AP 模式 (Gossip):</strong> 分区容错性高，优先保证系统可用性，节点间数据最终对齐。
+                        <strong>AP 模式 (Gossip):</strong> 分区容错性高，优先保证系统可用，节点间数据最终对齐。
                       </template>
                       <template v-else>
                         <strong>CP 模式 (Raft):</strong> 通过多数派与 Leader 协调保证强一致，适合关键元数据管理。
@@ -1039,8 +1016,7 @@ onMounted(() => {
                   <div class="section-title-with-tip">
                     <h4>实例存活策略</h4>
                     <el-tooltip
-                      content="注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。"
-                      placement="top"
+                      content="注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。" placement="top"
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1068,8 +1044,7 @@ onMounted(() => {
                         <span class="label-with-tip">
                           心跳超时次数
                           <el-tooltip
-                            content="默认 3 次。连续丢失心跳达到阈值后，实例会先标记为下线，而不是立即删除。"
-                            placement="top"
+                            content="默认 3 次连续丢失心跳达到阈值后，实例会先标记为下线，而不是立即删除。" placement="top"
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1089,8 +1064,7 @@ onMounted(() => {
                         <span class="label-with-tip">
                           实例保留（分钟）
                           <el-tooltip
-                            content="默认 10 分钟。适合处理服务重启、网络抖动或 CPU 过高导致的心跳延迟。"
-                            placement="top"
+                            content="默认 10 分钟。适合处理服务重启、网络抖动或 CPU 过高导致的心跳延迟。" placement="top"
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1140,8 +1114,7 @@ onMounted(() => {
                   <div class="section-title-with-tip">
                     <h4>日志配置</h4>
                     <el-tooltip
-                      content="日志级别会在保存后立即更新当前进程；日志保留时长会同步写入持久化配置，用于后续日志滚动与清理策略。"
-                      placement="top"
+                      content="日志级别会在保存后立即更新当前进程；日志保留时长会同步写入持久化配置，用于后续日志滚动与清理策略。" placement="top"
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1288,25 +1261,25 @@ onMounted(() => {
 
         <div class="tab-content ops-settings-tab" v-loading="messageLoading">
           <section class="settings-section glass-card ops-settings-section">
-            <div class="section-header">
-              <el-icon><Share /></el-icon>
-              <div class="section-title-with-tip">
-                <h4>消息渠道配置</h4>
-                <el-tooltip content="当前版本先保存渠道配置本身，不记录发送历史，也暂未提供测试发送按钮。" placement="top">
-                  <el-icon class="help-icon"><InfoFilled /></el-icon>
-                </el-tooltip>
-              </div>
-              <div class="section-actions channel-toolbar">
-                <div class="notify-node-inline">
-                  <span class="inline-label">配置节点</span>
-                  <el-select v-model="draftSettings.notify_alert_node_id" class="notify-node-select">
-                    <el-option v-for="item in members" :key="item.id" :label="`${item.id}${item.is_local ? '（当前节点）' : ''}`" :value="item.id" />
+            <div class="ops-toolbar-v2">
+              <div class="toolbar-left">
+                <el-icon class="toolbar-icon"><Connection /></el-icon>
+                <span class="toolbar-label">消息发送节点</span>
+                <el-tooltip content="所有消息将由该节点负责推送。" placement="bottom">
+                  <el-select v-model="draftSettings.notify_alert_node_id" class="minimal-select" size="default" style="width: 200px">
+                    <el-option
+                      v-for="item in members"
+                      :key="item.id"
+                      :label="`${item.id}${item.is_local ? '（当前节点）' : ''}`"
+                      :value="item.id"
+                    />
                   </el-select>
-                  <el-button type="primary" :loading="notifyNodeSaving" :disabled="!notifyNodeDirty" @click="saveNotifyAlertNode">
-                    保存
-                  </el-button>
-                </div>
-                <el-button :icon="RefreshRight" @click="reloadNotifyConfig">重新加载</el-button>
+                </el-tooltip>
+                <el-button v-if="notifyNodeDirty" type="primary" link :loading="notifyNodeSaving" @click="saveNotifyAlertNode">
+                  保存节点配置
+                </el-button>
+              </div>
+              <div class="toolbar-right">
                 <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">新增渠道</el-button>
               </div>
             </div>
@@ -1317,49 +1290,63 @@ onMounted(() => {
                   <div
                     v-for="item in notifyConfig.channels"
                     :key="item.id"
-                    class="entity-card"
-                    :class="{ active: channelEditorVisible && channelForm.id === item.id }"
+                    class="entity-card-v2"
+                    :class="{ active: channelEditorVisible && channelForm.id === item.id, 'type-email': item.type === 'email' }"
                     @click="openChannelDialog('edit', item)"
                   >
-                    <div class="entity-card-head">
-                      <div>
-                        <div class="entity-title">{{ item.name }}</div>
-                        <div class="entity-subline">{{ channelTypeLabel(item.type) }} · {{ providerLabel(item.provider) }}</div>
+                    <div class="entity-strip"></div>
+                    <div class="entity-body-v2">
+                      <div class="entity-row-top">
+                        <div class="entity-icon-chip" :class="item.type">
+                          <el-icon v-if="item.type === 'email'"><Document /></el-icon>
+                          <el-icon v-else><Connection /></el-icon>
+                        </div>
+                        <div class="entity-info-v2">
+                          <div class="entity-title">{{ item.name }}</div>
+                          <div class="entity-subline">{{ channelTypeLabel(item.type) }} · {{ providerLabel(item.provider) }}</div>
+                        </div>
                       </div>
-                      <el-tag :type="item.enabled ? 'success' : 'info'" size="small">{{ item.enabled ? '启用' : '停用' }}</el-tag>
-                    </div>
-                    <div class="entity-detail">{{ channelTarget(item) }}</div>
-                    <div class="entity-actions">
-                      <el-button link type="primary" @click.stop="openChannelDialog('edit', item)">编辑</el-button>
-                      <el-button link type="danger" @click.stop="removeChannel(item)">删除</el-button>
+                      <div class="entity-actions-v2">
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                        <div class="action-btn-group">
+                          <el-button link type="primary" size="small" @click.stop="openChannelDialog('edit', item)">编辑</el-button>
+                          <el-divider direction="vertical" />
+                          <el-button link type="danger" size="small" @click.stop="removeChannel(item)">删除</el-button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <el-empty v-else description="还没有消息渠道">
-                  <template #description>
-                    <div class="empty-copy">先新增一个 Webhook 或邮件渠道，后面模板和规则都会基于这里关联。</div>
-                  </template>
-                  <el-button type="primary" @click="openChannelDialog('create')">新增第一个渠道</el-button>
-                </el-empty>
+                <div v-else class="ops-empty-state">
+                  <div class="empty-icon-large">
+                    <el-icon><Share /></el-icon>
+                  </div>
+                  <div class="empty-state-title">尚未配置消息渠道</div>
+                  <div class="empty-state-desc">新增 Webhook 或邮件渠道后，模板和规则都会基于此进行关联推送。</div>
+                  <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">新增第一个渠道</el-button>
+                </div>
               </div>
 
               <div class="ops-editor-panel glass-subcard">
                 <template v-if="channelEditorVisible">
-                  <div class="editor-head">
-                    <div>
-                      <div class="editor-title">{{ channelEditorTitle }}</div>
-                      <div class="editor-subtitle">直接在页面里编辑，不再弹窗。</div>
-                    </div>
-                    <div class="editor-actions">
-                      <el-button @click="closeChannelEditor">取消</el-button>
-                      <el-button type="primary" @click="saveChannelDraft">保存</el-button>
+                  <div class="editor-head-v2">
+                    <div class="editor-head-accent channel"></div>
+                    <div class="editor-head-content">
+                      <div>
+                        <div class="editor-title">{{ channelEditorTitle }}</div>
+                        <div class="editor-subtitle">配置渠道参数，完成后点击确认。</div>
+                      </div>
+                      <div class="editor-actions">
+                        <el-button @click="closeChannelEditor">取消</el-button>
+                        <el-button type="primary" @click="saveChannelDraft">确认</el-button>
+                      </div>
                     </div>
                   </div>
 
-                  <el-form label-position="top" class="compact-form editor-form">
-                    <div class="ops-form-grid">
+                  <el-form label-position="left" label-width="85px" class="compact-form editor-form inline-label-form">
+                    <div class="ops-form-grid-3col">
                       <el-form-item label="名称">
-                        <el-input v-model="channelForm.name" placeholder="例如：生产环境飞书告警" />
+                        <el-input v-model="channelForm.name" placeholder="例如：生产环境告警" />
                       </el-form-item>
                       <el-form-item label="类型">
                         <el-select v-model="channelForm.type" @change="handleChannelTypeChange">
@@ -1372,18 +1359,18 @@ onMounted(() => {
                           <el-option v-for="item in messageProviderOptions" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="启用">
+                      <el-form-item label="启用状态">
                         <el-switch v-model="channelForm.enabled" />
                       </el-form-item>
                     </div>
 
-                    <el-form-item label="描述">
+                    <el-form-item label="渠道描述">
                       <el-input v-model="channelForm.description" type="textarea" :rows="2" placeholder="可选，用于说明这个渠道的用途" />
                     </el-form-item>
 
                     <template v-if="channelForm.type === 'webhook'">
-                      <div class="ops-form-grid">
-                        <el-form-item label="Webhook 地址">
+                      <div class="ops-form-grid-3col">
+                        <el-form-item label="地址 (URL)" style="grid-column: span 2;">
                           <el-input v-model="channelForm.webhookUrl" placeholder="https://your-webhook-endpoint" />
                         </el-form-item>
                         <el-form-item label="签名密钥">
@@ -1392,7 +1379,7 @@ onMounted(() => {
                       </div>
                     </template>
                     <template v-else>
-                      <div class="ops-form-grid channel-email-grid">
+                      <div class="ops-form-grid-3col channel-email-grid">
                         <el-form-item label="SMTP 主机">
                           <el-input v-model="channelForm.emailHost" placeholder="例如：smtp.example.com" />
                         </el-form-item>
@@ -1428,21 +1415,23 @@ onMounted(() => {
                         v-model="channelForm.extraConfigText"
                         type="textarea"
                         :rows="4"
-                        placeholder='可选，例如：{"headers":{"X-Token":"abc"}}'
+                        placeholder='可，例如：{"headers":{"X-Token":"abc"}}'
                       />
                     </el-form-item>
                   </el-form>
                 </template>
-                <div v-else class="editor-empty">
+                <div v-else class="editor-empty-v2">
+                  <div class="editor-empty-icon channel">
+                    <el-icon><Connection /></el-icon>
+                  </div>
                   <div class="editor-empty-title">选择左侧渠道进行编辑</div>
                   <div class="editor-empty-desc">或者直接新建一个渠道。</div>
-                  <el-button type="primary" @click="openChannelDialog('create')">新增渠道</el-button>
+                  <el-button type="primary" plain @click="openChannelDialog('create')">新增渠道</el-button>
                 </div>
               </div>
             </div>
 
-            <div class="ops-footer">
-              <span class="muted-text">最近保存：{{ formatConfigTime(notifyConfig.updated_at) }}</span>
+            <div class="ops-footer-v2" style="justify-content: flex-end;">
               <el-button type="primary" :loading="messageSaving" :disabled="!messageDirty" @click="saveNotifyConfig">
                 保存消息渠道
               </el-button>
@@ -1458,219 +1447,164 @@ onMounted(() => {
 
         <div class="tab-content ops-settings-tab" v-loading="alertLoading">
           <section class="settings-section glass-card ops-settings-section">
-            <div class="section-header">
-              <el-icon><Bell /></el-icon>
-              <div class="section-title-with-tip">
-                <h4>告警模板</h4>
-                <el-tooltip content="模板绑定消息渠道，用于拼装触发后的通知内容。" placement="top">
-                  <el-icon class="help-icon"><InfoFilled /></el-icon>
-                </el-tooltip>
+            <div class="alert-tabs-header">
+              <div class="alert-sub-tabs">
+                <button type="button" class="alert-sub-tab" :class="{ active: alertSubTab === 'templates' }" @click="alertSubTab = 'templates'">
+                  <el-icon><Bell /></el-icon>
+                  <span>告警模板</span>
+                  <span v-if="alertConfig.templates.length" class="sub-tab-badge">{{ alertConfig.templates.length }}</span>
+                </button>
+                <button type="button" class="alert-sub-tab" :class="{ active: alertSubTab === 'rules' }" @click="alertSubTab = 'rules'">
+                  <el-icon><Timer /></el-icon>
+                  <span>事件阈值规则</span>
+                  <span v-if="alertConfig.rules.length" class="sub-tab-badge">{{ alertConfig.rules.length }}</span>
+                </button>
               </div>
               <div class="section-actions">
-                <el-button type="primary" :icon="Plus" @click="openTemplateDialog('create')">新增模板</el-button>
+                <el-button v-if="alertSubTab === 'templates'" type="primary" :icon="Plus" @click="openTemplateDialog('create')">新增模板</el-button>
+                <el-button v-else type="primary" :icon="Plus" @click="openRuleDialog('create')">新增规则</el-button>
               </div>
             </div>
 
-            <div class="ops-workbench">
+            <div v-show="alertSubTab === 'templates'" class="ops-workbench alert-workbench" :class="{ 'with-editor': templateEditorVisible }">
               <div class="ops-list-panel">
                 <div v-if="alertConfig.templates.length > 0" class="entity-list">
-                  <div
-                    v-for="item in alertConfig.templates"
-                    :key="item.id"
-                    class="entity-card"
-                    :class="{ active: templateEditorVisible && templateForm.id === item.id }"
-                    @click="openTemplateDialog('edit', item)"
-                  >
-                    <div class="entity-card-head">
-                      <div>
-                        <div class="entity-title">{{ item.name }}</div>
-                        <div class="entity-subline">{{ channelName(item.channel_id) }}</div>
+                  <div v-for="item in alertConfig.templates" :key="item.id" class="entity-card-v2 type-template" :class="{ active: templateEditorVisible && templateForm.id === item.id }" @click="openTemplateDialog('edit', item)">
+                    <div class="entity-strip"></div>
+                    <div class="entity-body-v2">
+                      <div class="entity-row-top">
+                        <div class="entity-icon-chip template"><el-icon><Document /></el-icon></div>
+                        <div class="entity-info-v2">
+                          <div class="entity-title">{{ item.name }}</div>
+                          <div class="entity-subline">{{ channelName(item.channel_id) }}</div>
+                        </div>
                       </div>
-                      <el-tag :type="item.enabled ? 'success' : 'info'" size="small">{{ item.enabled ? '启用' : '停用' }}</el-tag>
-                    </div>
-                    <div class="entity-detail multiline-clamp">{{ item.body_template }}</div>
-                    <div class="entity-actions">
-                      <el-button link type="primary" @click.stop="openTemplateDialog('edit', item)">编辑</el-button>
-                      <el-button link type="danger" @click.stop="removeTemplate(item)">删除</el-button>
+                      <div class="entity-detail-v2 multiline-clamp">{{ item.body_template }}</div>
+                      <div class="entity-actions-v2">
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                        <div class="action-btn-group">
+                          <el-button link type="primary" size="small" @click.stop="openTemplateDialog('edit', item)">编辑</el-button>
+                          <el-divider direction="vertical" />
+                          <el-button link type="danger" size="small" @click.stop="removeTemplate(item)">删除</el-button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <el-empty v-else description="还没有告警模板">
-                  <template #description>
-                    <div class="empty-copy">模板决定消息标题和正文内容，可以直接从预设起步。</div>
-                  </template>
-                  <el-button type="primary" @click="openTemplateDialog('create')">新增第一个模板</el-button>
-                </el-empty>
+                <div v-else class="ops-empty-state">
+                  <div class="empty-icon-large template"><el-icon><Document /></el-icon></div>
+                  <div class="empty-state-title">尚未配置告警模板</div>
+                  <div class="empty-state-desc">模板决定消息标题和正文内容，可以直接从预设开始。</div>
+                  <el-button type="primary" :icon="Plus" @click="openTemplateDialog('create')">新增第一个模板</el-button>
+                </div>
               </div>
-
-              <div class="ops-editor-panel glass-subcard">
-                <template v-if="templateEditorVisible">
-                  <div class="editor-head">
-                    <div>
-                      <div class="editor-title">{{ templateEditorTitle }}</div>
-                      <div class="editor-subtitle">模板和渠道直接绑定，规则只负责触发条件。</div>
-                    </div>
-                    <div class="editor-actions">
-                      <el-button @click="closeTemplateEditor">取消</el-button>
-                      <el-button type="primary" @click="saveTemplateDraft">保存</el-button>
+              <Transition name="slide-panel">
+                <div v-if="templateEditorVisible" class="ops-editor-panel glass-subcard">
+                  <div class="editor-head-v2">
+                    <div class="editor-head-accent template"></div>
+                    <div class="editor-head-content">
+                      <div>
+                        <div class="editor-title">{{ templateEditorTitle }}</div>
+                        <div class="editor-subtitle">模板和渠道绑定，规则只负责触发条件。</div>
+                      </div>
+                      <div class="editor-actions">
+                        <el-button @click="closeTemplateEditor">取消</el-button>
+                        <el-button type="primary" :loading="alertSaving" @click="saveTemplateDraft">确认</el-button>
+                      </div>
                     </div>
                   </div>
-
-                  <el-form label-position="top" class="compact-form editor-form">
+                  <el-form label-position="left" label-width="85px" class="compact-form editor-form inline-label-form">
                     <div class="inline-preset-row">
                       <span class="inline-label">快速套用</span>
-                      <button v-for="preset in TEMPLATE_PRESETS" :key="preset.id" type="button" class="preset-chip" @click="applyTemplatePreset(preset.id)">
-                        {{ preset.label }}
-                      </button>
+                      <button v-for="preset in TEMPLATE_PRESETS" :key="preset.id" type="button" class="preset-chip" @click="applyTemplatePreset(preset.id)">{{ preset.label }}</button>
                     </div>
-
-                    <div class="ops-form-grid">
-                      <el-form-item label="模板名称">
-                        <el-input v-model="templateForm.name" placeholder="例如：服务下线通知" />
-                      </el-form-item>
+                    <div class="ops-form-grid-3col">
+                      <el-form-item label="模板名称"><el-input v-model="templateForm.name" placeholder="例如：服务下线通知" /></el-form-item>
                       <el-form-item label="消息渠道">
                         <el-select v-model="templateForm.channel_id">
-                          <el-option
-                            v-for="item in templateChannelOptions"
-                            :key="item.id"
-                            :label="item.enabled ? item.name : `${item.name}（已停用）`"
-                            :value="item.id"
-                          />
+                          <el-option v-for="item in templateChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（已停用）`" :value="item.id" />
                         </el-select>
                       </el-form-item>
+                      <el-form-item label="启用状态"><el-switch v-model="templateForm.enabled" /></el-form-item>
                     </div>
-
-                    <el-form-item label="标题模板">
-                      <el-input v-model="templateForm.title_template" placeholder="例如：Eden 告警 - {{ event_code }}" />
-                    </el-form-item>
+                    <el-form-item label="标题模板"><el-input v-model="templateForm.title_template" placeholder="例如：Eden 告警 - {{ event_code }}" /></el-form-item>
                     <el-form-item label="内容模板">
-                      <el-input
-                        v-model="templateForm.body_template"
-                        type="textarea"
-                        :rows="8"
-                        placeholder="例如：事件：{{ event_code }}&#10;触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次"
-                      />
-                    </el-form-item>
-                    <el-form-item label="启用">
-                      <el-switch v-model="templateForm.enabled" />
+                      <el-input v-model="templateForm.body_template" type="textarea" :rows="4" placeholder="例如：事件：{{ event_code }}&#10;{{ window_sec }} 秒内达到 {{ threshold }} 次" />
                     </el-form-item>
                   </el-form>
-                </template>
-                <div v-else class="editor-empty">
-                  <div class="editor-empty-title">选择左侧模板进行编辑</div>
-                  <div class="editor-empty-desc">也可以先用预设快速新建一个模板。</div>
-                  <el-button type="primary" @click="openTemplateDialog('create')">新增模板</el-button>
                 </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="settings-section glass-card ops-settings-section">
-            <div class="section-header">
-              <el-icon><Monitor /></el-icon>
-              <div class="section-title-with-tip">
-                <h4>事件阈值规则</h4>
-                <el-tooltip content="按事件类型、阈值次数和统计窗口触发告警，不保存历史记录。" placement="top">
-                  <el-icon class="help-icon"><InfoFilled /></el-icon>
-                </el-tooltip>
-              </div>
-              <div class="section-actions">
-                <el-button :icon="RefreshRight" @click="reloadAlertRuleConfig">重新加载</el-button>
-                <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">新增规则</el-button>
-              </div>
+              </Transition>
             </div>
 
-            <div class="ops-workbench">
+            <div v-show="alertSubTab === 'rules'" class="ops-workbench alert-workbench" :class="{ 'with-editor': ruleEditorVisible }">
               <div class="ops-list-panel">
                 <div v-if="alertConfig.rules.length > 0" class="entity-list">
-                  <div
-                    v-for="item in alertConfig.rules"
-                    :key="item.id"
-                    class="entity-card"
-                    :class="{ active: ruleEditorVisible && ruleForm.id === item.id }"
-                    @click="openRuleDialog('edit', item)"
-                  >
-                    <div class="entity-card-head">
-                      <div>
-                        <div class="entity-title">{{ item.name }}</div>
-                        <div class="entity-subline">{{ eventLabel(item.event_code) }}</div>
+                  <div v-for="item in alertConfig.rules" :key="item.id" class="entity-card-v2 type-rule" :class="{ active: ruleEditorVisible && ruleForm.id === item.id }" @click="openRuleDialog('edit', item)">
+                    <div class="entity-strip"></div>
+                    <div class="entity-body-v2">
+                      <div class="entity-row-top">
+                        <div class="entity-icon-chip rule"><el-icon><Timer /></el-icon></div>
+                        <div class="entity-info-v2">
+                          <div class="entity-title">{{ item.name }}</div>
+                          <div class="entity-subline">{{ eventLabel(item.event_code) }}</div>
+                        </div>
                       </div>
-                      <el-tag :type="item.enabled ? 'success' : 'info'" size="small">{{ item.enabled ? '启用' : '停用' }}</el-tag>
-                    </div>
-                    <div class="entity-detail">{{ item.window_sec }} 秒内累计 {{ item.threshold }} 次 · {{ item.template_ids.map(templateName).join('、') || '-' }}</div>
-                    <div class="entity-actions">
-                      <el-button link type="primary" @click.stop="openRuleDialog('edit', item)">编辑</el-button>
-                      <el-button link type="danger" @click.stop="removeRule(item)">删除</el-button>
+                      <div class="entity-detail-v2">{{ item.window_sec }} 秒内累计 {{ item.threshold }} 次 · {{ item.template_ids.map(templateName).join('、') || '-' }}</div>
+                      <div class="entity-actions-v2">
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                        <div class="action-btn-group">
+                          <el-button link type="primary" size="small" @click.stop="openRuleDialog('edit', item)">编辑</el-button>
+                          <el-divider direction="vertical" />
+                          <el-button link type="danger" size="small" @click.stop="removeRule(item)">删除</el-button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <el-empty v-else description="还没有告警规则">
-                  <template #description>
-                    <div class="empty-copy">规则把事件、次数窗口和模板关联起来。</div>
-                  </template>
-                  <el-button type="primary" @click="openRuleDialog('create')">新增第一条规则</el-button>
-                </el-empty>
+                <div v-else class="ops-empty-state">
+                  <div class="empty-icon-large rule"><el-icon><Timer /></el-icon></div>
+                  <div class="empty-state-title">尚未配置告警规则</div>
+                  <div class="empty-state-desc">规则把事件类型、次数窗口和模板关联起来。</div>
+                  <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">新增第一条规则</el-button>
+                </div>
               </div>
-
-              <div class="ops-editor-panel glass-subcard">
-                <template v-if="ruleEditorVisible">
-                  <div class="editor-head">
-                    <div>
-                      <div class="editor-title">{{ ruleEditorTitle }}</div>
-                      <div class="editor-subtitle">规则决定什么事件在什么阈值下触发哪些模板。</div>
-                    </div>
-                    <div class="editor-actions">
-                      <el-button @click="closeRuleEditor">取消</el-button>
-                      <el-button type="primary" @click="saveRuleDraft">保存</el-button>
+              <Transition name="slide-panel">
+                <div v-if="ruleEditorVisible" class="ops-editor-panel glass-subcard">
+                  <div class="editor-head-v2">
+                    <div class="editor-head-accent rule"></div>
+                    <div class="editor-head-content">
+                      <div>
+                        <div class="editor-title">{{ ruleEditorTitle }}</div>
+                        <div class="editor-subtitle">规则决定什么事件在什么阈值下触发哪些模板。</div>
+                      </div>
+                      <div class="editor-actions">
+                        <el-button @click="closeRuleEditor">取消</el-button>
+                        <el-button type="primary" :loading="alertSaving" @click="saveRuleDraft">确认</el-button>
+                      </div>
                     </div>
                   </div>
-
-                  <el-form label-position="top" class="compact-form editor-form">
-                    <div class="ops-form-grid">
-                      <el-form-item label="规则名称">
-                        <el-input v-model="ruleForm.name" placeholder="例如：服务下线连续告警" />
-                      </el-form-item>
+                  <el-form label-position="left" label-width="95px" class="compact-form editor-form inline-label-form">
+                    <div class="ops-form-grid-3col">
+                      <el-form-item label="规则名称"><el-input v-model="ruleForm.name" placeholder="例如：服务下线连续告警" /></el-form-item>
                       <el-form-item label="事件类型">
                         <el-select v-model="ruleForm.event_code">
                           <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="阈值次数">
-                        <el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100%" />
-                      </el-form-item>
-                      <el-form-item label="统计窗口(秒)">
-                        <el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 100%" />
+                      <el-form-item label="关联模板">
+                        <el-select v-model="ruleForm.template_ids" multiple collapse-tags collapse-tags-tooltip>
+                          <el-option v-for="item in ruleTemplateOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（已停用）`" :value="item.id" />
+                        </el-select>
                       </el-form-item>
                     </div>
-
-                    <el-form-item label="关联模板">
-                      <el-select v-model="ruleForm.template_ids" multiple collapse-tags collapse-tags-tooltip>
-                        <el-option
-                          v-for="item in ruleTemplateOptions"
-                          :key="item.id"
-                          :label="item.enabled ? item.name : `${item.name}（已停用）`"
-                          :value="item.id"
-                        />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="启用">
-                      <el-switch v-model="ruleForm.enabled" />
-                    </el-form-item>
+                    <div class="ops-form-grid-3col">
+                      <el-form-item label="阈值次/秒"><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100%" /></el-form-item>
+                      <el-form-item label="统计窗口(秒)"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 100%" /></el-form-item>
+                      <el-form-item label="启用状态"><el-switch v-model="ruleForm.enabled" /></el-form-item>
+                    </div>
                   </el-form>
-                </template>
-                <div v-else class="editor-empty">
-                  <div class="editor-empty-title">选择左侧规则进行编辑</div>
-                  <div class="editor-empty-desc">或者新建一条规则。</div>
-                  <el-button type="primary" @click="openRuleDialog('create')">新增规则</el-button>
                 </div>
-              </div>
-            </div>
-
-            <div class="ops-footer">
-              <span class="muted-text">最近保存：{{ formatConfigTime(alertConfig.updated_at) }}</span>
-              <el-button type="primary" :loading="alertSaving" :disabled="!alertRuleDirty" @click="saveAlertRuleConfig">
-                保存告警配置
-              </el-button>
+              </Transition>
             </div>
           </section>
         </div>
@@ -1790,33 +1724,63 @@ onMounted(() => {
 .ops-settings-tab {
   display: flex;
   flex-direction: column;
+  height: 100%;
   gap: 12px;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
+  overflow: hidden;
 }
 
 .ops-settings-section {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: 14px;
 }
 
 .ops-workbench {
   display: grid;
-  grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.05fr);
+  grid-template-columns: minmax(300px, 25%) minmax(0, 1fr);
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.alert-workbench {
+  grid-template-columns: 1fr;
+  transition: grid-template-columns 0.28s ease;
+}
+
+.alert-workbench.with-editor {
+  grid-template-columns: minmax(280px, 25%) minmax(0, 1fr);
 }
 
 .ops-list-panel {
   min-width: 0;
+  overflow-y: auto;
+  height: 100%;
+  padding-right: 4px;
 }
 
 .ops-editor-panel {
-  position: sticky;
-  top: 0;
   min-width: 0;
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide-panel-enter-active,
+.slide-panel-leave-active {
+  transition: opacity 0.24s ease, transform 0.28s ease;
+}
+
+.slide-panel-enter-from,
+.slide-panel-leave-to {
+  opacity: 0;
+  transform: translateX(36px);
 }
 
 .glass-subcard {
@@ -1957,18 +1921,18 @@ onMounted(() => {
 }
 
 .settings-section {
-  padding: 18px 20px;
+  padding: 14px 16px;
 }
 
 .mode-section {
-  padding: 22px;
+  padding: 16px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .section-header h4 {
@@ -1997,9 +1961,40 @@ onMounted(() => {
   gap: 8px;
 }
 
-.channel-toolbar {
+.ops-toolbar-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-icon {
+  font-size: 16px;
+  color: var(--accent-blue);
+}
+
+.toolbar-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.minimal-select {
+  width: 180px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .help-icon {
@@ -2306,6 +2301,47 @@ onMounted(() => {
 
 .registry-form :deep(.el-form-item__label) {
   padding-top: 4px;
+}
+
+.ops-form-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.inline-label-form :deep(.el-form-item) {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.inline-label-form :deep(.el-form-item__label) {
+  padding-bottom: 0;
+  padding-right: 12px;
+  line-height: 32px;
+  height: 32px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.inline-label-form :deep(.el-form-item__content) {
+  flex: 1;
+  min-width: 0;
+  line-height: normal;
+}
+
+.entity-actions-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+}
+
+.action-btn-group {
+  display: flex;
+  align-items: center;
 }
 
 .form-grid {
@@ -2928,4 +2964,414 @@ onMounted(() => {
     padding-right: 4px;
   }
 }
+
+/* ===== Pipeline Flow ===== */
+.pipeline-flow {
+  display: flex;
+  align-items: center;
+  padding: 14px 22px;
+  gap: 0;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.pipeline-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  border: 2px solid rgba(148, 163, 184, 0.18);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.pipeline-step.done .pipeline-num {
+  background: var(--accent-blue);
+  color: #fff;
+  border-color: var(--accent-blue);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.pipeline-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pipeline-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: color 0.3s ease;
+}
+
+.pipeline-step.done .pipeline-label {
+  color: var(--text-primary);
+}
+
+.pipeline-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pipeline-line {
+  flex: 1;
+  height: 2px;
+  min-width: 20px;
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 1px;
+  transition: background 0.3s ease;
+}
+
+.pipeline-line.done {
+  background: linear-gradient(90deg, var(--accent-blue), rgba(59, 130, 246, 0.25));
+}
+
+/* ===== Entity Card V2 ===== */
+.entity-card-v2 {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.22s ease;
+}
+
+.entity-card-v2:hover {
+  border-color: rgba(59, 130, 246, 0.24);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.entity-card-v2.active {
+  border-color: rgba(59, 130, 246, 0.36);
+  background: rgba(59, 130, 246, 0.04);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1) inset;
+}
+
+.entity-strip {
+  width: 4px;
+  flex-shrink: 0;
+  background: var(--accent-blue);
+  border-radius: 4px 0 0 4px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.entity-card-v2:hover .entity-strip,
+.entity-card-v2.active .entity-strip {
+  opacity: 1;
+}
+
+.entity-card-v2.type-email .entity-strip { background: #10b981; }
+.entity-card-v2.type-template .entity-strip { background: #8b5cf6; }
+.entity-card-v2.type-rule .entity-strip { background: #f59e0b; }
+
+.entity-body-v2 {
+  flex: 1;
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.entity-row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.entity-icon-chip {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+  transition: all 0.2s ease;
+}
+
+.entity-icon-chip.email { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.entity-icon-chip.template { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+.entity-icon-chip.rule { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+
+.entity-info-v2 {
+  flex: 1;
+  min-width: 0;
+}
+
+.entity-detail-v2 {
+  margin-top: 10px;
+  padding-left: 48px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ===== Custom Empty State ===== */
+.ops-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 260px;
+  padding: 40px 24px;
+  text-align: center;
+  border: 1px dashed rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.5);
+}
+
+.empty-icon-large {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+  margin-bottom: 4px;
+}
+
+.empty-icon-large.template { color: #8b5cf6; background: rgba(139, 92, 246, 0.08); }
+.empty-icon-large.rule { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+
+.empty-state-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.empty-state-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 320px;
+}
+
+/* ===== Editor V2 ===== */
+.editor-head-v2 {
+  overflow: hidden;
+  border-radius: 16px 16px 0 0;
+}
+
+.editor-head-accent {
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-blue), #60a5fa, var(--accent-blue));
+  background-size: 200% 100%;
+  animation: gradientShift 4s ease infinite;
+}
+
+.editor-head-accent.channel {
+  background: linear-gradient(90deg, var(--accent-blue), #38bdf8, var(--accent-blue));
+  background-size: 200% 100%;
+}
+
+.editor-head-accent.template {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa, #8b5cf6);
+  background-size: 200% 100%;
+}
+
+.editor-head-accent.rule {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+  background-size: 200% 100%;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.editor-head-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 0;
+}
+
+/* ===== Editor Empty V2 ===== */
+.editor-empty-v2 {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+}
+
+.editor-empty-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+  margin-bottom: 4px;
+}
+
+.editor-empty-icon.channel { color: var(--accent-blue); background: rgba(59, 130, 246, 0.08); }
+.editor-empty-icon.template { color: #8b5cf6; background: rgba(139, 92, 246, 0.08); }
+.editor-empty-icon.rule { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+
+/* ===== Footer V2 ===== */
+.ops-footer-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.footer-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  transition: all 0.3s ease;
+}
+
+.status-dot.dirty {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+  animation: pulse-dot 1.5s ease infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ===== Alert Sub-Tabs ===== */
+.alert-tabs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.alert-sub-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.alert-sub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.22s ease;
+}
+
+.alert-sub-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.alert-sub-tab.active {
+  color: #fff;
+  background: var(--accent-blue);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.24);
+}
+
+.alert-sub-tab .el-icon {
+  font-size: 16px;
+}
+
+.sub-tab-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.alert-sub-tab:not(.active) .sub-tab-badge {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .alert-tabs-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .alert-sub-tabs {
+    width: 100%;
+  }
+
+  .alert-sub-tab {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .pipeline-flow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .pipeline-line {
+    display: none;
+  }
+
+  .ops-footer-v2 {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 </style>
+
+
