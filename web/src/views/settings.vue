@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -101,6 +101,15 @@ const alertSubTab = ref<'templates' | 'rules'>('templates')
 const channelMode = ref<EditMode>('create')
 const templateMode = ref<EditMode>('create')
 const ruleMode = ref<EditMode>('create')
+
+const channelCurrentPage = ref(1)
+const templateCurrentPage = ref(1)
+const ruleCurrentPage = ref(1)
+const PAGE_SIZE = 9
+
+const pagedChannels = computed(() => notifyConfig.value.channels.slice((channelCurrentPage.value - 1) * PAGE_SIZE, channelCurrentPage.value * PAGE_SIZE))
+const pagedTemplates = computed(() => alertConfig.value.templates.slice((templateCurrentPage.value - 1) * PAGE_SIZE, templateCurrentPage.value * PAGE_SIZE))
+const pagedRules = computed(() => alertConfig.value.rules.slice((ruleCurrentPage.value - 1) * PAGE_SIZE, ruleCurrentPage.value * PAGE_SIZE))
 
 const EVENT_OPTIONS = [
   { value: 'service_register', label: '服务注册' },
@@ -637,20 +646,40 @@ function saveChannelDraft() {
 
 function removeChannel(channel: NotificationChannel) {
   ElMessageBox.confirm(`确定删除渠道 ${channel.name} 吗？`, '删除确认', { type: 'warning' })
-    .then(() => {
+    .then(async () => {
       const removedID = channel.id
-      notifyConfig.value = {
+      const prevNotify = notifyConfig.value
+      const prevAlert = alertConfig.value
+
+      const nextNotifyConfig = {
         ...notifyConfig.value,
         channels: notifyConfig.value.channels.filter((item) => item.id !== removedID),
       }
-      alertConfig.value = {
+      const nextAlertConfig = {
         ...alertConfig.value,
         templates: alertConfig.value.templates.filter((item) => item.channel_id !== removedID),
       }
-      if (channelEditorVisible.value && channelForm.value.id === removedID) {
-        closeChannelEditor()
+
+      try {
+        messageSaving.value = true
+        const resNotify = await updateNotificationConfig('default', nextNotifyConfig)
+        notifyConfig.value = resNotify.data || nextNotifyConfig
+        notifySnapshot.value = serializeNotificationConfig(notifyConfig.value)
+        
+        const resAlert = await updateAlertConfig('default', nextAlertConfig)
+        alertConfig.value = resAlert.data || nextAlertConfig
+
+        if (channelEditorVisible.value && channelForm.value.id === removedID) {
+          closeChannelEditor()
+        }
+        ElMessage.success('渠道已删除')
+      } catch (error: any) {
+        notifyConfig.value = prevNotify
+        alertConfig.value = prevAlert
+        ElMessage.error(error.response?.data?.error || '删除渠道失败')
+      } finally {
+        messageSaving.value = false
       }
-      ElMessage.success('渠道已删除')
     })
     .catch(() => {})
 }
@@ -1284,11 +1313,12 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="ops-workbench">
+            <div class="ops-workbench alert-workbench" :class="{ 'with-editor': channelEditorVisible }">
               <div class="ops-list-panel">
-                <div v-if="notifyConfig.channels.length > 0" class="entity-list">
+                <div v-if="notifyConfig.channels.length > 0" class="entity-list-container">
+                  <div class="entity-list">
                   <div
-                    v-for="item in notifyConfig.channels"
+                    v-for="item in pagedChannels"
                     :key="item.id"
                     class="entity-card-v2"
                     :class="{ active: channelEditorVisible && channelForm.id === item.id, 'type-email': item.type === 'email' }"
@@ -1316,6 +1346,16 @@ onMounted(() => {
                       </div>
                     </div>
                   </div>
+                  </div>
+                  <div class="list-pagination" v-if="notifyConfig.channels.length > 9">
+                    <el-pagination
+                      v-model:current-page="channelCurrentPage"
+                      :page-size="9"
+                      :total="notifyConfig.channels.length"
+                      layout="prev, pager, next"
+                      background
+                    />
+                  </div>
                 </div>
                 <div v-else class="ops-empty-state">
                   <div class="empty-icon-large">
@@ -1327,14 +1367,13 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="ops-editor-panel glass-subcard">
-                <template v-if="channelEditorVisible">
+              <Transition name="slide-panel">
+                <div v-if="channelEditorVisible" class="ops-editor-panel glass-subcard">
                   <div class="editor-head-v2">
                     <div class="editor-head-accent channel"></div>
                     <div class="editor-head-content">
                       <div>
                         <div class="editor-title">{{ channelEditorTitle }}</div>
-                        <div class="editor-subtitle">配置渠道参数，完成后点击确认。</div>
                       </div>
                       <div class="editor-actions">
                         <el-button @click="closeChannelEditor">取消</el-button>
@@ -1343,7 +1382,7 @@ onMounted(() => {
                     </div>
                   </div>
 
-                  <el-form label-position="left" label-width="85px" class="compact-form editor-form inline-label-form">
+                  <el-form label-position="left" label-width="100px" class="compact-form editor-form inline-label-form">
                     <div class="ops-form-grid-3col">
                       <el-form-item label="名称">
                         <el-input v-model="channelForm.name" placeholder="例如：生产环境告警" />
@@ -1379,7 +1418,7 @@ onMounted(() => {
                       </div>
                     </template>
                     <template v-else>
-                      <div class="ops-form-grid-3col channel-email-grid">
+                      <div class="ops-form-grid-2col channel-email-grid">
                         <el-form-item label="SMTP 主机">
                           <el-input v-model="channelForm.emailHost" placeholder="例如：smtp.example.com" />
                         </el-form-item>
@@ -1419,16 +1458,8 @@ onMounted(() => {
                       />
                     </el-form-item>
                   </el-form>
-                </template>
-                <div v-else class="editor-empty-v2">
-                  <div class="editor-empty-icon channel">
-                    <el-icon><Connection /></el-icon>
-                  </div>
-                  <div class="editor-empty-title">选择左侧渠道进行编辑</div>
-                  <div class="editor-empty-desc">或者直接新建一个渠道。</div>
-                  <el-button type="primary" plain @click="openChannelDialog('create')">新增渠道</el-button>
                 </div>
-              </div>
+              </Transition>
             </div>
 
             <div class="ops-footer-v2" style="justify-content: flex-end;">
@@ -1468,8 +1499,9 @@ onMounted(() => {
 
             <div v-show="alertSubTab === 'templates'" class="ops-workbench alert-workbench" :class="{ 'with-editor': templateEditorVisible }">
               <div class="ops-list-panel">
-                <div v-if="alertConfig.templates.length > 0" class="entity-list">
-                  <div v-for="item in alertConfig.templates" :key="item.id" class="entity-card-v2 type-template" :class="{ active: templateEditorVisible && templateForm.id === item.id }" @click="openTemplateDialog('edit', item)">
+                <div v-if="alertConfig.templates.length > 0" class="entity-list-container">
+                  <div class="entity-list">
+                  <div v-for="item in pagedTemplates" :key="item.id" class="entity-card-v2 type-template" :class="{ active: templateEditorVisible && templateForm.id === item.id }" @click="openTemplateDialog('edit', item)">
                     <div class="entity-strip"></div>
                     <div class="entity-body-v2">
                       <div class="entity-row-top">
@@ -1489,6 +1521,16 @@ onMounted(() => {
                         </div>
                       </div>
                     </div>
+                  </div>
+                  </div>
+                  <div class="list-pagination" v-if="alertConfig.templates.length > 9">
+                    <el-pagination
+                      v-model:current-page="templateCurrentPage"
+                      :page-size="9"
+                      :total="alertConfig.templates.length"
+                      layout="prev, pager, next"
+                      background
+                    />
                   </div>
                 </div>
                 <div v-else class="ops-empty-state">
@@ -1538,8 +1580,9 @@ onMounted(() => {
 
             <div v-show="alertSubTab === 'rules'" class="ops-workbench alert-workbench" :class="{ 'with-editor': ruleEditorVisible }">
               <div class="ops-list-panel">
-                <div v-if="alertConfig.rules.length > 0" class="entity-list">
-                  <div v-for="item in alertConfig.rules" :key="item.id" class="entity-card-v2 type-rule" :class="{ active: ruleEditorVisible && ruleForm.id === item.id }" @click="openRuleDialog('edit', item)">
+                <div v-if="alertConfig.rules.length > 0" class="entity-list-container">
+                  <div class="entity-list">
+                  <div v-for="item in pagedRules" :key="item.id" class="entity-card-v2 type-rule" :class="{ active: ruleEditorVisible && ruleForm.id === item.id }" @click="openRuleDialog('edit', item)">
                     <div class="entity-strip"></div>
                     <div class="entity-body-v2">
                       <div class="entity-row-top">
@@ -1559,6 +1602,16 @@ onMounted(() => {
                         </div>
                       </div>
                     </div>
+                  </div>
+                  </div>
+                  <div class="list-pagination" v-if="alertConfig.rules.length > 9">
+                    <el-pagination
+                      v-model:current-page="ruleCurrentPage"
+                      :page-size="9"
+                      :total="alertConfig.rules.length"
+                      layout="prev, pager, next"
+                      background
+                    />
                   </div>
                 </div>
                 <div v-else class="ops-empty-state">
@@ -1766,7 +1819,7 @@ onMounted(() => {
 
 .ops-editor-panel {
   min-width: 0;
-  overflow-y: auto;
+  overflow: hidden;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1785,15 +1838,37 @@ onMounted(() => {
 
 .glass-subcard {
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
+  border-radius: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
 }
 
-.entity-list {
+.glass-subcard :deep(.el-input__wrapper),
+.glass-subcard :deep(.el-select__wrapper),
+.glass-subcard :deep(.el-textarea__inner),
+.glass-subcard :deep(.el-button) {
+  border-radius: 0 !important;
+}
+
+.entity-list-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  height: 100%;
+}
+
+.entity-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.list-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  margin-top: auto;
 }
 
 .entity-card {
@@ -1880,7 +1955,9 @@ onMounted(() => {
 }
 
 .editor-form {
-  padding: 14px 18px 18px;
+  padding: 6px 24px 18px 18px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .editor-empty {
@@ -2309,9 +2386,15 @@ onMounted(() => {
   gap: 12px 16px;
 }
 
+.ops-form-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
 .inline-label-form :deep(.el-form-item) {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
 }
 
@@ -3138,6 +3221,8 @@ onMounted(() => {
   border: 1px dashed rgba(148, 163, 184, 0.2);
   border-radius: 14px;
   background: rgba(248, 250, 252, 0.5);
+  max-width: 480px;
+  margin: 40px auto;
 }
 
 .empty-icon-large {
@@ -3172,7 +3257,8 @@ onMounted(() => {
 /* ===== Editor V2 ===== */
 .editor-head-v2 {
   overflow: hidden;
-  border-radius: 16px 16px 0 0;
+  border-radius: 0;
+  flex-shrink: 0;
 }
 
 .editor-head-accent {
@@ -3207,7 +3293,7 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 18px 0;
+  padding: 18px 24px 12px 18px;
 }
 
 /* ===== Editor Empty V2 ===== */
