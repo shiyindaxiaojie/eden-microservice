@@ -127,27 +127,19 @@ export interface NotificationConfig {
   updated_at?: string
 }
 
-export interface AlertTemplate {
-  id: string
-  name: string
-  channel_id: string
-  title_template?: string
-  body_template: string
-  enabled: boolean
-}
-
 export interface AlertRule {
   id: string
   name: string
   event_code: string
   threshold?: number
   window_sec?: number
-  template_ids: string[]
+  channel_ids: string[]
+  title_template?: string
+  body_template?: string
   enabled: boolean
 }
 
 export interface AlertConfig {
-  templates: AlertTemplate[]
   rules: AlertRule[]
   updated_at?: string
 }

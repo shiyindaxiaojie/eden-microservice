@@ -1,10 +1,6 @@
 package notify
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -26,35 +22,32 @@ type Config struct {
 	UpdatedAt string    `json:"updated_at,omitempty"`
 }
 
-type Store struct {
-	dataDir string
-	mu      sync.RWMutex
+type ConfigProvider interface {
+	GetNotifyConfig(namespace string) *Config
+	SaveNotifyConfig(namespace string, cfg *Config) error
 }
 
-func NewStore(dataDir string) *Store {
-	return &Store{dataDir: dataDir}
+type Store struct {
+	provider ConfigProvider
+	mu       sync.RWMutex
+}
+
+func NewStore(provider ConfigProvider) *Store {
+	return &Store{provider: provider}
 }
 
 func (s *Store) Load(namespace string) (*Config, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	path := s.configPath(namespace)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			cfg := defaultConfig()
-			return &cfg, nil
-		}
-		return nil, err
+	cfg := s.provider.GetNotifyConfig(namespace)
+	if cfg == nil {
+		defaultCfg := defaultConfig()
+		return &defaultCfg, nil
 	}
 
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-	normalizeConfig(&cfg)
-	return &cfg, nil
+	normalizeConfig(cfg)
+	return cfg, nil
 }
 
 func (s *Store) Save(namespace string, cfg *Config) error {
@@ -68,34 +61,7 @@ func (s *Store) Save(namespace string, cfg *Config) error {
 	normalizeConfig(cfg)
 	cfg.UpdatedAt = time.Now().Format(time.RFC3339)
 
-	path := s.configPath(namespace)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-func (s *Store) configPath(namespace string) string {
-	return filepath.Join(s.dataDir, "notify", cleanNamespace(namespace), "config.json")
-}
-
-func cleanNamespace(namespace string) string {
-	namespace = strings.TrimSpace(namespace)
-	if namespace == "" {
-		return defaultNamespace
-	}
-
-	replacer := strings.NewReplacer("/", "_", "\\", "_", "..", "_")
-	namespace = replacer.Replace(namespace)
-	if namespace == "" {
-		return defaultNamespace
-	}
-	return namespace
+	return s.provider.SaveNotifyConfig(namespace, cfg)
 }
 
 func defaultConfig() Config {

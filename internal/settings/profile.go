@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
 )
 
 // Profile persists cluster mode, environment, and runtime
@@ -26,6 +28,8 @@ type Profile struct {
 	apiKeyAuthSet bool
 	notifyAlertNodeID string
 	dataPath      string
+	alertConfigs      map[string]*alert.Config
+	notifyConfigs     map[string]*notify.Config
 }
 
 func NewProfile(dataPath string) *Profile {
@@ -39,6 +43,8 @@ func NewProfile(dataPath string) *Profile {
 		hbMaxFail:    3,
 		removalDelay: 600,
 		dataPath:     dataPath,
+		alertConfigs:  make(map[string]*alert.Config),
+		notifyConfigs: make(map[string]*notify.Config),
 	}
 	s.Load()
 	return s
@@ -216,6 +222,45 @@ func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, 
 	s.apiKeyAuth = apiKeyAuth
 	s.apiKeyAuthSet = true
 	s.notifyAlertNodeID = notifyAlertNodeID
+	s.notifyAlertNodeID = notifyAlertNodeID
+	s.Save()
+}
+
+func (s *Profile) GetAlertConfig(namespace string) *alert.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if cfg, ok := s.alertConfigs[namespace]; ok {
+		return cfg
+	}
+	return nil
+}
+
+func (s *Profile) SaveAlertConfig(namespace string, cfg *alert.Config) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.alertConfigs == nil {
+		s.alertConfigs = make(map[string]*alert.Config)
+	}
+	s.alertConfigs[namespace] = cfg
+	s.Save()
+}
+
+func (s *Profile) GetNotifyConfig(namespace string) *notify.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if cfg, ok := s.notifyConfigs[namespace]; ok {
+		return cfg
+	}
+	return nil
+}
+
+func (s *Profile) SaveNotifyConfig(namespace string, cfg *notify.Config) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.notifyConfigs == nil {
+		s.notifyConfigs = make(map[string]*notify.Config)
+	}
+	s.notifyConfigs[namespace] = cfg
 	s.Save()
 }
 
@@ -224,7 +269,7 @@ func (s *Profile) Load() {
 		return
 	}
 	// Load settings
-	settingsFile := filepath.Join(s.dataPath, "json")
+	settingsFile := filepath.Join(s.dataPath, "settings.json")
 	if data, err := os.ReadFile(settingsFile); err == nil {
 		var meta struct {
 			Mode               string    `json:"mode"`
@@ -235,8 +280,10 @@ func (s *Profile) Load() {
 			EventTypes         *[]string `json:"event_types"`
 			HBMaxFail          int       `json:"heartbeat_max_failures"`
 			RemovalDelay       int       `json:"instance_removal_delay_seconds"`
-			APIKeyAuthEnabled  *bool     `json:"api_key_auth_enabled"`
-			NotifyAlertNodeID  string    `json:"notify_alert_node_id"`
+			APIKeyAuthEnabled  *bool                     `json:"api_key_auth_enabled"`
+			NotifyAlertNodeID  string                    `json:"notify_alert_node_id"`
+			AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
+			NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
 		}
 		if err := json.Unmarshal(data, &meta); err == nil {
 			s.mode = meta.Mode
@@ -262,6 +309,12 @@ func (s *Profile) Load() {
 				s.apiKeyAuthSet = true
 			}
 			s.notifyAlertNodeID = meta.NotifyAlertNodeID
+			if meta.AlertConfigs != nil {
+				s.alertConfigs = meta.AlertConfigs
+			}
+			if meta.NotifyConfigs != nil {
+				s.notifyConfigs = meta.NotifyConfigs
+			}
 			s.loaded = true
 		}
 	}
@@ -285,7 +338,7 @@ func (s *Profile) Save() {
 	s.mu.Unlock()
 
 	// Save settings
-	settingsFile := filepath.Join(s.dataPath, "json")
+	settingsFile := filepath.Join(s.dataPath, "settings.json")
 	meta := struct {
 		Mode               string   `json:"mode"`
 		Environment        string   `json:"environment"`
@@ -295,8 +348,10 @@ func (s *Profile) Save() {
 		EventTypes         []string `json:"event_types"`
 		HBMaxFail          int      `json:"heartbeat_max_failures"`
 		RemovalDelay       int      `json:"instance_removal_delay_seconds"`
-		APIKeyAuthEnabled  bool     `json:"api_key_auth_enabled"`
-		NotifyAlertNodeID  string   `json:"notify_alert_node_id,omitempty"`
+		APIKeyAuthEnabled  bool                      `json:"api_key_auth_enabled"`
+		NotifyAlertNodeID  string                    `json:"notify_alert_node_id,omitempty"`
+		AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
+		NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
 	}{
 		Mode:               s.GetMode(),
 		Environment:        s.GetEnvironment(),
@@ -308,6 +363,8 @@ func (s *Profile) Save() {
 		RemovalDelay:       s.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:  s.GetAPIKeyAuthEnabled(),
 		NotifyAlertNodeID:  s.GetNotifyAlertNodeID(),
+		AlertConfigs:       s.alertConfigs,
+		NotifyConfigs:      s.notifyConfigs,
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(settingsFile, data, 0644)

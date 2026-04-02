@@ -14,5 +14,29 @@
   ],
   "heartbeat_max_failures": 3,
   "instance_removal_delay_seconds": 600,
-  "api_key_auth_enabled": false
+  "api_key_auth_enabled": false,
+  "alert_configs": {
+    "default": {
+      "templates": [],
+      "rules": [],
+      "updated_at": "2026-04-02T10:30:21+08:00"
+    }
+  },
+  "notify_configs": {
+    "default": {
+      "channels": [
+        {
+          "id": "channel-mngv305a-ifp9bm",
+          "name": "钉钉通知",
+          "type": "webhook",
+          "provider": "generic",
+          "enabled": true,
+          "config": {
+            "url": "https://oapi.dingtalk.com/robot/send?access_token=d6671540350195d27ec62673e732f12763d5eca4840aab9cf118e7a08272a79b"
+          }
+        }
+      ],
+      "updated_at": "2026-04-02T10:34:30+08:00"
+    }
+  }
 }

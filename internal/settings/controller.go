@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
 	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
 )
@@ -54,6 +56,10 @@ type Controller interface {
 	SetAPIKeyAuthEnabled(enabled bool) error
 	SetNotifyAlertNodeID(nodeID string) error
 	GetNotifyAlertNodeID() string
+	GetAlertConfig(namespace string) *alert.Config
+	SaveAlertConfig(namespace string, cfg *alert.Config) error
+	GetNotifyConfig(namespace string) *notify.Config
+	SaveNotifyConfig(namespace string, cfg *notify.Config) error
 }
 
 type CPNode interface {
@@ -750,6 +756,24 @@ func (c *controller) SetNotifyAlertNodeID(nodeID string) error {
 
 func (c *controller) GetNotifyAlertNodeID() string {
 	return c.profile.GetNotifyAlertNodeID()
+}
+
+func (c *controller) GetAlertConfig(namespace string) *alert.Config {
+	return c.profile.GetAlertConfig(namespace)
+}
+
+func (c *controller) SaveAlertConfig(namespace string, cfg *alert.Config) error {
+	c.profile.SaveAlertConfig(namespace, cfg)
+	return nil
+}
+
+func (s *controller) GetNotifyConfig(namespace string) *notify.Config {
+	return s.profile.GetNotifyConfig(namespace)
+}
+
+func (s *controller) SaveNotifyConfig(namespace string, cfg *notify.Config) error {
+	s.profile.SaveNotifyConfig(namespace, cfg)
+	return nil
 }
 
 func (c *controller) SetSeeds(seeds []string) error {
