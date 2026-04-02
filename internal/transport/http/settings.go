@@ -384,3 +384,90 @@ func (h *Handler) proxyRequest(w http.ResponseWriter, r *http.Request, targetBas
 	_, err = io.Copy(w, resp.Body)
 	return err
 }
+
+func (h *Handler) testNotification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+
+	var req struct {
+		Rule alert.Rule `json:"rule"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	namespace := "default"
+	notifyCfg, err := h.notify.Load(namespace)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "failed to load notification config")
+		return
+	}
+
+	// Filter channels requested in the test
+	var targetChannels []notify.Channel
+	for _, id := range req.Rule.ChannelIDs {
+		for _, ch := range notifyCfg.Channels {
+			if ch.ID == id {
+				targetChannels = append(targetChannels, ch)
+				break
+			}
+		}
+	}
+
+	if len(targetChannels) == 0 {
+		httpError(w, http.StatusBadRequest, "no valid notification channels selected")
+		return
+	}
+
+	msg := notify.Message{
+		Title: req.Rule.TitleTemplate,
+		Body:  req.Rule.BodyTemplate,
+	}
+
+	var errors []string
+	for _, ch := range targetChannels {
+		if err := h.notifyEngine.Send(ch, msg); err != nil {
+			logger.Error("[Notify] Failed to send test notification to channel %s: %v", ch.Name, err)
+			errors = append(errors, fmt.Sprintf("%s: %v", ch.Name, err))
+		}
+	}
+
+	if len(errors) > 0 {
+		httpError(w, http.StatusInternalServerError, strings.Join(errors, "; "))
+		return
+	}
+
+	jsonOK(w, map[string]string{"status": "ok", "message": "测试通知已成功发送"})
+}
+
+func (h *Handler) testChannelNotification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+
+	var req struct {
+		Channel notify.Channel `json:"channel"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	msg := notify.Message{
+		Title: "测试通知",
+		Body:  "这是一条来自注册中心的测试通知，用于验证您的配置是否正确。",
+	}
+
+	if err := h.notifyEngine.Send(req.Channel, msg); err != nil {
+		logger.Error("[Notify] Failed to send test notification to channel %s: %v", req.Channel.Name, err)
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonOK(w, map[string]string{"status": "ok", "message": "测试通知已成功发送"})
+}
+

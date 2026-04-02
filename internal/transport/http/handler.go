@@ -21,8 +21,9 @@ type Handler struct {
 	auth      auth.Authenticator
 	settings  settings.Controller
 	cluster   cluster.Membership
-	notify    *notify.Store
-	alerts    *alert.Store
+	notify       *notify.Store
+	notifyEngine *notify.Engine
+	alerts       *alert.Store
 	consul    *consuladapter.HTTPAdapter
 	nodeCache sync.Map // map[string]config.Config
 	mux       *http.ServeMux
@@ -40,8 +41,9 @@ func NewHandler(cfg *config.Config,
 		auth:      authenticator,
 		settings:  settingsController,
 		cluster:   clusterMembership,
-		notify:    notify.NewStore(settingsController),
-		alerts:    alert.NewStore(settingsController),
+		notify:       notify.NewStore(settingsController),
+		notifyEngine: notify.NewEngine(),
+		alerts:       alert.NewStore(settingsController),
 		consul:    consuladapter.NewHTTPAdapter(cfg, catalogRegistry),
 		nodeCache: sync.Map{},
 		mux:       http.NewServeMux(),
@@ -116,6 +118,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("/v1/auth/login", h.login)
 	h.mux.Handle("/v1/auth/profile", h.Auth(http.HandlerFunc(h.profile)))
 	h.mux.Handle("/v1/auth/password", h.Auth(http.HandlerFunc(h.updatePassword)))
+	h.mux.Handle("/v1/auth/guide-status", h.Auth(http.HandlerFunc(h.updateGuideStatus)))
 
 	// --- RBAC & Settings (Admin only) ---
 	h.mux.Handle("/v1/rbac/users", h.Auth(http.HandlerFunc(h.listUsers)))
@@ -136,6 +139,9 @@ func (h *Handler) registerRoutes() {
 	}))))
 	h.mux.Handle("/v1/notify/config", h.Auth(adminOrDev(http.HandlerFunc(h.notificationConfig))))
 	h.mux.Handle("/v1/alert/config", h.Auth(adminOrDev(http.HandlerFunc(h.alertConfig))))
+	h.mux.Handle("/v1/notify/test", h.Auth(adminOrDev(http.HandlerFunc(h.testNotification))))
+	h.mux.Handle("/v1/notify/channel/test", h.Auth(adminOrDev(http.HandlerFunc(h.testChannelNotification))))
+
 
 	// --- Internal Sync (no auth, for inter-node communication) ---
 	h.mux.HandleFunc("/internal/sync/seeds", h.syncSeeds)

@@ -28,6 +28,8 @@ import {
   updateAlertConfig,
   updateNotificationConfig,
   updateSystemSettings,
+  testNotification,
+  testChannel,
   type AlertConfig,
   type AlertRule,
   type ClusterMember,
@@ -88,6 +90,7 @@ const messageSaving = ref(false)
 const notifyNodeSaving = ref(false)
 const alertLoading = ref(false)
 const alertSaving = ref(false)
+const alertTesting = ref(false)
 
 const notifyConfig = ref<NotificationConfig>({ channels: [] })
 const alertConfig = ref<AlertConfig>({ rules: [] })
@@ -158,8 +161,23 @@ const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { name: 'timestamp', label: '触发时间', desc: '事件发生的时间', example: '2026-04-02 13:30:00' },
 ]
 
-const DEFAULT_TITLE_TEMPLATE = 'Eden 告警 - {{ event_name }}'
-const DEFAULT_BODY_TEMPLATE = ['事件：{{ event_name }}（{{ event_code }}）', '触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次', '请尽快检查对应服务实例与节点状态。'].join('\n')
+function getDynamicTitleTemplate() {
+  return '注册中心告警 - {{ event_name }}'
+}
+
+function getDynamicBodyTemplate(eventCode: string) {
+  switch (eventCode) {
+    case 'service_offline': return '服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。'
+    case 'service_heartbeat': return '服务心跳异常：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：服务实例连续多次心跳失败。'
+    case 'registry_node_sync': return '集群节点同步异常告警\n事件类型：{{ event_code }}\n触发时间：{{ timestamp }}\n影响范围：可能导致服务列表短暂不一致。'
+    case 'service_online': return '服务上线通知：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：新服务实例已上线并准备好接收流量。'
+    case 'service_remove': return '服务移除告警：{{ service }}\n触发时间：{{ timestamp }}\n说明：服务已被管理员或系统从注册中心完全移除。'
+    default: return '事件：{{ event_name }}（{{ event_code }}）\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n记录时间：{{ timestamp }}\n请及时关注系统状态。'
+  }
+}
+
+const dynamicTitleTemplate = computed(() => getDynamicTitleTemplate())
+const dynamicBodyTemplate = computed(() => getDynamicBodyTemplate(ruleForm.value.event_code))
 
 function cloneConfig(input?: Record<string, any>) {
   return input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {}
@@ -311,21 +329,32 @@ function emptyChannel(item?: NotificationChannel): ChannelEditor {
 }
 
 function emptyRule(item?: AlertRule): AlertRule {
+  const eventCode = item?.event_code || 'service_offline'
   return {
     id: item?.id || '',
     name: item?.name || '',
-    event_code: item?.event_code || 'service_offline',
+    event_code: eventCode,
     threshold: item?.threshold || 1,
     window_sec: item?.window_sec || 300,
     channel_ids: [...(item?.channel_ids || [])],
-    title_template: item?.title_template || '',
-    body_template: item?.body_template || '',
+    title_template: item?.title_template || getDynamicTitleTemplate(),
+    body_template: item?.body_template || getDynamicBodyTemplate(eventCode),
     enabled: item?.enabled ?? true,
   }
 }
 
 const channelForm = ref<ChannelEditor>(emptyChannel())
 const ruleForm = ref<AlertRule>(emptyRule())
+
+function handleEventCodeChange(val: string) {
+  // 检查当前模板是否还是默认模板（或者是之前某个事件的默认模板），如果是则更新为新事件类型的默认模板
+  const currentBody = ruleForm.value.body_template
+  const isBodyEmptyOrDefault = !currentBody || EVENT_OPTIONS.some(opt => getDynamicBodyTemplate(opt.value) === currentBody)
+  
+  if (isBodyEmptyOrDefault) {
+    ruleForm.value.body_template = getDynamicBodyTemplate(val)
+  }
+}
 
 function channelName(channelID: string) {
   return notifyConfig.value.channels.find((item) => item.id === channelID)?.name || '-'
@@ -346,7 +375,7 @@ function insertVariable(varName: string) {
 
 const defaultTitleTemplate = computed(() => {
   const rule = ruleForm.value
-  const tpl = showCustomTemplate.value && rule.title_template ? rule.title_template : DEFAULT_TITLE_TEMPLATE
+  const tpl = rule.title_template || dynamicTitleTemplate.value
   return tpl
     .replace(/\{\{\s*event_name\s*\}\}/g, eventLabel(rule.event_code))
     .replace(/\{\{\s*event_code\s*\}\}/g, rule.event_code)
@@ -358,7 +387,7 @@ const defaultTitleTemplate = computed(() => {
 
 const defaultBodyTemplate = computed(() => {
   const rule = ruleForm.value
-  const tpl = showCustomTemplate.value && rule.body_template ? rule.body_template : DEFAULT_BODY_TEMPLATE
+  const tpl = rule.body_template || dynamicBodyTemplate.value
   return tpl
     .replace(/\{\{\s*event_name\s*\}\}/g, eventLabel(rule.event_code))
     .replace(/\{\{\s*event_code\s*\}\}/g, rule.event_code)
@@ -589,7 +618,40 @@ function handleChannelTypeChange(value: string) {
   }
 }
 
+async function testChannelNotification() {
+  if (channelForm.value.type === 'webhook' && !channelForm.value.webhookUrl) {
+    ElMessage.warning('请先填写 Webhook 地址')
+    return
+  }
+  if (channelForm.value.type === 'email' && !channelForm.value.emailFrom) {
+    ElMessage.warning('请先填写发件人邮箱')
+    return
+  }
+  
+  messageSaving.value = true
+  try {
+    const config = buildChannelConfig(channelForm.value)
+    const channel: NotificationChannel = {
+      id: channelForm.value.id || 'test-channel',
+      name: channelForm.value.name.trim() || '测试渠道',
+      type: channelForm.value.type,
+      provider: channelForm.value.type === 'email' ? 'smtp' : channelForm.value.provider,
+      description: '',
+      enabled: true,
+      config,
+    }
+    await testChannel({ channel })
+    ElMessage.success('测试通知已成功发送，请检查接收端')
+  } catch (err: any) {
+    console.error('[TestChannel] Failed:', err)
+    ElMessage.error(err.response?.data?.error || '发送测试通知失败')
+  } finally {
+    messageSaving.value = false
+  }
+}
+
 async function saveChannelDraft() {
+
   try {
     const config = buildChannelConfig(channelForm.value)
     const payload: NotificationChannel = {
@@ -721,6 +783,28 @@ async function persistAlertConfig(nextConfig: AlertConfig, successMessage: strin
   }
 }
 
+async function testAlertNotification() {
+  if (ruleForm.value.channel_ids.length === 0) {
+    ElMessage.warning('请至少选择一个通知渠道来测试')
+    return
+  }
+  alertTesting.value = true
+  try {
+    await testNotification({
+      rule: {
+        ...ruleForm.value,
+        title_template: defaultTitleTemplate.value,
+        body_template: defaultBodyTemplate.value,
+      }
+    })
+    ElMessage.success('测试通知已发送')
+  } catch (err: any) {
+    ElMessage.error(err.response?.data?.error || '发送测试通知失败')
+  } finally {
+    alertTesting.value = false
+  }
+}
+
 function openRuleDialog(mode: EditMode, item?: AlertRule) {
   if (mode === 'create' && notifyConfig.value.channels.length === 0) {
     activeTab.value = 'channels'
@@ -747,8 +831,8 @@ async function saveRuleDraft() {
     threshold: Math.max(1, ruleForm.value.threshold || 1),
     window_sec: Math.max(60, ruleForm.value.window_sec || 300),
     channel_ids: [...ruleForm.value.channel_ids],
-    title_template: showCustomTemplate.value ? (ruleForm.value.title_template?.trim() || '') : '',
-    body_template: showCustomTemplate.value ? (ruleForm.value.body_template?.trim() || '') : '',
+    title_template: ruleForm.value.title_template?.trim() || '',
+    body_template: ruleForm.value.body_template?.trim() || '',
     enabled: ruleForm.value.enabled,
   }
   if (!payload.name || !payload.event_code || payload.channel_ids.length === 0) {
@@ -1318,6 +1402,7 @@ onMounted(() => {
                       </div>
                       <div class="editor-actions">
                         <el-button @click="closeChannelEditor">取消</el-button>
+                        <el-button :icon="Bell" @click="testChannelNotification">测试</el-button>
                         <el-button type="primary" :loading="messageSaving" @click="saveChannelDraft">保存</el-button>
                       </div>
                     </div>
@@ -1479,6 +1564,7 @@ onMounted(() => {
                         <div class="editor-subtitle">当事件达到阈值时，通过指定渠道发送告警通知。</div>
                       </div>
                       <div class="editor-actions">
+                        <el-button @click="testAlertNotification" :loading="alertTesting">测试通知</el-button>
                         <el-button @click="closeRuleEditor">取消</el-button>
                         <el-button type="primary" :loading="alertSaving" @click="saveRuleDraft">保存</el-button>
                       </div>
@@ -1488,60 +1574,57 @@ onMounted(() => {
                     <div class="ops-form-grid-3col">
                       <el-form-item label="规则名称"><el-input v-model="ruleForm.name" placeholder="例如：服务下线连续告警" /></el-form-item>
                       <el-form-item label="事件类型">
-                        <el-select v-model="ruleForm.event_code">
+                        <el-select v-model="ruleForm.event_code" @change="handleEventCodeChange">
                           <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
                       </el-form-item>
                       <el-form-item label="启用状态"><el-switch v-model="ruleForm.enabled" /></el-form-item>
                     </div>
                     <div class="ops-form-grid-3col">
-                      <el-form-item label="触发条件"><div style="display:flex; gap:8px; align-items:center; width:100%"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="flex:1; min-width:0" placeholder="秒" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">秒内达</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="flex:1; min-width:0" placeholder="次" /><span style="font-size:13px; color:var(--text-secondary)">次</span></div></el-form-item>
-                      <el-form-item label="通知渠道" style="grid-column: span 2;">
+                      <el-form-item label="通知渠道">
                         <el-select v-model="ruleForm.channel_ids" multiple collapse-tags collapse-tags-tooltip>
                           <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（已停用）`" :value="item.id" />
                         </el-select>
                       </el-form-item>
+                      <el-form-item label="触发条件" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" placeholder="秒" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">秒内累计发生</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" placeholder="次" /><span style="font-size:13px; color:var(--text-secondary)">次告警</span></div></el-form-item>
                     </div>
 
-                    <div class="template-section" style="margin-top: 16px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-                      <div class="template-section-header" @click="showCustomTemplate = !showCustomTemplate" style="background: rgba(0,0,0,0.02); padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <el-icon :style="{ transform: showCustomTemplate ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }"><Operation /></el-icon>
-                        <span style="font-weight: 600; font-size: 14px;">自定义消息模板（可选）</span>
-                        <span style="font-size: 12px; color: var(--text-muted); margin-left: auto;">展开可覆盖系统默认通知格式</span>
-                      </div>
-                      
-                      <div v-show="!showCustomTemplate" style="padding: 16px; background: #fafafa; border-top: 1px solid var(--border-color);">
-                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">默认通知格式预览：</div>
-                        <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px dashed #e2e8f0;">
-                          <div style="font-weight: 600; margin-bottom: 8px;">{{ defaultTitleTemplate }}</div>
-                          <div style="white-space: pre-wrap; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">{{ defaultBodyTemplate }}</div>
-                        </div>
+                    <div class="template-section" style="margin-top: 16px; border: 1px solid var(--border-color); overflow: hidden;">
+                      <div class="template-section-header" style="background: rgba(0,0,0,0.02); padding: 12px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
+                        <el-icon><Operation /></el-icon>
+                        <span style="font-weight: 600; font-size: 14px;">消息模板</span>
                       </div>
 
-                      <div v-show="showCustomTemplate" style="padding: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 16px;">
-                        <div style="flex: 1;">
+                      <div style="padding: 16px; display: flex; gap: 16px;">
+                        <div style="flex: 1; display: flex; flex-direction: column;">
                           <el-form-item label="标题模板" label-width="70px" style="margin-bottom: 16px;">
-                            <el-input v-model="ruleForm.title_template" :placeholder="DEFAULT_TITLE_TEMPLATE" />
+                            <el-input v-model="ruleForm.title_template" :placeholder="dynamicTitleTemplate" />
                           </el-form-item>
-                          <el-form-item label="内容模板" label-width="70px" style="margin-bottom: 0;">
-                            <el-input v-model="ruleForm.body_template" type="textarea" :rows="8" :placeholder="DEFAULT_BODY_TEMPLATE" />
+                          <el-form-item label="内容模板" label-width="70px" style="margin-bottom: 8px;">
+                            <el-input v-model="ruleForm.body_template" type="textarea" :rows="5" :placeholder="dynamicBodyTemplate" />
                           </el-form-item>
-                        </div>
-                        <div style="width: 200px; flex-shrink: 0; background: #f8fafc; border-radius: 6px; padding: 12px;">
-                          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 8px;">可用变量（点击插入）</div>
-                          <div style="display: flex; flex-direction: column; gap: 6px;">
-                            <el-tooltip v-for="variable in TEMPLATE_VARIABLES" :key="variable.name" placement="left">
+                          
+                          <div style="margin-left: 70px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px;">
+                            <el-tooltip v-for="variable in TEMPLATE_VARIABLES" :key="variable.name" placement="top">
                               <template #content>
                                 <div>
                                   <div>{{ variable.desc }}</div>
                                   <div style="color: #94a3b8; margin-top: 4px;">示例：{{ variable.example }}</div>
                                 </div>
                               </template>
-                              <div @click="insertVariable(variable.name)" style="font-size: 12px; background: #fff; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                              <div @click="insertVariable(variable.name)" style="font-size: 12px; background: #fff; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                 <span style="color: #3b82f6; font-family: monospace;" v-text="'{{ ' + variable.name + ' }}'"></span>
-                                <span style="color: #64748b; float: right;">{{ variable.label }}</span>
+                                <span style="color: #64748b; margin-left: 4px;">{{ variable.label }}</span>
                               </div>
                             </el-tooltip>
+                          </div>
+                        </div>
+                        
+                        <div style="width: 250px; flex-shrink: 0; background: #f8fafc; border-left: 1px dashed #e2e8f0; padding: 0 12px;">
+                          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;"><el-icon><Monitor /></el-icon> 实时预览</div>
+                          <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.14); box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+                            <div style="font-weight: 600; margin-bottom: 8px; font-size: 13px; color: var(--text-primary);">{{ defaultTitleTemplate }}</div>
+                            <div style="white-space: pre-wrap; font-size: 12px; color: var(--text-secondary); line-height: 1.6; word-break: break-all;">{{ defaultBodyTemplate }}</div>
                           </div>
                         </div>
                       </div>

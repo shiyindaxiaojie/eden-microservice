@@ -23,7 +23,10 @@ api.interceptors.response.use((response) => {
   if (error.response?.status === 401) {
     // Don't redirect if we're already trying to login
     if (!error.config.url.endsWith('/v1/auth/login')) {
-      localStorage.clear()
+      localStorage.removeItem('token')
+      localStorage.removeItem('user_role')
+      localStorage.removeItem('username')
+      localStorage.removeItem('nickname')
       window.location.href = '/login'
     }
   }

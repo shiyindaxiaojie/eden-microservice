@@ -357,3 +357,44 @@ func (h *Handler) updatePassword(w http.ResponseWriter, r *http.Request) {
 
 	jsonOK(w, "Password updated")
 }
+
+// updateGuideStatus updates the user's guide completion status.
+func (h *Handler) updateGuideStatus(w http.ResponseWriter, r *http.Request) {
+	username, _ := r.Context().Value(UserContextKey).(string)
+	if username == "" {
+		httpError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		user, ok := h.auth.GetUser(username)
+		if !ok {
+			httpError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		jsonOK(w, map[string]interface{}{
+			"guide_completed": user.GuideCompleted,
+		})
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		httpError(w, http.StatusMethodNotAllowed, "GET or POST required")
+		return
+	}
+
+	var req struct {
+		Completed bool `json:"completed"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if err := h.auth.UpdateGuideStatus(username, req.Completed); err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonOK(w, "Guide status updated")
+}

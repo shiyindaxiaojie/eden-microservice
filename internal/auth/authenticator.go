@@ -13,6 +13,7 @@ type Authenticator interface {
 	GetUser(username string) (*User, bool)
 	UpdateProfile(username, nickname, phone, email string) error
 	UpdatePassword(username, oldPassword, newPassword string) error
+	UpdateGuideStatus(username string, completed bool) error
 }
 
 type authenticator struct {
@@ -83,6 +84,17 @@ func (a *authenticator) UpdatePassword(username, oldPassword, newPassword string
 	// But let's use bcrypt for new password
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	user.Password = string(hashed)
+	a.directory.AddUser(user)
+	a.directory.Save()
+	return nil
+}
+
+func (a *authenticator) UpdateGuideStatus(username string, completed bool) error {
+	user, ok := a.directory.GetUser(username)
+	if !ok {
+		return errors.New("user not found")
+	}
+	user.GuideCompleted = completed
 	a.directory.AddUser(user)
 	a.directory.Save()
 	return nil

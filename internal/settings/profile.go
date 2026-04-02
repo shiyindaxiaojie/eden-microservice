@@ -180,9 +180,11 @@ func (s *Profile) HasAPIKeyAuthEnabled() bool {
 
 func (s *Profile) SetAPIKeyAuthEnabled(enabled bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.apiKeyAuth = enabled
 	s.apiKeyAuthSet = true
+	s.mu.Unlock()
+
+	s.Save()
 }
 
 func (s *Profile) GetNotifyAlertNodeID() string {
@@ -193,8 +195,10 @@ func (s *Profile) GetNotifyAlertNodeID() string {
 
 func (s *Profile) SetNotifyAlertNodeID(nodeID string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.notifyAlertNodeID = nodeID
+	s.mu.Unlock()
+
+	s.Save()
 }
 
 func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID string) {
@@ -237,11 +241,12 @@ func (s *Profile) GetAlertConfig(namespace string) *alert.Config {
 
 func (s *Profile) SaveAlertConfig(namespace string, cfg *alert.Config) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.alertConfigs == nil {
 		s.alertConfigs = make(map[string]*alert.Config)
 	}
 	s.alertConfigs[namespace] = cfg
+	s.mu.Unlock()
+
 	s.Save()
 }
 
@@ -256,11 +261,12 @@ func (s *Profile) GetNotifyConfig(namespace string) *notify.Config {
 
 func (s *Profile) SaveNotifyConfig(namespace string, cfg *notify.Config) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.notifyConfigs == nil {
 		s.notifyConfigs = make(map[string]*notify.Config)
 	}
 	s.notifyConfigs[namespace] = cfg
+	s.mu.Unlock()
+
 	s.Save()
 }
 
@@ -333,9 +339,9 @@ func (s *Profile) Save() {
 		return
 	}
 	os.MkdirAll(s.dataPath, 0755)
-	s.mu.Lock()
-	s.loaded = true
-	s.mu.Unlock()
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	// Save settings
 	settingsFile := filepath.Join(s.dataPath, "settings.json")
@@ -353,16 +359,16 @@ func (s *Profile) Save() {
 		AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
 		NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
 	}{
-		Mode:               s.GetMode(),
-		Environment:        s.GetEnvironment(),
-		LogLevel:           s.GetLogLevel(),
-		EventRetentionDays: s.GetEventRetentionDays(),
-		LogRetentionDays:   s.GetLogRetentionDays(),
-		EventTypes:         s.GetEventTypes(),
-		HBMaxFail:          s.GetHeartbeatMaxFailures(),
-		RemovalDelay:       s.GetInstanceRemovalDelaySeconds(),
-		APIKeyAuthEnabled:  s.GetAPIKeyAuthEnabled(),
-		NotifyAlertNodeID:  s.GetNotifyAlertNodeID(),
+		Mode:               s.mode,
+		Environment:        s.environment,
+		LogLevel:           s.logLevel,
+		EventRetentionDays: s.eventRetDays,
+		LogRetentionDays:   s.logRetDays,
+		EventTypes:         s.eventTypes,
+		HBMaxFail:          s.hbMaxFail,
+		RemovalDelay:       s.removalDelay,
+		APIKeyAuthEnabled:  s.apiKeyAuth,
+		NotifyAlertNodeID:  s.notifyAlertNodeID,
 		AlertConfigs:       s.alertConfigs,
 		NotifyConfigs:      s.notifyConfigs,
 	}
@@ -371,6 +377,6 @@ func (s *Profile) Save() {
 
 	// Save nodes
 	nodesFile := filepath.Join(s.dataPath, "nodes.json")
-	nodesData, _ := json.MarshalIndent(s.GetSeeds(), "", "  ")
+	nodesData, _ := json.MarshalIndent(s.seeds, "", "  ")
 	_ = os.WriteFile(nodesFile, nodesData, 0644)
 }

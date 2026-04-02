@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown, Guide, Moon, QuestionFilled, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { useI18n } from './utils/i18n'
 import UiGuide, { type GuideStep } from './components/ui-guide.vue'
+import { getGuideStatus, updateGuideStatus } from './api/registry'
 import logo from './assets/logo.png'
 
 const GUIDE_STORAGE_KEY = 'eden-ui-guide-completed-v1'
@@ -186,6 +187,7 @@ watch(
 watch(
   () => route.fullPath,
   async () => {
+    // If not public, not already showing, and not specifically marked as completed in localStorage
     if (route.meta.public || showGuide.value || localStorage.getItem(GUIDE_STORAGE_KEY) === '1') {
       return
     }
@@ -195,7 +197,11 @@ watch(
 )
 
 function handleLogout() {
+  const guideVal = localStorage.getItem(GUIDE_STORAGE_KEY)
+  const themeVal = localStorage.getItem('theme')
   localStorage.clear()
+  if (guideVal) localStorage.setItem(GUIDE_STORAGE_KEY, guideVal)
+  if (themeVal) localStorage.setItem('theme', themeVal)
   router.push('/login')
 }
 
@@ -226,6 +232,8 @@ function restartGuide() {
 function finishGuide() {
   localStorage.setItem(GUIDE_STORAGE_KEY, '1')
   showGuide.value = false
+  // Sync to server
+  updateGuideStatus(true).catch(err => console.error('Failed to sync guide status:', err))
 }
 
 function setCookie(name: string, value: string, daysUp: number) {
@@ -251,9 +259,22 @@ onMounted(async () => {
 
   window.addEventListener('storage', handleStorageChange)
 
-  if (!route.meta.public && localStorage.getItem(GUIDE_STORAGE_KEY) !== '1') {
-    await nextTick()
-    showGuide.value = true
+  if (!route.meta.public) {
+    const localCompleted = localStorage.getItem(GUIDE_STORAGE_KEY) === '1'
+    try {
+      const res = await getGuideStatus()
+      if (res.data.guide_completed) {
+        localStorage.setItem(GUIDE_STORAGE_KEY, '1')
+      } else if (!localCompleted) {
+        await nextTick()
+        showGuide.value = true
+      }
+    } catch (err) {
+      if (!localCompleted) {
+        await nextTick()
+        showGuide.value = true
+      }
+    }
   }
 })
 

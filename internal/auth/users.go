@@ -8,6 +8,7 @@ type User struct {
 	Phone     string `json:"phone"`
 	Email     string `json:"email"`
 	Remark    string `json:"remark"`
-	Role      string `json:"role"`
-	IsBuiltIn bool   `json:"is_builtin"`
+	Role           string `json:"role"`
+	IsBuiltIn      bool   `json:"is_builtin"`
+	GuideCompleted bool   `json:"guide_completed"`
 }

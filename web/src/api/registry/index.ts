@@ -197,3 +197,9 @@ export const getAlertConfig = (namespace = 'default') =>
   api.get<AlertConfig>(`/v1/alert/config?namespace=${encodeURIComponent(namespace)}`)
 export const updateAlertConfig = (namespace: string, data: AlertConfig) =>
   api.post<AlertConfig>(`/v1/alert/config?namespace=${encodeURIComponent(namespace)}`, data)
+
+export const getGuideStatus = () => api.get<{guide_completed: boolean}>('/v1/auth/guide-status')
+export const updateGuideStatus = (completed: boolean) => api.post('/v1/auth/guide-status', { completed })
+export const testNotification = (data: { rule: Partial<AlertRule> }) => api.post('/v1/notify/test', data)
+export const testChannel = (data: { channel: Partial<NotificationChannel> }) => api.post('/v1/notify/channel/test', data)
+
