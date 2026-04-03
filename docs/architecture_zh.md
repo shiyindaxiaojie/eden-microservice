@@ -7,8 +7,9 @@
 Eden 的目标是提供一套可在 `AP` 与 `CP` 模式间切换的轻量级注册中心，同时覆盖三类能力：
 
 - 面向业务服务的注册、心跳、发现、订阅与实例上下线。
-- 面向运维治理的控制台、用户、RBAC、API Key 与系统设置管理。
+- 面向运维治理的控制台、多语言 (i18n)、用户、RBAC、API Key 与系统运维配置。
 - 面向集群的节点复制、反熵同步与强一致复制。
+- 面向系统的事件响应体系：基于滑动窗口规则的自定义告警及多渠道系统通知 (Webhooks / SMTP)。
 
 ## 2. 协议总览
 
@@ -41,6 +42,8 @@ graph TB
         GRPC_REG["gRPC RegistryService"]
         GRPC_CLUSTER["gRPC ClusterService"]
         CAT["CatalogService"]
+        ALERT["Alert Evaluator"]
+        NOTIFY["Notification Engine"]
         SET["SettingsService"]
         AUTH["AuthService"]
         AP["AP Node + PeerManager"]
@@ -53,7 +56,7 @@ graph TB
     Client -->|optional HTTP /v1/cluster/members| HTTP
     Client -->|optional HTTP /v1/catalog/topology/report| HTTP
 
-    Console -->|HTTP /v1/auth/* /v1/settings/* /v1/cluster/*| HTTP
+    Console -->|HTTP /v1/auth/* /v1/settings/* /v1/cluster/* /v1/alert/* /v1/notify/*| HTTP
 
     Peer -->|gRPC ReplicateLog / SyncDiscovery| GRPC_CLUSTER
     Peer -->|HTTP /v1/node/info| HTTP
@@ -63,11 +66,15 @@ graph TB
     HTTP --> CAT
     HTTP --> SET
     HTTP --> AUTH
+    HTTP --> ALERT
+    HTTP --> NOTIFY
     GRPC_REG --> CAT
     GRPC_CLUSTER --> AP
 
     CAT --> AP
     CAT --> CP
+    CAT -->|OnEvent Hook| ALERT
+    ALERT -->|Match Rule| NOTIFY
     SET --> AP
     SET --> CP
     AP --> STORE
@@ -217,6 +224,8 @@ CP 模式下的主链路如下：
 | AP 节点复制 | `api/proto/cluster/v1/cluster.proto`、`internal/cluster/ap/node.go`、`internal/grpc/cluster_server.go` |
 | 节点 HTTP 同步 | `internal/handler/cluster_handler.go`、`internal/service/settings.go` |
 | CP 共识 | `internal/cluster/cp/node.go`、`internal/cluster/cp/fsm.go` |
+| 告警评估与通知 | `internal/alert/evaluator.go`、`internal/notify/engine.go` |
+| 控制台 i18n 逻辑 | `web/src/utils/i18n.ts`、`web/src/views/settings.vue` |
 | 服务端监听入口 | `cmd/server/main.go` |
 
 ## 8. 实现约束

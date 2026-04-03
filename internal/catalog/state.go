@@ -27,6 +27,7 @@ type State struct {
 	Namespaces         *NamespaceRegistry
 	Topology           *TopologyIndex
 	eventTypesProvider func() []string
+	onEventCallback    func(*Event)
 }
 
 func NewState(dataPath string) *State {
@@ -40,6 +41,10 @@ func NewState(dataPath string) *State {
 
 func (s *State) SetEventTypesProvider(fn func() []string) {
 	s.eventTypesProvider = fn
+}
+
+func (s *State) SetOnEventCallback(fn func(*Event)) {
+	s.onEventCallback = fn
 }
 
 func (s *State) Register(inst *Instance) {
@@ -98,13 +103,17 @@ func (s *State) AppendEvent(eventType, service, instance, message string) {
 	if !s.shouldRecordEvent(normalized[0]) {
 		return
 	}
-	s.Events.Append(&Event{
+	event := &Event{
 		Type:      normalized[0],
 		Service:   service,
 		Instance:  instance,
 		Message:   message,
 		Timestamp: time.Now(),
-	})
+	}
+	s.Events.Append(event)
+	if s.onEventCallback != nil {
+		go s.onEventCallback(event)
+	}
 }
 
 func (s *State) shouldRecordEvent(eventType string) bool {

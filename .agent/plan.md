@@ -1,161 +1,98 @@
-# 告警配置 UI 重新设计
+# 告警配置事件触发逻辑完整实现
 
 ## 问题分析
 
-当前告警配置页面核心问题：
+当前系统已有：
 
-1. 概念割裂：模板 / 规则分散在子 tab，需来回跳转
-2. 模板变量裸露：`{{ event_code }}` 等无任何说明，用户不知道含义和用法
-3. 三步操作链（渠道 → 模板 → 规则）没有引导
+- ✅ 事件记录机制（`State.AppendEvent()` → `EventLog.Append()`）
+- ✅ 告警规则配置（`alert.Rule` 包含 `event_code`, `threshold`, `window_sec`, `channel_ids`）
+- ✅ 通知渠道配置（`notify.Channel`）
+- ✅ 通知发送引擎（`notify.Engine.Send()`）
+- ✅ 模板变量定义（title/body template）
+
+**缺失的关键链路**：没有告警评估器将事件与规则匹配，实现"在指定时间窗口内事件达到阈值次数后触发通知"的逻辑。
 
 ## 设计方案
 
-### 核心理念：**"规则直接绑定渠道，模板作为高级选项内联"**
-
-- **简化主流程**：规则编辑器直接选择通知渠道，系统内置默认通知格式
-- **保留自定义能力**：在规则编辑器中提供"自定义模板"折叠区域
-- **变量参考面板**：在自定义模板区域旁边展示可用变量列表和说明
-
-### 数据结构变更
-
-**告警规则** 从 `template_ids` 改为：
-
-- `channel_ids: string[]` — 直接关联渠道
-- `title_template?: string` — 可选，内联标题模板
-- `body_template?: string` — 可选，内联内容模板
-- 留空时使用系统默认通知格式
-
-**删除 AlertTemplate 独立实体** — 模板不再是独立管理的对象，而是内联在规则中的可选高级选项。
-
-### 可用模板变量
-
-基于 Event 结构定义和 Rule 配置，以下变量在模板渲染时可用：
-
-| 变量名             | 来源            | 说明               | 示例值                  |
-| ------------------ | --------------- | ------------------ | ----------------------- |
-| `{{ event_code }}` | Rule.event_code | 触发事件类型       | `service_offline`       |
-| `{{ event_name }}` | 事件中文名映射  | 事件类型的中文描述 | `服务下线`              |
-| `{{ threshold }}`  | Rule.threshold  | 触发阈值次数       | `3`                     |
-| `{{ window_sec }}` | Rule.window_sec | 统计窗口秒数       | `300`                   |
-| `{{ window_min }}` | window_sec / 60 | 统计窗口分钟数     | `5`                     |
-| `{{ service }}`    | Event.service   | 触发事件的服务名   | `order-service`         |
-| `{{ instance }}`   | Event.instance  | 触发事件的实例地址 | `10.0.1.5:8080`         |
-| `{{ message }}`    | Event.message   | 事件描述信息       | `Instance deregistered` |
-| `{{ timestamp }}`  | Event.timestamp | 事件发生时间       | `2026-04-02 13:30:00`   |
-| `{{ rule_name }}`  | Rule.name       | 告警规则名称       | `服务下线告警`          |
-| `{{ count }}`      | 实际触发次数    | 窗口内实际累计次数 | `5`                     |
-
-### UI 交互设计
-
-**规则编辑器（右侧面板）布局：**
+### 核心：Alert Evaluator（告警评估器）
 
 ```
-┌───────────────────────────────────────────────┐
-│  新增告警规则                    [取消] [保存]  │
-│  当事件达到阈值时，通过指定渠道发送告警通知       │
-├───────────────────────────────────────────────┤
-│  规则名称: [_____________]                     │
-│  事件类型: [服务下线    ▼]   启用: [✓]         │
-│  阈值次数: [3        ▲▼]                      │
-│  统计窗口: [300      ▲▼] 秒                   │
-│  通知渠道: [钉钉通知, 邮件 ▼] (多选)            │
-├───────────────────────────────────────────────┤
-│  ▸ 自定义消息模板（可选）                       │
-│  ┌─默认格式预览──────────────────────────────┐ │
-│  │ [Eden] 服务下线                          │ │
-│  │ 事件：服务下线（service_offline）          │ │
-│  │ 触发条件：300 秒内达到 3 次               │ │
-│  │ 请尽快检查对应服务实例与节点状态。           │ │
-│  └──────────────────────────────────────────┘ │
-│                                               │
-│  展开后:                                      │
-│  ▾ 自定义消息模板（可选）                      │
-│  ┌─可用变量─────────────────┐                 │
-│  │ {{ event_code }}  事件类型 │                │
-│  │ {{ event_name }}  事件名称 │  ← 点击插入     │
-│  │ {{ threshold  }}  阈值次数 │                │
-│  │ {{ window_sec }}  窗口秒数 │                │
-│  │ {{ service    }}  服务名   │                │
-│  │ {{ instance   }}  实例地址 │                │
-│  │ ...                      │                │
-│  └──────────────────────────┘                 │
-│  标题模板: [Eden 告警 - {{ event_name }}___]    │
-│  内容模板: [________________________]          │
-│           [________________________]          │
-│           [________________________]          │
-└───────────────────────────────────────────────┘
+事件流: AppendEvent() → EventLog.Append()
+                    ↓ (新增回调)
+              AlertEvaluator.Evaluate(event)
+                    ↓
+         匹配规则 → 滑动窗口计数 → 达到阈值?
+                    ↓ YES
+         渲染模板 → 查找通知渠道 → Engine.Send()
 ```
+
+### 关键设计决策
+
+1. **滑动窗口**：为每条规则维护事件时间戳列表，评估时清理过期记录，统计窗口内事件数
+2. **冷却机制**：触发通知后设置冷却期（= window_sec），防止同一规则短时间内重复通知
+3. **模板渲染**：使用 Go 的 `strings.NewReplacer` 替换 `{{ var }}` 变量
+4. **线程安全**：评估器使用 `sync.Mutex` 保护内部状态
+5. **回调钩子**：在 `catalog.State` 上添加 `OnEvent` 回调，事件追加后异步触发评估
 
 ---
 
 ## Proposed Changes
 
-### 后端数据结构
+### 告警评估器（核心新增）
 
-#### [MODIFY] [store.go](file:///d:/Workspaces/Git/eden-go-registry/internal/alert/store.go)
+#### [NEW] [evaluator.go](file:///d:/Workspaces/Git/eden-go-registry/internal/alert/evaluator.go)
 
-- **删除** `Template` 结构体
-- **Rule 结构体变更**：
-  - 删除 `TemplateIDs []string`
-  - 新增 `ChannelIDs []string` `json:"channel_ids"`
-  - 新增 `TitleTemplate string` `json:"title_template,omitempty"`
-  - 新增 `BodyTemplate string` `json:"body_template,omitempty"`
-- **Config 结构体变更**：
-  - 删除 `Templates []Template`
-- 更新 `normalizeConfig` / `defaultConfig`
+告警评估器，包含：
 
-#### [MODIFY] [store_test.go](file:///d:/Workspaces/Git/eden-go-registry/internal/alert/store_test.go)
-
-- 更新测试用例适配新结构
-
----
-
-### 前端 API 类型
-
-#### [MODIFY] [index.ts](file:///d:/Workspaces/Git/eden-go-registry/web/src/api/registry/index.ts)
-
-- **删除** `AlertTemplate` 接口
-- **AlertRule** 接口：
-  - 删除 `template_ids`
-  - 新增 `channel_ids: string[]`
-  - 新增 `title_template?: string`
-  - 新增 `body_template?: string`
-- **AlertConfig** 接口：删除 `templates` 字段
+- `Evaluator` 结构体：持有规则提供者、通知渠道提供者、通知引擎
+- 滑动窗口状态：`map[ruleID][]time.Time` 记录每条规则匹配到的事件时间戳
+- 冷却状态：`map[ruleID]time.Time` 记录上次通知时间
+- `Evaluate(event)` 方法：
+  1. 遍历所有启用的规则
+  2. 匹配 `event_code`
+  3. 将当前事件时间戳加入对应规则的滑动窗口
+  4. 清理窗口外的过期时间戳
+  5. 如果窗口内计数 ≥ threshold 且不在冷却期：
+     - 渲染模板（替换变量）
+     - 查找对应通知渠道
+     - 通过 Engine.Send() 发送通知
+     - 重置窗口计数，设置冷却期
+- `renderTemplate()` 方法：替换模板变量
+- `defaultTitle/defaultBody()` 方法：规则未自定义模板时使用默认格式
 
 ---
 
-### 前端 UI
+### 事件回调钩子
 
-#### [MODIFY] [settings.vue](file:///d:/Workspaces/Git/eden-go-registry/web/src/views/settings.vue)
+#### [MODIFY] [state.go](file:///d:/Workspaces/Git/eden-go-registry/internal/catalog/state.go)
 
-**Script 变更：**
+- 新增 `onEventCallback func(*Event)` 字段
+- 新增 `SetOnEventCallback(fn)` 方法
+- 在 `AppendEvent()` 中，事件追加后，异步调用回调（`go callback(event)`）
 
-- 删除所有模板独立实体相关代码（`templateForm`、`templateEditorVisible`、`templateMode`、`TEMPLATE_PRESETS`、`openTemplateDialog`、`saveTemplateDraft`、`removeTemplate`、`pagedTemplates`、`alertSubTab` 等）
-- 新增 `TEMPLATE_VARIABLES` 常量数组，列出所有可用变量及说明
-- 新增 `showCustomTemplate` ref，控制折叠
-- 新增 `defaultTitleTemplate` / `defaultBodyTemplate` 计算属性（根据当前规则表单动态预览）
-- 新增 `insertVariable(varName)` 方法
-- `emptyRule()` 更新为 `channel_ids`、`title_template`、`body_template`
-- `saveRuleDraft()` 更新验证逻辑
+---
 
-**Template 变更 — 告警配置 tab：**
+### 系统初始化集成
 
-- 删除"告警模板 / 事件阈值规则"子 tab 切换
-- 直接展示告警规则列表 + 编辑器（与消息渠道页面同构）
-- 规则编辑器增加：
-  - "通知渠道"多选下拉（直接选消息渠道）
-  - 折叠式"自定义消息模板"区域
-    - 默认折叠，显示系统默认格式的只读预览
-    - 展开后显示：变量参考面板（可点击插入）+ 标题模板输入 + 内容模板输入
-  - 引导文字说明
-- 规则卡片展示：事件中文名、阈值窗口描述、绑定渠道名称
+#### [MODIFY] [handler.go](file:///d:/Workspaces/Git/eden-go-registry/internal/transport/http/handler.go)
 
-**Style 变更：**
+- 新增 `alertEvaluator *alert.Evaluator` 字段
+- 在 `NewHandler()` 中创建 `Evaluator` 实例
 
-- 删除模板子 tab 相关样式
-- 新增变量参考面板样式（标签式、可点击）
-- 新增折叠区域样式
-- 新增默认格式预览样式
+#### [MODIFY] [main.go](file:///d:/Workspaces/Git/eden-go-registry/cmd/server/main.go)
+
+- 将 `alertEvaluator` 的 `Evaluate` 方法注册为 `State.OnEvent` 回调
+- 修改 `NewHandler` 签名以接受 catalog State，用于注册回调
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Handler vs main.go 初始化位置**：评估器需要同时访问 alert store、notify store 和 notify engine。当前这些都在 Handler 中创建。建议在 Handler 中创建评估器并注册回调，这样不需要修改 main.go 签名。是否同意？
+
+> [!NOTE]
+> **冷却期策略**：建议触发通知后，冷却期等于规则的 `window_sec`。例如规则配置 300 秒窗口、3 次阈值，触发后 300 秒内不再重复通知。是否合理？
 
 ---
 
@@ -163,12 +100,11 @@
 
 ### Automated Tests
 
-- `go test ./internal/alert/...` — 后端结构变更不破坏编译
-- `npm run build` — 前端编译通过
+- `go test ./internal/alert/...` — 评估器单元测试
+- `go build ./cmd/server/...` — 编译通过
 
 ### Manual Verification
 
-- 浏览器验证告警规则完整 CRUD 流程
-- 验证变量参考面板展示和点击插入功能
-- 验证默认格式预览根据表单输入动态更新
-- 验证消息渠道页面不受影响
+- 配置一条告警规则（如 service_offline 事件，阈值 1，窗口 300 秒）
+- 手动触发服务下线事件
+- 验证通知是否通过配置的渠道发送

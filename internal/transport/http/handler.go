@@ -16,37 +16,48 @@ import (
 
 // Handler serves the HTTP API for both AP and CP modes.
 type Handler struct {
-	config    *config.Config
-	catalog   catalog.Registry
-	auth      auth.Authenticator
-	settings  settings.Controller
-	cluster   cluster.Membership
-	notify       *notify.Store
-	notifyEngine *notify.Engine
-	alerts       *alert.Store
-	consul    *consuladapter.HTTPAdapter
-	nodeCache sync.Map // map[string]config.Config
-	mux       *http.ServeMux
+	config         *config.Config
+	catalog        catalog.Registry
+	auth           auth.Authenticator
+	settings       settings.Controller
+	cluster        cluster.Membership
+	notify         *notify.Store
+	notifyEngine   *notify.Engine
+	alerts         *alert.Store
+	alertEvaluator *alert.Evaluator
+	consul         *consuladapter.HTTPAdapter
+	nodeCache      sync.Map // map[string]config.Config
+	mux            *http.ServeMux
 }
 
 // NewHandler creates a unified HTTP handler.
 func NewHandler(cfg *config.Config,
+	eventState *catalog.State,
 	catalogRegistry catalog.Registry,
 	authenticator auth.Authenticator,
 	settingsController settings.Controller,
 	clusterMembership cluster.Membership) *Handler {
+	notifyStore := notify.NewStore(settingsController)
+	notifyEngine := notify.NewEngine()
+	alertStore := alert.NewStore(settingsController)
+	alertEvaluator := alert.NewEvaluator(alertStore, notifyStore, notifyEngine)
+
 	h := &Handler{
-		config:    cfg,
-		catalog:   catalogRegistry,
-		auth:      authenticator,
-		settings:  settingsController,
-		cluster:   clusterMembership,
-		notify:       notify.NewStore(settingsController),
-		notifyEngine: notify.NewEngine(),
-		alerts:       alert.NewStore(settingsController),
-		consul:    consuladapter.NewHTTPAdapter(cfg, catalogRegistry),
-		nodeCache: sync.Map{},
-		mux:       http.NewServeMux(),
+		config:         cfg,
+		catalog:        catalogRegistry,
+		auth:           authenticator,
+		settings:       settingsController,
+		cluster:        clusterMembership,
+		notify:         notifyStore,
+		notifyEngine:   notifyEngine,
+		alerts:         alertStore,
+		alertEvaluator: alertEvaluator,
+		consul:         consuladapter.NewHTTPAdapter(cfg, catalogRegistry),
+		nodeCache:      sync.Map{},
+		mux:            http.NewServeMux(),
+	}
+	if eventState != nil {
+		eventState.SetOnEventCallback(alertEvaluator.Evaluate)
 	}
 	h.registerRoutes()
 	return h
@@ -141,7 +152,6 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/alert/config", h.Auth(adminOrDev(http.HandlerFunc(h.alertConfig))))
 	h.mux.Handle("/v1/notify/test", h.Auth(adminOrDev(http.HandlerFunc(h.testNotification))))
 	h.mux.Handle("/v1/notify/channel/test", h.Auth(adminOrDev(http.HandlerFunc(h.testChannelNotification))))
-
 
 	// --- Internal Sync (no auth, for inter-node communication) ---
 	h.mux.HandleFunc("/internal/sync/seeds", h.syncSeeds)

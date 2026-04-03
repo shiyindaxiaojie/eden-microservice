@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from '../utils/i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Bell,
@@ -40,6 +41,8 @@ import {
 
 type CredentialView = 'grid' | 'list'
 type EditMode = 'create' | 'edit'
+
+const { t, locale } = useI18n()
 
 interface ChannelEditor extends NotificationChannel {
   webhookUrl: string
@@ -108,23 +111,23 @@ const PAGE_SIZE = 9
 const pagedChannels = computed(() => notifyConfig.value.channels.slice((channelCurrentPage.value - 1) * PAGE_SIZE, channelCurrentPage.value * PAGE_SIZE))
 const pagedRules = computed(() => alertConfig.value.rules.slice((ruleCurrentPage.value - 1) * PAGE_SIZE, ruleCurrentPage.value * PAGE_SIZE))
 
-const EVENT_OPTIONS = [
-  { value: 'service_register', label: '服务注册' },
-  { value: 'service_online', label: '服务上线' },
-  { value: 'service_offline', label: '服务下线' },
-  { value: 'registry_node_sync', label: '节点同步' },
-  { value: 'service_heartbeat', label: '服务心跳' },
-  { value: 'service_remove', label: '服务移除' },
-]
+const EVENT_OPTIONS = computed(() => [
+  { value: 'service_register', label: t.value.settings.serviceRegister },
+  { value: 'service_online', label: t.value.settings.serviceOnline },
+  { value: 'service_offline', label: t.value.settings.serviceOffline },
+  { value: 'registry_node_sync', label: t.value.settings.nodeSync },
+  { value: 'service_heartbeat', label: t.value.settings.serviceHeartbeat },
+  { value: 'service_remove', label: t.value.settings.serviceRemove },
+])
 
 const LOG_LEVEL_OPTIONS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
 
-const MESSAGE_PROVIDER_OPTIONS = [
-  { label: '通用 Webhook', value: 'generic' },
-  { label: '钉钉', value: 'dingtalk' },
-  { label: '飞书', value: 'feishu' },
-  { label: '企业微信', value: 'wecom' },
-]
+const MESSAGE_PROVIDER_OPTIONS = computed(() => [
+  { label: locale.value === 'zh' ? '通用 Webhook' : 'Generic Webhook', value: 'generic' },
+  { label: locale.value === 'zh' ? '钉钉' : 'DingTalk', value: 'dingtalk' },
+  { label: locale.value === 'zh' ? '飞书' : 'Lark/Feishu', value: 'feishu' },
+  { label: locale.value === 'zh' ? '企业微信' : 'WeCom', value: 'wecom' },
+])
 
 const WEBHOOK_CONFIG_KEYS = new Set(['url', 'secret'])
 const EMAIL_CONFIG_KEYS = new Set([
@@ -147,25 +150,35 @@ const EMAIL_CONFIG_KEYS = new Set([
   'to',
 ])
 
-const TEMPLATE_VARIABLES: TemplateVariable[] = [
-  { name: 'event_code', label: '事件类型', desc: '触发事件的英文标识', example: 'service_offline' },
-  { name: 'event_name', label: '事件名称', desc: '事件类型的中文描述', example: '服务下线' },
-  { name: 'rule_name', label: '规则名称', desc: '当前告警规则名称', example: '服务下线告警' },
-  { name: 'threshold', label: '阈值次数', desc: '规则配置的触发阈值', example: '3' },
-  { name: 'window_sec', label: '窗口秒数', desc: '统计窗口时长（秒）', example: '300' },
-  { name: 'window_min', label: '窗口分钟', desc: '统计窗口时长（分钟）', example: '5' },
-  { name: 'count', label: '实际次数', desc: '窗口内实际累计次数', example: '5' },
-  { name: 'service', label: '服务名', desc: '触发事件的服务名称', example: 'order-service' },
-  { name: 'instance', label: '实例地址', desc: '触发事件的实例地址', example: '10.0.1.5:8080' },
-  { name: 'message', label: '事件描述', desc: '事件的详细描述信息', example: 'Instance deregistered' },
-  { name: 'timestamp', label: '触发时间', desc: '事件发生的时间', example: '2026-04-02 13:30:00' },
-]
+const TEMPLATE_VARIABLES = computed<TemplateVariable[]>(() => [
+  { name: 'event_code', label: locale.value === 'zh' ? '事件类型' : 'Event Code', desc: locale.value === 'zh' ? '触发事件的英文标识' : 'English identifier for the triggered event', example: 'service_offline' },
+  { name: 'event_name', label: locale.value === 'zh' ? '事件名称' : 'Event Name', desc: locale.value === 'zh' ? '事件类型的中文描述' : 'Display name of the event type', example: locale.value === 'zh' ? '服务下线' : 'Service Offline' },
+  { name: 'rule_name', label: locale.value === 'zh' ? '规则名称' : 'Rule Name', desc: locale.value === 'zh' ? '当前告警规则名称' : 'Name of the current alarm rule', example: locale.value === 'zh' ? '服务下线告警' : 'Service Offline Alarm' },
+  { name: 'threshold', label: locale.value === 'zh' ? '阈值次数' : 'Threshold', desc: locale.value === 'zh' ? '规则配置的触发阈值' : 'Trigger threshold configured in the rule', example: '3' },
+  { name: 'window_sec', label: locale.value === 'zh' ? '窗口秒数' : 'Window Seconds', desc: locale.value === 'zh' ? '统计窗口时长（秒）' : 'Statistical window duration (seconds)', example: '300' },
+  { name: 'window_min', label: locale.value === 'zh' ? '窗口分钟' : 'Window Minutes', desc: locale.value === 'zh' ? '统计窗口时长（分钟）' : 'Statistical window duration (minutes)', example: '5' },
+  { name: 'count', label: locale.value === 'zh' ? '实际次数' : 'Actual Count', desc: locale.value === 'zh' ? '窗口内实际累计次数' : 'Actual accumulated occurrences within the window', example: '5' },
+  { name: 'service', label: locale.value === 'zh' ? '服务名' : 'Service Name', desc: locale.value === 'zh' ? '触发事件的服务名称' : 'Name of the service that triggered the event', example: 'order-service' },
+  { name: 'instance', label: locale.value === 'zh' ? '实例地址' : 'Instance Addr', desc: locale.value === 'zh' ? '触发事件的实例地址' : 'Address of the instance that triggered the event', example: '10.0.1.5:8080' },
+  { name: 'message', label: locale.value === 'zh' ? '事件描述' : 'Message', desc: locale.value === 'zh' ? '事件的详细描述信息' : 'Detailed description of the event', example: 'Instance deregistered' },
+  { name: 'timestamp', label: locale.value === 'zh' ? '触发时间' : 'Timestamp', desc: locale.value === 'zh' ? '事件发生的时间' : 'Time when the event occurred', example: '2026-04-02 13:30:00' },
+])
 
 function getDynamicTitleTemplate() {
-  return '注册中心告警 - {{ event_name }}'
+  return locale.value === 'zh' ? '注册中心告警 - {{ event_name }}' : 'Registry Alarm - {{ event_name }}'
 }
 
 function getDynamicBodyTemplate(eventCode: string) {
+  if (locale.value === 'en') {
+    switch (eventCode) {
+      case 'service_offline': return 'Service Offline Alarm: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nCondition: Reached {{ threshold }} occurrences within {{ window_sec }}s\nPlease check service health.'
+      case 'service_heartbeat': return 'Service Heartbeat Anomaly: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: Service instance failed heartbeats consecutively.'
+      case 'registry_node_sync': return 'Cluster Node Sync Anomaly\nType: {{ event_code }}\nTime: {{ timestamp }}\nImpact: Potential temporary service list inconsistency.'
+      case 'service_online': return 'Service Online Notice: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: New service instance is online and ready for traffic.'
+      case 'service_remove': return 'Service Removal Alarm: {{ service }}\nTime: {{ timestamp }}\nDesc: Service has been completely removed from the registry.'
+      default: return 'Event: {{ event_name }} ({{ event_code }})\nCondition: Reached {{ threshold }} occurrences within {{ window_sec }}s\nRecorded: {{ timestamp }}\nPlease check system status.'
+    }
+  }
   switch (eventCode) {
     case 'service_offline': return '服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。'
     case 'service_heartbeat': return '服务心跳异常：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：服务实例连续多次心跳失败。'
@@ -347,9 +360,9 @@ const channelForm = ref<ChannelEditor>(emptyChannel())
 const ruleForm = ref<AlertRule>(emptyRule())
 
 function handleEventCodeChange(val: string) {
-  // 检查当前模板是否还是默认模板（或者是之前某个事件的默认模板），如果是则更新为新事件类型的默认模板
+  // Check if current template is default (or default for previous event), if so update to new event default
   const currentBody = ruleForm.value.body_template
-  const isBodyEmptyOrDefault = !currentBody || EVENT_OPTIONS.some(opt => getDynamicBodyTemplate(opt.value) === currentBody)
+  const isBodyEmptyOrDefault = !currentBody || EVENT_OPTIONS.value.some(opt => getDynamicBodyTemplate(opt.value) === currentBody)
   
   if (isBodyEmptyOrDefault) {
     ruleForm.value.body_template = getDynamicBodyTemplate(val)
@@ -398,20 +411,20 @@ const defaultBodyTemplate = computed(() => {
     .replace(/\{\{\s*service\s*\}\}/g, 'example-service')
     .replace(/\{\{\s*instance\s*\}\}/g, '10.0.1.5:8080')
     .replace(/\{\{\s*message\s*\}\}/g, 'Instance deregistered')
-    .replace(/\{\{\s*timestamp\s*\}\}/g, new Date().toLocaleString('zh-CN'))
+    .replace(/\{\{\s*timestamp\s*\}\}/g, new Date().toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US'))
     .replace(/\{\{\s*count\s*\}\}/g, String(rule.threshold || 1))
 })
 
 function providerLabel(provider: string) {
-  return MESSAGE_PROVIDER_OPTIONS.find((item) => item.value === provider)?.label || provider || '-'
+  return MESSAGE_PROVIDER_OPTIONS.value.find((item) => item.value === provider)?.label || provider || '-'
 }
 
 function channelTypeLabel(type: string) {
-  return type === 'email' ? '邮件' : 'Webhook'
+  return type === 'email' ? t.value.settings.email : t.value.settings.webhook
 }
 
 function eventLabel(code: string) {
-  return EVENT_OPTIONS.find((item) => item.value === code)?.label || code
+  return EVENT_OPTIONS.value.find((item) => item.value === code)?.label || code
 }
 
 function createDefaultSettings(): SystemSettings {
@@ -421,7 +434,7 @@ function createDefaultSettings(): SystemSettings {
     log_level: 'INFO',
     event_retention_days: 30,
     log_retention_days: 30,
-    event_types: EVENT_OPTIONS.map((item) => item.value),
+    event_types: EVENT_OPTIONS.value.map((item) => item.value),
     heartbeat_max_failures: 3,
     instance_removal_delay_seconds: 600,
     api_key_auth_enabled: false,
@@ -438,7 +451,7 @@ function cloneSettings(settings: SystemSettings): SystemSettings {
 
 function normalizeEventTypes(values?: string[]): string[] {
   if (!values) return []
-  const valid = new Set(EVENT_OPTIONS.map((item) => item.value))
+  const valid = new Set(EVENT_OPTIONS.value.map((item) => item.value))
   const seen = new Set<string>()
   return values.filter((value) => {
     if (!valid.has(value) || seen.has(value)) {
@@ -498,18 +511,18 @@ const isDirty = computed(() => {
 const messageProviderOptions = computed(() =>
   channelForm.value.type === 'email'
     ? [{ label: 'SMTP', value: 'smtp' }]
-    : MESSAGE_PROVIDER_OPTIONS,
+    : MESSAGE_PROVIDER_OPTIONS.value,
 )
 
 const notifyNodeDirty = computed(() => (draftSettings.value.notify_alert_node_id || '') !== (appliedSettings.value.notify_alert_node_id || ''))
 const ruleChannelOptions = computed(() => notifyConfig.value.channels)
-const channelEditorTitle = computed(() => (channelMode.value === 'create' ? '新增消息渠道' : '编辑消息渠道'))
-const ruleEditorTitle = computed(() => (ruleMode.value === 'create' ? '新增告警规则' : '编辑告警规则'))
+const channelEditorTitle = computed(() => (channelMode.value === 'create' ? t.value.settings.addChannel : t.value.settings.editChannel))
+const ruleEditorTitle = computed(() => (ruleMode.value === 'create' ? t.value.settings.addAlarmRule : t.value.settings.editAlarmRule))
 
 function handleSettingsSaveError(error: any, fallback: string) {
   const data = error.response?.data
   if (data?.error === 'not leader' && data?.leader) {
-    ElMessage.warning(`当前节点不是 Leader，请到 ${data.leader} 节点执行保存`)
+    ElMessage.warning(`${locale.value === 'zh' ? '当前节点不是 Leader，请到' : 'Current node is not Leader, please go to'} ${data.leader} ${locale.value === 'zh' ? '节点执行保存' : 'to save'}`)
   } else {
     ElMessage.error(data?.error || fallback)
   }
@@ -542,12 +555,12 @@ async function saveSystemConfig() {
     appliedSettings.value = cloneSettings(payload)
     draftSettings.value = cloneSettings(payload)
     if (data.restart_required) {
-      ElMessage.warning(data.message || '当前变更需要重启后生效')
+      ElMessage.warning(data.message || t.value.settings.restartWarning)
     } else {
-      ElMessage.success('系统设置已保存')
+      ElMessage.success(t.value.settings.saveSuccess)
     }
   } catch (error: any) {
-    handleSettingsSaveError(error, '保存系统设置失败')
+    handleSettingsSaveError(error, locale.value === 'zh' ? '保存系统设置失败' : 'Failed to save system settings')
   } finally {
     saveLoading.value = false
   }
@@ -567,12 +580,12 @@ async function saveNotifyAlertNode() {
     }
     draftSettings.value.notify_alert_node_id = payload.notify_alert_node_id
     if (data.restart_required) {
-      ElMessage.warning(data.message || '通知配置节点修改后需要重启生效')
+      ElMessage.warning(data.message || (locale.value === 'zh' ? '通知配置节点修改后需要重启生效' : 'Notification node change requires restart'))
     } else {
-      ElMessage.success('通知配置节点已保存')
+      ElMessage.success(t.value.common.success)
     }
   } catch (error: any) {
-    handleSettingsSaveError(error, '保存通知配置节点失败')
+    handleSettingsSaveError(error, locale.value === 'zh' ? '保存通知配置节点失败' : 'Failed to save notification node config')
   } finally {
     notifyNodeSaving.value = false
   }
@@ -584,7 +597,7 @@ async function fetchNotifyConfig() {
     const response = await getNotificationConfig('default')
     notifyConfig.value = response.data || { channels: [] }
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || '加载消息渠道配置失败')
+    ElMessage.error(error.response?.data?.error || (locale.value === 'zh' ? '加载消息渠道配置失败' : 'Failed to load notification channels'))
   } finally {
     messageLoading.value = false
   }
@@ -917,7 +930,7 @@ async function deleteKey(key: string) {
       type: 'warning',
     })
     await api.post(`/v1/settings/apikey/delete?key=${encodeURIComponent(key)}`)
-    ElMessage.success('API Key 已删除')
+    ElMessage.success(t.value.common.success)
     await fetchKeys()
   } catch (error) {
     if (error) {
@@ -968,7 +981,7 @@ onMounted(() => {
     <el-tabs v-model="activeTab" class="settings-tabs">
       <el-tab-pane name="basic">
         <template #label>
-          <span class="tab-label"><el-icon><Setting /></el-icon>基本设置</span>
+          <span class="tab-label"><el-icon><Setting /></el-icon>{{ t.settings.basic }}</span>
         </template>
 
         <div class="tab-content basic-settings">
@@ -977,20 +990,18 @@ onMounted(() => {
               <section class="settings-section glass-card mode-section">
                 <div class="section-header">
                   <el-icon><Operation /></el-icon>
-                  <h4>运行模式</h4>
+                  <h4>{{ t.settings.runningMode }}</h4>
                   <div class="status-tags">
                     <div class="status-indicator">
                       <span class="indicator-dot" :class="appliedEnvironment === 'cluster' ? 'active' : 'idle'"></span>
-                      <span class="dot-label">当前运行:</span>
+                      <span class="dot-label">{{ t.settings.currentRunning }}</span>
                       <el-tag :type="appliedEnvironment === 'cluster' ? 'primary' : 'info'" size="small" effect="dark">
-                        {{ appliedEnvironment === 'cluster' ? '集群模式' : '单机模式' }}
+                        {{ appliedEnvironment === 'cluster' ? t.settings.clusterTitle : t.settings.singleTitle }}
                       </el-tag>
                     </div>
                     <div class="status-indicator" v-if="appliedEnvironment === 'cluster'">
-                      <span class="dot-label">一致性:</span>
-                      <el-tag :class="appliedMode === 'cp' ? 'tag-cp' : 'tag-ap'" size="small" effect="dark">
-                        {{ appliedMode === 'cp' ? '强一致性' : '最终一致性' }}
-                      </el-tag>
+                      <span class="dot-label">{{ t.settings.consistency }}:</span>
+                        {{ appliedMode === 'cp' ? t.settings.cpTitle : t.settings.apTitle }}
                     </div>
                   </div>
                 </div>
@@ -1006,8 +1017,8 @@ onMounted(() => {
                       <div class="card-inner">
                         <div class="mode-icon-v7"><el-icon><Monitor /></el-icon></div>
                         <div class="mode-content-v7">
-                          <div class="mode-title-v7">单机模式</div>
-                          <div class="mode-desc-v7">本地闭环，轻量化部署，不涉及分布式一致性协议。</div>
+                          <div class="mode-title-v7">{{ t.settings.singleTitle }}</div>
+                          <div class="mode-desc-v7">{{ t.settings.modeDescStandalone }}</div>
                         </div>
                       </div>
                     </div>
@@ -1021,25 +1032,25 @@ onMounted(() => {
                       <div class="card-inner">
                         <div class="mode-icon-v7 cluster"><el-icon><Share /></el-icon></div>
                         <div class="mode-content-v7">
-                          <div class="mode-title-v7">分布式集群模式</div>
+                          <div class="mode-title-v7">{{ t.settings.clusterTitle }}</div>
 
                           <div class="integrated-toggle-v7" :class="[previewMode]" v-if="previewEnvironment === 'cluster'" @click.stop>
                             <div class="toggle-option" :class="{ selected: previewMode === 'ap' }" @click="setDraftMode('ap')">
                               <div class="toggle-bg"></div>
                               <div class="toggle-text">
-                                <span class="primary">AP 模式</span>
-                                <span class="secondary">可用性优先</span>
+                                <span class="primary">{{ t.settings.apModeShort }}</span>
+                                <span class="secondary">{{ t.settings.availabilityFirst }}</span>
                               </div>
                             </div>
                             <div class="toggle-option" :class="{ selected: previewMode === 'cp' }" @click="setDraftMode('cp')">
                               <div class="toggle-bg"></div>
                               <div class="toggle-text">
-                                <span class="primary">CP 模式</span>
-                                <span class="secondary">强一致性</span>
+                                <span class="primary">{{ t.settings.cpModeShort }}</span>
+                                <span class="secondary">{{ t.settings.consistencyFirst }}</span>
                               </div>
                             </div>
                           </div>
-                          <div class="mode-desc-v7" v-else>启用分布式协调，支持 AP / CP 协议切换。</div>
+                          <div class="mode-desc-v7" v-else>{{ t.settings.modeDescCluster }}</div>
                         </div>
                       </div>
                     </div>
@@ -1051,13 +1062,13 @@ onMounted(() => {
                     <el-icon><InfoFilled /></el-icon>
                     <div class="bubble-content">
                       <template v-if="previewEnvironment === 'standalone'">
-                        <strong>单机模式:</strong> 本地闭环，用于开发测试或边缘单点场景。
+                        <strong>{{ t.settings.singleTitle }}:</strong> {{ t.settings.modeDescStandalone }}
                       </template>
                       <template v-else-if="previewMode === 'ap'">
-                        <strong>AP 模式 (Gossip):</strong> 分区容错性高，优先保证系统可用，节点间数据最终对齐。
+                        <strong>{{ t.settings.apModeShort }} (Gossip):</strong> {{ t.settings.apDesc }}
                       </template>
                       <template v-else>
-                        <strong>CP 模式 (Raft):</strong> 通过多数派与 Leader 协调保证强一致，适合关键元数据管理。
+                        <strong>{{ t.settings.cpModeShort }} (Raft):</strong> {{ t.settings.cpDesc }}
                       </template>
                     </div>
                   </div>
@@ -1068,9 +1079,9 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Connection /></el-icon>
                   <div class="section-title-with-tip">
-                    <h4>实例存活策略</h4>
+                    <h4>{{ t.settings.survivalStrategy }}</h4>
                     <el-tooltip
-                      content="注册中心不会在首次心跳异常时立即摘除实例，而是先进入保护窗口，给实例恢复与补发心跳的机会。" placement="top"
+                      :content="t.settings.survivalStrategyTip" placement="top"
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1082,8 +1093,8 @@ onMounted(() => {
                     <el-form-item class="switch-form-item">
                       <template #label>
                         <span class="label-with-tip">
-                          客户端凭据认证
-                          <el-tooltip content="主要用于控制客户端集成注册中心时是否需要携带凭据，默认不开启。" placement="top">
+                          {{ t.settings.clientAuth }}
+                          <el-tooltip :content="t.settings.clientAuthTip" placement="top">
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
                         </span>
@@ -1096,9 +1107,9 @@ onMounted(() => {
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
-                          心跳超时次数
+                          {{ t.settings.heartbeatTimeout }}
                           <el-tooltip
-                            content="默认 3 次连续丢失心跳达到阈值后，实例会先标记为下线，而不是立即删除。" placement="top"
+                            :content="t.settings.heartbeatTimeoutTip" placement="top"
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1116,9 +1127,9 @@ onMounted(() => {
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
-                          实例保留（分钟）
+                          {{ t.settings.instanceRetention }}
                           <el-tooltip
-                            content="默认 10 分钟。适合处理服务重启、网络抖动或 CPU 过高导致的心跳延迟。" placement="top"
+                            :content="t.settings.instanceRetentionTip" placement="top"
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1141,18 +1152,18 @@ onMounted(() => {
               <section class="settings-section glass-card side-section">
                 <div class="section-header">
                   <el-icon><Bell /></el-icon>
-                  <h4>事件设置</h4>
+                  <h4>{{ t.settings.eventSettings }}</h4>
                 </div>
 
                 <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item label="事件保留（天）">
+                  <el-form-item :label="t.settings.retention">
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.event_retention_days" :min="1" :max="365" style="flex: 1" />
                       <span class="val-text">{{ draftSettings.event_retention_days }}</span>
                     </div>
                   </el-form-item>
 
-                  <el-form-item label="触发事件">
+                  <el-form-item :label="t.settings.triggerEvents">
                     <el-checkbox-group v-model="draftSettings.event_types" class="event-checkbox-grid">
                       <el-checkbox v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.value">
                         {{ item.label }}
@@ -1166,9 +1177,9 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Document /></el-icon>
                   <div class="section-title-with-tip">
-                    <h4>日志配置</h4>
+                    <h4>{{ t.settings.logConfig }}</h4>
                     <el-tooltip
-                      content="日志级别会在保存后立即更新当前进程；日志保留时长会同步写入持久化配置，用于后续日志滚动与清理策略。" placement="top"
+                      :content="t.settings.logConfigTip" placement="top"
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1176,8 +1187,8 @@ onMounted(() => {
                 </div>
 
                 <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item label="日志级别">
-                    <div class="log-level-options" role="radiogroup" aria-label="日志级别">
+                  <el-form-item :label="t.settings.logLevel">
+                    <div class="log-level-options" role="radiogroup" :aria-label="t.settings.logLevel">
                       <button
                         v-for="level in LOG_LEVEL_OPTIONS"
                         :key="level"
@@ -1191,7 +1202,7 @@ onMounted(() => {
                     </div>
                   </el-form-item>
 
-                  <el-form-item label="日志保留（天）">
+                  <el-form-item :label="t.settings.logRetention">
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.log_retention_days" :min="1" :max="365" style="flex: 1" />
                       <span class="val-text">{{ draftSettings.log_retention_days }}</span>
@@ -1204,9 +1215,9 @@ onMounted(() => {
 
           <div class="save-toolbar">
             <div class="save-actions">
-              <el-button @click="resetDraftSettings" :disabled="!isDirty || saveLoading">重置</el-button>
+              <el-button @click="resetDraftSettings" :disabled="!isDirty || saveLoading">{{ t.settings.reset }}</el-button>
               <el-button type="primary" @click="saveSystemConfig" :loading="saveLoading" :disabled="!isDirty">
-                保存设置
+                {{ t.settings.saveSettings }}
               </el-button>
             </div>
           </div>
@@ -1215,18 +1226,18 @@ onMounted(() => {
 
       <el-tab-pane name="credentials">
         <template #label>
-          <span class="tab-label"><el-icon><Key /></el-icon>凭据管理</span>
+          <span class="tab-label"><el-icon><Key /></el-icon>{{ t.settings.credentials }}</span>
         </template>
 
         <div class="tab-content">
           <div class="content-header credentials-header">
-            <p class="content-desc credentials-desc">管理服务注册与控制台访问使用的 API Key，支持快速生成、复制与回收。</p>
+            <p class="content-desc credentials-desc">{{ t.settings.credentialsDesc }}</p>
             <div class="credentials-toolbar">
               <div class="pill-group icon-pills credential-view-pills" aria-label="API Key 视图切换">
                 <button
                   type="button"
                   :class="{ active: credentialView === 'list' }"
-                  title="列表视图"
+                  :title="t.settings.listView"
                   @click="credentialView = 'list'"
                 >
                   <el-icon><List /></el-icon>
@@ -1234,7 +1245,7 @@ onMounted(() => {
                 <button
                   type="button"
                   :class="{ active: credentialView === 'grid' }"
-                  title="卡片视图"
+                  :title="t.settings.gridView"
                   @click="credentialView = 'grid'"
                 >
                   <el-icon><Grid /></el-icon>
@@ -1242,7 +1253,7 @@ onMounted(() => {
               </div>
               <el-button type="primary" class="new-key-btn" @click="showDialog = true; generateRandKey()">
                 <el-icon style="margin-right: 4px"><Plus /></el-icon>
-                新建 API Key
+                {{ t.settings.newApiKey }}
               </el-button>
             </div>
           </div>
@@ -1253,20 +1264,20 @@ onMounted(() => {
                 <code class="key-code" :title="item.key">{{ item.key.substring(0, 24) }}...</code>
                 <div class="key-actions">
                   <el-tag v-if="item.status === 'expired'" type="danger" size="small" effect="dark" class="status-tag">
-                    已过期
+                    {{ t.settings.expired }}
                   </el-tag>
                   <el-button link type="primary" :icon="CopyDocument" @click="copyKey(item.key)" />
                   <el-button link type="danger" :icon="Delete" @click="deleteKey(item.key)" />
                 </div>
               </div>
               <div class="key-body">
-                <div class="key-desc">{{ item.description || '无描述' }}</div>
+                <div class="key-desc">{{ item.description || t.settings.noDescription }}</div>
                 <div class="key-info">
                   <div class="key-date">
-                    <el-icon><Timer /></el-icon> 过期时间: {{ formatDate(item.expires_at) }}
+                    <el-icon><Timer /></el-icon> {{ t.settings.expiration }}: {{ formatDate(item.expires_at) }}
                   </div>
                   <div class="key-date">
-                    <el-icon><Timer /></el-icon> 创建时间: {{ formatDate(item.created_at) }}
+                    <el-icon><Timer /></el-icon> {{ t.settings.created }}: {{ formatDate(item.created_at) }}
                   </div>
                 </div>
               </div>
@@ -1283,20 +1294,20 @@ onMounted(() => {
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="description" label="描述" min-width="180" />
-              <el-table-column prop="status" label="状态" width="100">
+              <el-table-column prop="description" :label="t.settings.description" min-width="180" />
+              <el-table-column prop="status" :label="t.common.status" width="100">
                 <template #default="scope">
                   <el-tag :type="scope.row.status === 'expired' ? 'danger' : 'success'" size="small">
                     {{ scope.row.status === 'expired' ? '已过期' : '生效中' }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="过期时间" width="180">
+              <el-table-column :label="t.settings.expiration" width="180">
                 <template #default="scope">
                   {{ formatDate(scope.row.expires_at) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80" align="right">
+              <el-table-column :label="t.settings.actions" width="80" align="right">
                 <template #default="scope">
                   <el-button link type="danger" :icon="Delete" @click="deleteKey(scope.row.key)" />
                 </template>
@@ -1304,13 +1315,13 @@ onMounted(() => {
             </el-table>
           </div>
 
-          <el-empty v-if="!keysLoading && keys.length === 0" description="暂无 API Key" />
+          <el-empty v-if="!keysLoading && keys.length === 0" :description="t.settings.noCredentials" />
         </div>
       </el-tab-pane>
 
       <el-tab-pane name="channels">
         <template #label>
-          <span class="tab-label"><el-icon><Share /></el-icon>消息渠道</span>
+          <span class="tab-label"><el-icon><Share /></el-icon>{{ t.settings.channels }}</span>
         </template>
 
         <div class="tab-content ops-settings-tab" v-loading="messageLoading">
@@ -1318,23 +1329,23 @@ onMounted(() => {
             <div class="ops-toolbar-v2">
               <div class="toolbar-left">
                 <el-icon class="toolbar-icon"><Connection /></el-icon>
-                <span class="toolbar-label">消息发送节点</span>
-                <el-tooltip content="所有消息将由该节点负责推送。" placement="bottom">
+                <span class="toolbar-label">{{ t.settings.messageSendNode }}</span>
+                <el-tooltip :content="t.settings.messageSendNodeTip" placement="bottom">
                   <el-select v-model="draftSettings.notify_alert_node_id" class="minimal-select" size="default" style="width: 200px">
                     <el-option
                       v-for="item in members"
                       :key="item.id"
-                      :label="`${item.id}${item.is_local ? '（当前节点）' : ''}`"
+                      :label="`${item.id}${item.is_local ? `（${t.cluster.currentNode}）` : ''}`"
                       :value="item.id"
                     />
                   </el-select>
                 </el-tooltip>
                 <el-button v-if="notifyNodeDirty" type="primary" link :loading="notifyNodeSaving" @click="saveNotifyAlertNode">
-                  保存节点配置
+                  {{ t.settings.saveNodeConfig }}
                 </el-button>
               </div>
               <div class="toolbar-right">
-                <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">新增渠道</el-button>
+                <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">{{ t.settings.addChannel }}</el-button>
               </div>
             </div>
 
@@ -1362,11 +1373,11 @@ onMounted(() => {
                         </div>
                       </div>
                       <div class="entity-actions-v2">
-                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? t.settings.channelEnabled : t.settings.channelDisabled }}</el-tag>
                         <div class="action-btn-group">
-                          <el-button link type="primary" size="small" @click.stop="openChannelDialog('edit', item)">编辑</el-button>
+                          <el-button link type="primary" size="small" @click.stop="openChannelDialog('edit', item)">{{ t.common.edit }}</el-button>
                           <el-divider direction="vertical" />
-                          <el-button link type="danger" size="small" @click.stop="removeChannel(item)">删除</el-button>
+                          <el-button link type="danger" size="small" @click.stop="removeChannel(item)">{{ t.common.delete }}</el-button>
                         </div>
                       </div>
                     </div>
@@ -1386,9 +1397,9 @@ onMounted(() => {
                   <div class="empty-icon-large">
                     <el-icon><Share /></el-icon>
                   </div>
-                  <div class="empty-state-title">尚未配置消息渠道</div>
-                  <div class="empty-state-desc">新增 Webhook 或邮件渠道后，模板和规则都会基于此进行关联推送。</div>
-                  <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">新增第一个渠道</el-button>
+                  <div class="empty-state-title">{{ t.settings.noChannel }}</div>
+                  <div class="empty-state-desc">{{ t.settings.noChannelDesc }}</div>
+                  <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">{{ t.settings.addFirstChannel }}</el-button>
                 </div>
               </div>
 
@@ -1401,71 +1412,71 @@ onMounted(() => {
                         <div class="editor-title">{{ channelEditorTitle }}</div>
                       </div>
                       <div class="editor-actions">
-                        <el-button @click="closeChannelEditor">取消</el-button>
-                        <el-button :icon="Bell" @click="testChannelNotification">测试</el-button>
-                        <el-button type="primary" :loading="messageSaving" @click="saveChannelDraft">保存</el-button>
+                        <el-button @click="closeChannelEditor">{{ t.common.cancel }}</el-button>
+                        <el-button :icon="Bell" @click="testChannelNotification">{{ t.settings.testNotice }}</el-button>
+                        <el-button type="primary" :loading="messageSaving" @click="saveChannelDraft">{{ t.common.confirm }}</el-button>
                       </div>
                     </div>
                   </div>
 
                   <el-form label-position="left" label-width="100px" class="compact-form editor-form inline-label-form">
                     <div class="ops-form-grid-3col">
-                      <el-form-item label="名称">
-                        <el-input v-model="channelForm.name" placeholder="例如：生产环境告警" />
+                      <el-form-item :label="t.common.name">
+                        <el-input v-model="channelForm.name" />
                       </el-form-item>
-                      <el-form-item label="类型">
+                      <el-form-item :label="t.common.type">
                         <el-select v-model="channelForm.type" @change="handleChannelTypeChange">
-                          <el-option label="Webhook" value="webhook" />
-                          <el-option label="邮件" value="email" />
+                          <el-option :label="t.settings.webhook" value="webhook" />
+                          <el-option :label="t.settings.email" value="email" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="提供方">
+                      <el-form-item :label="t.settings.provider">
                         <el-select v-model="channelForm.provider" :disabled="channelForm.type === 'email'">
                           <el-option v-for="item in messageProviderOptions" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="启用状态">
+                      <el-form-item :label="t.settings.channelStatus">
                         <el-switch v-model="channelForm.enabled" />
                       </el-form-item>
                     </div>
 
-                    <el-form-item label="渠道描述">
-                      <el-input v-model="channelForm.description" type="textarea" :rows="2" placeholder="可选，用于说明这个渠道的用途" />
+                    <el-form-item :label="t.settings.channelDesc">
+                      <el-input v-model="channelForm.description" type="textarea" :rows="2" :placeholder="t.settings.channelDescPlaceholder" />
                     </el-form-item>
 
                     <template v-if="channelForm.type === 'webhook'">
                       <div class="ops-form-grid-3col">
-                        <el-form-item label="地址 (URL)" style="grid-column: span 2;">
-                          <el-input v-model="channelForm.webhookUrl" placeholder="https://your-webhook-endpoint" />
+                        <el-form-item :label="t.settings.webhookUrl" style="grid-column: span 2;">
+                          <el-input v-model="channelForm.webhookUrl" />
                         </el-form-item>
-                        <el-form-item label="签名密钥">
-                          <el-input v-model="channelForm.webhookSecret" show-password placeholder="可选" />
+                        <el-form-item :label="t.settings.webhookSecret">
+                          <el-input v-model="channelForm.webhookSecret" show-password :placeholder="t.common.none" />
                         </el-form-item>
                       </div>
                     </template>
                     <template v-else>
                       <div class="ops-form-grid-2col channel-email-grid">
-                        <el-form-item label="SMTP 主机">
-                          <el-input v-model="channelForm.emailHost" placeholder="例如：smtp.example.com" />
+                        <el-form-item :label="t.settings.smtpHost">
+                          <el-input v-model="channelForm.emailHost" />
                         </el-form-item>
-                        <el-form-item label="SMTP 端口">
+                        <el-form-item :label="t.settings.smtpPort">
                           <el-input-number v-model="channelForm.emailPort" :min="1" :max="65535" controls-position="right" style="width: 100%" />
                         </el-form-item>
-                        <el-form-item label="用户名">
-                          <el-input v-model="channelForm.emailUsername" placeholder="可选" />
+                        <el-form-item :label="t.settings.smtpUser">
+                          <el-input v-model="channelForm.emailUsername" :placeholder="t.common.none" />
                         </el-form-item>
-                        <el-form-item label="密码">
-                          <el-input v-model="channelForm.emailPassword" show-password placeholder="可选" />
+                        <el-form-item :label="t.settings.smtpPass">
+                          <el-input v-model="channelForm.emailPassword" show-password :placeholder="t.common.none" />
                         </el-form-item>
-                        <el-form-item label="发件人邮箱">
-                          <el-input v-model="channelForm.emailFrom" placeholder="例如：noreply@example.com" />
+                        <el-form-item :label="t.settings.smtpFrom">
+                          <el-input v-model="channelForm.emailFrom" />
                         </el-form-item>
-                        <el-form-item label="启用 TLS">
+                        <el-form-item :label="t.settings.enableTls">
                           <el-switch v-model="channelForm.emailUseTLS" />
                         </el-form-item>
                       </div>
 
-                      <el-form-item label="收件人列表">
+                      <el-form-item :label="t.settings.emailRecipients">
                         <el-input
                           v-model="channelForm.emailRecipientsText"
                           type="textarea"
@@ -1475,12 +1486,12 @@ onMounted(() => {
                       </el-form-item>
                     </template>
 
-                    <el-form-item label="扩展字段(JSON)">
+                    <el-form-item :label="t.settings.extraConfig">
                       <el-input
                         v-model="channelForm.extraConfigText"
                         type="textarea"
                         :rows="4"
-                        placeholder='可，例如：{"headers":{"X-Token":"abc"}}'
+                        :placeholder="t.settings.extraConfigPlaceholder"
                       />
                     </el-form-item>
                   </el-form>
@@ -1495,7 +1506,7 @@ onMounted(() => {
 
       <el-tab-pane name="monitoring">
         <template #label>
-          <span class="tab-label"><el-icon><Monitor /></el-icon>告警配置</span>
+          <span class="tab-label"><el-icon><Monitor /></el-icon>{{ t.settings.alarmConfig }}</span>
         </template>
 
         <div class="tab-content ops-settings-tab" v-loading="alertLoading">
@@ -1503,11 +1514,11 @@ onMounted(() => {
             <div class="ops-toolbar-v2" style="margin-bottom: 0;">
               <div class="toolbar-left">
                 <el-icon class="toolbar-icon"><Bell /></el-icon>
-                <span class="toolbar-label">告警规则</span>
-                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">当事件达到规则阈值时，自动通过关联的通知渠道发送告警</span>
+                <span class="toolbar-label">{{ t.settings.alarmRules }}</span>
+                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">{{ t.settings.alarmRulesDesc }}</span>
               </div>
               <div class="toolbar-right">
-                <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">新增告警规则</el-button>
+                <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addAlarmRule }}</el-button>
               </div>
             </div>
 
@@ -1525,13 +1536,13 @@ onMounted(() => {
                           <div class="entity-subline">{{ eventLabel(item.event_code) }}</div>
                         </div>
                       </div>
-                      <div class="entity-detail-v2">{{ item.window_sec }} 秒内累计 {{ item.threshold }} 次 · {{ ruleChannelNames(item.channel_ids) }}</div>
+                      <div class="entity-detail-v2">{{ t.settings.ruleSummary.replace('{sec}', String(item.window_sec)).replace('{count}', String(item.threshold)) }} · {{ ruleChannelNames(item.channel_ids) }}</div>
                       <div class="entity-actions-v2">
-                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? '启用' : '停用' }}</el-tag>
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? t.settings.channelEnabled : t.settings.channelDisabled }}</el-tag>
                         <div class="action-btn-group">
-                          <el-button link type="primary" size="small" @click.stop="openRuleDialog('edit', item)">编辑</el-button>
+                          <el-button link type="primary" size="small" @click.stop="openRuleDialog('edit', item)">{{ t.common.edit }}</el-button>
                           <el-divider direction="vertical" />
-                          <el-button link type="danger" size="small" @click.stop="removeRule(item)">删除</el-button>
+                          <el-button link type="danger" size="small" @click.stop="removeRule(item)">{{ t.common.delete }}</el-button>
                         </div>
                       </div>
                     </div>
@@ -1549,9 +1560,9 @@ onMounted(() => {
                 </div>
                 <div v-else class="ops-empty-state">
                   <div class="empty-icon-large rule"><el-icon><Timer /></el-icon></div>
-                  <div class="empty-state-title">尚未配置告警规则</div>
-                  <div class="empty-state-desc">配置阈值并关联消息渠道，系统将自动监控异常。</div>
-                  <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">新增第一条规则</el-button>
+                  <div class="empty-state-title">{{ t.settings.noAlarmRule }}</div>
+                  <div class="empty-state-desc">{{ t.settings.noAlarmRuleDesc }}</div>
+                  <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addFirstAlarmRule }}</el-button>
                 </div>
               </div>
               <Transition name="slide-panel">
@@ -1561,46 +1572,46 @@ onMounted(() => {
                     <div class="editor-head-content">
                       <div>
                         <div class="editor-title">{{ ruleEditorTitle }}</div>
-                        <div class="editor-subtitle">当事件达到阈值时，通过指定渠道发送告警通知。</div>
+                        <div class="editor-subtitle">{{ t.settings.alarmRulesDesc }}</div>
                       </div>
                       <div class="editor-actions">
-                        <el-button @click="testAlertNotification" :loading="alertTesting">测试通知</el-button>
-                        <el-button @click="closeRuleEditor">取消</el-button>
-                        <el-button type="primary" :loading="alertSaving" @click="saveRuleDraft">保存</el-button>
+                        <el-button @click="testAlertNotification" :loading="alertTesting">{{ t.settings.testNotice }}</el-button>
+                        <el-button @click="closeRuleEditor">{{ t.common.cancel }}</el-button>
+                        <el-button type="primary" :loading="alertSaving" @click="saveRuleDraft">{{ t.common.confirm }}</el-button>
                       </div>
                     </div>
                   </div>
                   <el-form label-position="left" label-width="80px" class="compact-form editor-form inline-label-form" style="padding-right: 16px;">
                     <div class="ops-form-grid-3col">
-                      <el-form-item label="规则名称"><el-input v-model="ruleForm.name" placeholder="例如：服务下线连续告警" /></el-form-item>
-                      <el-form-item label="事件类型">
+                      <el-form-item :label="t.common.name"><el-input v-model="ruleForm.name" /></el-form-item>
+                      <el-form-item :label="t.common.type">
                         <el-select v-model="ruleForm.event_code" @change="handleEventCodeChange">
                           <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="启用状态"><el-switch v-model="ruleForm.enabled" /></el-form-item>
+                      <el-form-item :label="t.settings.channelStatus"><el-switch v-model="ruleForm.enabled" /></el-form-item>
                     </div>
                     <div class="ops-form-grid-3col">
-                      <el-form-item label="通知渠道">
+                      <el-form-item :label="t.settings.notificationChannel">
                         <el-select v-model="ruleForm.channel_ids" multiple collapse-tags collapse-tags-tooltip>
-                          <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（已停用）`" :value="item.id" />
+                          <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（${t.settings.channelDisabled}）`" :value="item.id" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="触发条件" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" placeholder="秒" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">秒内累计发生</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" placeholder="次" /><span style="font-size:13px; color:var(--text-secondary)">次告警</span></div></el-form-item>
+                      <el-form-item :label="t.settings.ruleCondition" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">{{ t.settings.ruleConditionPrefix }}</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" /><span style="font-size:13px; color:var(--text-secondary)">{{ t.settings.ruleConditionSuffix }}</span></div></el-form-item>
                     </div>
 
                     <div class="template-section" style="margin-top: 16px; border: 1px solid var(--border-color); overflow: hidden;">
                       <div class="template-section-header" style="background: rgba(0,0,0,0.02); padding: 12px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
                         <el-icon><Operation /></el-icon>
-                        <span style="font-weight: 600; font-size: 14px;">消息模板</span>
+                        <span style="font-weight: 600; font-size: 14px;">{{ t.settings.messageTemplate }}</span>
                       </div>
 
                       <div style="padding: 16px; display: flex; gap: 16px;">
                         <div style="flex: 1; display: flex; flex-direction: column;">
-                          <el-form-item label="标题模板" label-width="70px" style="margin-bottom: 16px;">
+                          <el-form-item :label="t.settings.titleTemplate" label-width="70px" style="margin-bottom: 16px;">
                             <el-input v-model="ruleForm.title_template" :placeholder="dynamicTitleTemplate" />
                           </el-form-item>
-                          <el-form-item label="内容模板" label-width="70px" style="margin-bottom: 8px;">
+                          <el-form-item :label="t.settings.bodyTemplate" label-width="70px" style="margin-bottom: 8px;">
                             <el-input v-model="ruleForm.body_template" type="textarea" :rows="5" :placeholder="dynamicBodyTemplate" />
                           </el-form-item>
                           
@@ -1621,7 +1632,7 @@ onMounted(() => {
                         </div>
                         
                         <div style="width: 250px; flex-shrink: 0; background: #f8fafc; border-left: 1px dashed #e2e8f0; padding: 0 12px;">
-                          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;"><el-icon><Monitor /></el-icon> 实时预览</div>
+                          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;"><el-icon><Monitor /></el-icon> {{ locale === 'zh' ? '实时预览' : 'Live Preview' }}</div>
                           <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.14); box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
                             <div style="font-weight: 600; margin-bottom: 8px; font-size: 13px; color: var(--text-primary);">{{ defaultTitleTemplate }}</div>
                             <div style="white-space: pre-wrap; font-size: 12px; color: var(--text-secondary); line-height: 1.6; word-break: break-all;">{{ defaultBodyTemplate }}</div>

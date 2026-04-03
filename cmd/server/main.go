@@ -347,7 +347,7 @@ func main() {
 	clsSvc := platformcluster.NewMembership(runtimeState.Catalog, membershipCPNode)
 
 	// 6. Start HTTP API
-	h := httpapi.NewHandler(cfg, catSvc, authSvc, setSvc, clsSvc)
+	h := httpapi.NewHandler(cfg, runtimeState.Catalog, catSvc, authSvc, setSvc, clsSvc)
 
 	var grpcServer *grpc.Server
 	if grpcEnabled || quicEnabled {
