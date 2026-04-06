@@ -208,6 +208,38 @@ func main() {
 		return fmt.Sprintf("%s:%s", host, port)
 	}
 
+	getLocalIP := func() string {
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return "127.0.0.1"
+		}
+		for _, address := range addrs {
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					return ipnet.IP.String()
+				}
+			}
+		}
+		return "127.0.0.1"
+	}
+
+	resolveLogAddr := func(addr string) string {
+		if addr == "" {
+			return ""
+		}
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			if strings.HasPrefix(addr, ":") {
+				return getLocalIP() + addr
+			}
+			return addr
+		}
+		if host == "" || host == "0.0.0.0" || host == "[::]" {
+			return getLocalIP() + ":" + port
+		}
+		return addr
+	}
+
 	isAutoPort := func(addr string) bool {
 		trimmed := strings.TrimSpace(addr)
 		if trimmed == "" || trimmed == ":0" {
@@ -297,10 +329,10 @@ func main() {
 	logger.Info("  Node ID   : %s", cfg.NodeID)
 	logger.Info("  Mode      : %s", strings.ToUpper(cfg.Mode))
 	logger.Info("  Consistency: %s", strings.ToUpper(cfg.Consistency))
-	logger.Info("  HTTP Addr : %s", cfg.HTTPAddr)
-	logger.Info("  GRPC Addr : %s", cfg.GRPCAddr)
-	logger.Info("  QUIC Addr : %s", cfg.QUICAddr)
-	logger.Info("  Raft Addr : %s", cfg.RaftAddr)
+	logger.Info("  HTTP Addr : %s", resolveLogAddr(cfg.HTTPAddr))
+	logger.Info("  GRPC Addr : %s", resolveLogAddr(cfg.GRPCAddr))
+	logger.Info("  QUIC Addr : %s", resolveLogAddr(cfg.QUICAddr))
+	logger.Info("  Raft Addr : %s", resolveLogAddr(cfg.RaftAddr))
 	logger.Info("  Data Dir  : %s", cfg.DataDir)
 	logger.Info("========================================")
 

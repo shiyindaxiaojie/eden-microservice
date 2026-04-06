@@ -364,7 +364,7 @@ onMounted(fetchCluster)
         <div v-if="viewMode === 'list'" class="table-wrap">
           <el-table :data="pagedMembers" height="100%" style="width: 100%; font-size: 14px;">
             <el-table-column type="index" :label="locale === 'zh' ? '序号' : 'No.'" width="60" align="center" />
-            <el-table-column :label="t.cluster.nodeId" min-width="100">
+            <el-table-column :label="t.cluster.nodeId" min-width="120">
               <template #default="{ row }">
                 <div class="node-id-cell">
                   <div class="node-main">
@@ -398,7 +398,7 @@ onMounted(fetchCluster)
               </template>
             </el-table-column>
 
-            <el-table-column :label="t.cluster.role" width="100">
+            <el-table-column :label="t.cluster.role" min-width="110">
               <template #default="{ row }">
                 <el-tag :type="roleTagType(row.role)" size="small" effect="dark" class="role-tag">{{ getRoleName(row.role) }}</el-tag>
               </template>
