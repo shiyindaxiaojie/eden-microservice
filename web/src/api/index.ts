@@ -21,8 +21,10 @@ api.interceptors.response.use((response) => {
   return response
 }, (error) => {
   if (error.response?.status === 401) {
-    // Don't redirect if we're already trying to login
-    if (!error.config.url.endsWith('/v1/auth/login')) {
+    // Don't redirect if we're already trying to login or already on login page
+    const isLoginEndpoint = error.config.url.endsWith('/v1/auth/login')
+    const isLoginPage = window.location.pathname === '/login'
+    if (!isLoginEndpoint && !isLoginPage) {
       localStorage.removeItem('token')
       localStorage.removeItem('user_role')
       localStorage.removeItem('username')

@@ -16,7 +16,6 @@ import {
   Operation,
   Plus,
   RefreshRight,
-  Setting,
   Share,
   Timer,
 } from '@element-plus/icons-vue'
@@ -123,10 +122,10 @@ const EVENT_OPTIONS = computed(() => [
 const LOG_LEVEL_OPTIONS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
 
 const MESSAGE_PROVIDER_OPTIONS = computed(() => [
-  { label: locale.value === 'zh' ? '通用 Webhook' : 'Generic Webhook', value: 'generic' },
-  { label: locale.value === 'zh' ? '钉钉' : 'DingTalk', value: 'dingtalk' },
-  { label: locale.value === 'zh' ? '飞书' : 'Lark/Feishu', value: 'feishu' },
-  { label: locale.value === 'zh' ? '企业微信' : 'WeCom', value: 'wecom' },
+  { label: t.value.settings.providers.generic, value: 'generic' },
+  { label: t.value.settings.providers.dingtalk, value: 'dingtalk' },
+  { label: t.value.settings.providers.feishu, value: 'feishu' },
+  { label: t.value.settings.providers.wecom, value: 'wecom' },
 ])
 
 const WEBHOOK_CONFIG_KEYS = new Set(['url', 'secret'])
@@ -151,41 +150,42 @@ const EMAIL_CONFIG_KEYS = new Set([
 ])
 
 const TEMPLATE_VARIABLES = computed<TemplateVariable[]>(() => [
-  { name: 'event_code', label: locale.value === 'zh' ? '事件类型' : 'Event Code', desc: locale.value === 'zh' ? '触发事件的英文标识' : 'English identifier for the triggered event', example: 'service_offline' },
-  { name: 'event_name', label: locale.value === 'zh' ? '事件名称' : 'Event Name', desc: locale.value === 'zh' ? '事件类型的中文描述' : 'Display name of the event type', example: locale.value === 'zh' ? '服务下线' : 'Service Offline' },
-  { name: 'rule_name', label: locale.value === 'zh' ? '规则名称' : 'Rule Name', desc: locale.value === 'zh' ? '当前告警规则名称' : 'Name of the current alarm rule', example: locale.value === 'zh' ? '服务下线告警' : 'Service Offline Alarm' },
-  { name: 'threshold', label: locale.value === 'zh' ? '阈值次数' : 'Threshold', desc: locale.value === 'zh' ? '规则配置的触发阈值' : 'Trigger threshold configured in the rule', example: '3' },
-  { name: 'window_sec', label: locale.value === 'zh' ? '窗口秒数' : 'Window Seconds', desc: locale.value === 'zh' ? '统计窗口时长（秒）' : 'Statistical window duration (seconds)', example: '300' },
-  { name: 'window_min', label: locale.value === 'zh' ? '窗口分钟' : 'Window Minutes', desc: locale.value === 'zh' ? '统计窗口时长（分钟）' : 'Statistical window duration (minutes)', example: '5' },
-  { name: 'count', label: locale.value === 'zh' ? '实际次数' : 'Actual Count', desc: locale.value === 'zh' ? '窗口内实际累计次数' : 'Actual accumulated occurrences within the window', example: '5' },
+  { name: 'event_code', label: locale.value === 'zh' ? '事件类型' : 'Event Code', desc: locale.value === 'zh' ? '触发事件的英文标识' : 'Internal event identifier', example: 'service_offline' },
+  { name: 'event_name', label: locale.value === 'zh' ? '事件名称' : 'Event Name', desc: locale.value === 'zh' ? '事件类型的本地化名称' : 'Localized name of the event', example: locale.value === 'zh' ? '服务下线' : 'Service Offline' },
+  { name: 'rule_name', label: locale.value === 'zh' ? '规则名称' : 'Rule Name', desc: locale.value === 'zh' ? '当前告警规则名称' : 'Name of the current alarm rule', example: locale.value === 'zh' ? '服务下线告警' : 'Offline Alarm' },
+  { name: 'threshold', label: locale.value === 'zh' ? '阈值次数' : 'Threshold', desc: locale.value === 'zh' ? '规则配置的触发阈值' : 'Configured trigger threshold', example: '3' },
+  { name: 'window_sec', label: locale.value === 'zh' ? '窗口秒数' : 'Window (Sec)', desc: locale.value === 'zh' ? '统计窗口时长（秒）' : 'Duration of the evaluation window in seconds', example: '300' },
+  { name: 'window_min', label: locale.value === 'zh' ? '窗口分钟' : 'Window (Min)', desc: locale.value === 'zh' ? '统计窗口时长（分钟）' : 'Duration of the evaluation window in minutes', example: '5' },
+  { name: 'count', label: locale.value === 'zh' ? '实际次数' : 'Actual Count', desc: locale.value === 'zh' ? '窗口内实际累计次数' : 'Cumulative count within the window', example: '5' },
   { name: 'service', label: locale.value === 'zh' ? '服务名' : 'Service Name', desc: locale.value === 'zh' ? '触发事件的服务名称' : 'Name of the service that triggered the event', example: 'order-service' },
   { name: 'instance', label: locale.value === 'zh' ? '实例地址' : 'Instance Addr', desc: locale.value === 'zh' ? '触发事件的实例地址' : 'Address of the instance that triggered the event', example: '10.0.1.5:8080' },
-  { name: 'message', label: locale.value === 'zh' ? '事件描述' : 'Message', desc: locale.value === 'zh' ? '事件的详细描述信息' : 'Detailed description of the event', example: 'Instance deregistered' },
+  { name: 'message', label: locale.value === 'zh' ? '事件描述' : 'Event Desc', desc: locale.value === 'zh' ? '事件的详细描述信息' : 'Detailed description information of the event', example: 'Instance deregistered' },
   { name: 'timestamp', label: locale.value === 'zh' ? '触发时间' : 'Timestamp', desc: locale.value === 'zh' ? '事件发生的时间' : 'Time when the event occurred', example: '2026-04-02 13:30:00' },
 ])
 
 function getDynamicTitleTemplate() {
-  return locale.value === 'zh' ? '注册中心告警 - {{ event_name }}' : 'Registry Alarm - {{ event_name }}'
+  return locale.value === 'zh' ? '注册中心告警 - {{ event_name }}' : 'Registry Alert - {{ event_name }}'
 }
 
 function getDynamicBodyTemplate(eventCode: string) {
-  if (locale.value === 'en') {
+  if (locale.value === 'zh') {
     switch (eventCode) {
-      case 'service_offline': return 'Service Offline Alarm: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nCondition: Reached {{ threshold }} occurrences within {{ window_sec }}s\nPlease check service health.'
-      case 'service_heartbeat': return 'Service Heartbeat Anomaly: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: Service instance failed heartbeats consecutively.'
-      case 'registry_node_sync': return 'Cluster Node Sync Anomaly\nType: {{ event_code }}\nTime: {{ timestamp }}\nImpact: Potential temporary service list inconsistency.'
-      case 'service_online': return 'Service Online Notice: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: New service instance is online and ready for traffic.'
-      case 'service_remove': return 'Service Removal Alarm: {{ service }}\nTime: {{ timestamp }}\nDesc: Service has been completely removed from the registry.'
-      default: return 'Event: {{ event_name }} ({{ event_code }})\nCondition: Reached {{ threshold }} occurrences within {{ window_sec }}s\nRecorded: {{ timestamp }}\nPlease check system status.'
+      case 'service_offline': return '服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。'
+      case 'service_heartbeat': return '服务心跳异常：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：服务实例连续多次心跳失败。'
+      case 'registry_node_sync': return '集群节点同步异常告警\n事件类型：{{ event_code }}\n触发时间：{{ timestamp }}\n影响范围：可能导致服务列表短暂不一致。'
+      case 'service_online': return '服务上线通知：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：新服务实例已上线并准备好接收流量。'
+      case 'service_remove': return '服务移除告警：{{ service }}\n触发时间：{{ timestamp }}\n说明：服务已被管理员或系统从注册中心完全移除。'
+      default: return '事件：{{ event_name }}（{{ event_code }}）\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n记录时间：{{ timestamp }}\n请及时关注系统状态。'
     }
-  }
-  switch (eventCode) {
-    case 'service_offline': return '服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。'
-    case 'service_heartbeat': return '服务心跳异常：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：服务实例连续多次心跳失败。'
-    case 'registry_node_sync': return '集群节点同步异常告警\n事件类型：{{ event_code }}\n触发时间：{{ timestamp }}\n影响范围：可能导致服务列表短暂不一致。'
-    case 'service_online': return '服务上线通知：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：新服务实例已上线并准备好接收流量。'
-    case 'service_remove': return '服务移除告警：{{ service }}\n触发时间：{{ timestamp }}\n说明：服务已被管理员或系统从注册中心完全移除。'
-    default: return '事件：{{ event_name }}（{{ event_code }}）\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n记录时间：{{ timestamp }}\n请及时关注系统状态。'
+  } else {
+    switch (eventCode) {
+      case 'service_offline': return 'Service Offline Alert: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nCondition: {{ threshold }} times within {{ window_sec }}s\nPlease check the service status.'
+      case 'service_heartbeat': return 'Heartbeat Failure: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: Multiple consecutive heartbeat failures.'
+      case 'registry_node_sync': return 'Node Sync Error\nEvent: {{ event_code }}\nTime: {{ timestamp }}\nImpact: Potential inconsistency in service list.'
+      case 'service_online': return 'Service Online: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: New instance is ready for traffic.'
+      case 'service_remove': return 'Service Removed: {{ service }}\nTime: {{ timestamp }}\nDesc: Service was completely removed from the registry.'
+      default: return 'Event: {{ event_name }} ({{ event_code }})\nCondition: {{ threshold }} times within {{ window_sec }}s\nTime: {{ timestamp }}\nPlease monitor system health.'
+    }
   }
 }
 
@@ -374,7 +374,7 @@ function channelName(channelID: string) {
 }
 
 function ruleChannelNames(channelIDs: string[]) {
-  return channelIDs.map(channelName).join('、') || '-'
+  return channelIDs.map(channelName).join(locale.value === 'zh' ? '、' : ', ') || '-'
 }
 
 function insertVariable(varName: string) {
@@ -1045,12 +1045,21 @@ onMounted(() => {
                             <div class="toggle-option" :class="{ selected: previewMode === 'cp' }" @click="setDraftMode('cp')">
                               <div class="toggle-bg"></div>
                               <div class="toggle-text">
+<<<<<<< HEAD
                                 <span class="primary">{{ t.settings.cpModeShort }}</span>
                                 <span class="secondary">{{ t.settings.consistencyFirst }}</span>
                               </div>
                             </div>
                           </div>
                           <div class="mode-desc-v7" v-else>{{ t.settings.modeDescCluster }}</div>
+=======
+                                <span class="primary">{{ t.settings.cpMode }}</span>
+                                <span class="secondary">{{ t.settings.strongConsistency }}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mode-desc-v7" v-else>{{ t.settings.clusterDesc }}</div>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         </div>
                       </div>
                     </div>
@@ -1062,6 +1071,7 @@ onMounted(() => {
                     <el-icon><InfoFilled /></el-icon>
                     <div class="bubble-content">
                       <template v-if="previewEnvironment === 'standalone'">
+<<<<<<< HEAD
                         <strong>{{ t.settings.singleTitle }}:</strong> {{ t.settings.modeDescStandalone }}
                       </template>
                       <template v-else-if="previewMode === 'ap'">
@@ -1069,6 +1079,15 @@ onMounted(() => {
                       </template>
                       <template v-else>
                         <strong>{{ t.settings.cpModeShort }} (Raft):</strong> {{ t.settings.cpDesc }}
+=======
+                        <strong>{{ t.settings.singleTitle }}:</strong> {{ t.settings.standaloneDesc }}
+                      </template>
+                      <template v-else-if="previewMode === 'ap'">
+                        <strong>{{ t.settings.apMode }} (Gossip):</strong> {{ t.settings.apDetailed }}
+                      </template>
+                      <template v-else>
+                        <strong>{{ t.settings.cpMode }} (Raft):</strong> {{ t.settings.cpDetailed }}
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       </template>
                     </div>
                   </div>
@@ -1079,9 +1098,15 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Connection /></el-icon>
                   <div class="section-title-with-tip">
+<<<<<<< HEAD
                     <h4>{{ t.settings.survivalStrategy }}</h4>
                     <el-tooltip
                       :content="t.settings.survivalStrategyTip" placement="top"
+=======
+                    <h4>{{ t.settings.strategy }}</h4>
+                    <el-tooltip
+                      :content="t.settings.strategyTooltip" placement="top"
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1093,8 +1118,13 @@ onMounted(() => {
                     <el-form-item class="switch-form-item">
                       <template #label>
                         <span class="label-with-tip">
+<<<<<<< HEAD
                           {{ t.settings.clientAuth }}
                           <el-tooltip :content="t.settings.clientAuthTip" placement="top">
+=======
+                          {{ t.settings.apiKeyAuth }}
+                          <el-tooltip :content="t.settings.apiKeyAuthTooltip" placement="top">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
                         </span>
@@ -1107,9 +1137,15 @@ onMounted(() => {
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
+<<<<<<< HEAD
                           {{ t.settings.heartbeatTimeout }}
                           <el-tooltip
                             :content="t.settings.heartbeatTimeoutTip" placement="top"
+=======
+                          {{ t.settings.heartbeatThreshold }}
+                          <el-tooltip
+                            :content="t.settings.heartbeatThresholdTooltip" placement="top"
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1127,9 +1163,15 @@ onMounted(() => {
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
+<<<<<<< HEAD
                           {{ t.settings.instanceRetention }}
                           <el-tooltip
                             :content="t.settings.instanceRetentionTip" placement="top"
+=======
+                          {{ t.settings.removalDelay }}
+                          <el-tooltip
+                            :content="t.settings.removalDelayTooltip" placement="top"
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1163,7 +1205,11 @@ onMounted(() => {
                     </div>
                   </el-form-item>
 
+<<<<<<< HEAD
                   <el-form-item :label="t.settings.triggerEvents">
+=======
+                  <el-form-item :label="t.settings.events">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     <el-checkbox-group v-model="draftSettings.event_types" class="event-checkbox-grid">
                       <el-checkbox v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.value">
                         {{ item.label }}
@@ -1177,9 +1223,15 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Document /></el-icon>
                   <div class="section-title-with-tip">
+<<<<<<< HEAD
                     <h4>{{ t.settings.logConfig }}</h4>
                     <el-tooltip
                       :content="t.settings.logConfigTip" placement="top"
+=======
+                    <h4>{{ t.settings.logSettings }}</h4>
+                    <el-tooltip
+                      :content="t.settings.logConfigTooltip" placement="top"
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1188,7 +1240,11 @@ onMounted(() => {
 
                 <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
                   <el-form-item :label="t.settings.logLevel">
+<<<<<<< HEAD
                     <div class="log-level-options" role="radiogroup" :aria-label="t.settings.logLevel">
+=======
+                    <div class="log-level-options" role="radiogroup" aria-label="日志级别">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       <button
                         v-for="level in LOG_LEVEL_OPTIONS"
                         :key="level"
@@ -1298,7 +1354,7 @@ onMounted(() => {
               <el-table-column prop="status" :label="t.common.status" width="100">
                 <template #default="scope">
                   <el-tag :type="scope.row.status === 'expired' ? 'danger' : 'success'" size="small">
-                    {{ scope.row.status === 'expired' ? '已过期' : '生效中' }}
+                    {{ scope.row.status === 'expired' ? t.settings.expiredTag : t.settings.activeTag }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -1329,19 +1385,32 @@ onMounted(() => {
             <div class="ops-toolbar-v2">
               <div class="toolbar-left">
                 <el-icon class="toolbar-icon"><Connection /></el-icon>
+<<<<<<< HEAD
                 <span class="toolbar-label">{{ t.settings.messageSendNode }}</span>
                 <el-tooltip :content="t.settings.messageSendNodeTip" placement="bottom">
+=======
+                <span class="toolbar-label">{{ t.settings.notifyNode }}</span>
+                <el-tooltip :content="t.settings.notifyNodeTooltip" placement="bottom">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                   <el-select v-model="draftSettings.notify_alert_node_id" class="minimal-select" size="default" style="width: 200px">
                     <el-option
                       v-for="item in members"
                       :key="item.id"
+<<<<<<< HEAD
                       :label="`${item.id}${item.is_local ? `（${t.cluster.currentNode}）` : ''}`"
+=======
+                      :label="`${item.id}${item.is_local ? (locale === 'zh' ? '（当前节点）' : ' (Local)') : ''}`"
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       :value="item.id"
                     />
                   </el-select>
                 </el-tooltip>
                 <el-button v-if="notifyNodeDirty" type="primary" link :loading="notifyNodeSaving" @click="saveNotifyAlertNode">
+<<<<<<< HEAD
                   {{ t.settings.saveNodeConfig }}
+=======
+                  {{ t.settings.saveNode }}
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                 </el-button>
               </div>
               <div class="toolbar-right">
@@ -1373,7 +1442,11 @@ onMounted(() => {
                         </div>
                       </div>
                       <div class="entity-actions-v2">
+<<<<<<< HEAD
                         <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? t.settings.channelEnabled : t.settings.channelDisabled }}</el-tag>
+=======
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? (locale === 'zh' ? '启用' : 'Active') : (locale === 'zh' ? '停用' : 'Disabled') }}</el-tag>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <div class="action-btn-group">
                           <el-button link type="primary" size="small" @click.stop="openChannelDialog('edit', item)">{{ t.common.edit }}</el-button>
                           <el-divider direction="vertical" />
@@ -1397,9 +1470,15 @@ onMounted(() => {
                   <div class="empty-icon-large">
                     <el-icon><Share /></el-icon>
                   </div>
+<<<<<<< HEAD
                   <div class="empty-state-title">{{ t.settings.noChannel }}</div>
                   <div class="empty-state-desc">{{ t.settings.noChannelDesc }}</div>
                   <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">{{ t.settings.addFirstChannel }}</el-button>
+=======
+                  <div class="empty-state-title">{{ locale === 'zh' ? '尚未配置消息渠道' : 'No message channels configured' }}</div>
+                  <div class="empty-state-desc">{{ locale === 'zh' ? '新增 Webhook 或邮件渠道后，模板和规则都会基于此进行关联推送。' : 'No webhook or email channels found. Add one to start sending alerts.' }}</div>
+                  <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">{{ t.settings.addChannel }}</el-button>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                 </div>
               </div>
 
@@ -1413,7 +1492,11 @@ onMounted(() => {
                       </div>
                       <div class="editor-actions">
                         <el-button @click="closeChannelEditor">{{ t.common.cancel }}</el-button>
+<<<<<<< HEAD
                         <el-button :icon="Bell" @click="testChannelNotification">{{ t.settings.testNotice }}</el-button>
+=======
+                        <el-button :icon="Bell" @click="testChannelNotification">{{ t.settings.test }}</el-button>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-button type="primary" :loading="messageSaving" @click="saveChannelDraft">{{ t.common.confirm }}</el-button>
                       </div>
                     </div>
@@ -1421,18 +1504,29 @@ onMounted(() => {
 
                   <el-form label-position="left" label-width="100px" class="compact-form editor-form inline-label-form">
                     <div class="ops-form-grid-3col">
+<<<<<<< HEAD
                       <el-form-item :label="t.common.name">
                         <el-input v-model="channelForm.name" />
                       </el-form-item>
                       <el-form-item :label="t.common.type">
+=======
+                      <el-form-item :label="t.settings.channelName">
+                        <el-input v-model="channelForm.name" :placeholder="locale === 'zh' ? '例如：生产环境告警' : 'e.g. Production Alerts'" />
+                      </el-form-item>
+                      <el-form-item :label="t.settings.channelType">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-select v-model="channelForm.type" @change="handleChannelTypeChange">
                           <el-option :label="t.settings.webhook" value="webhook" />
                           <el-option :label="t.settings.email" value="email" />
                         </el-select>
                       </el-form-item>
+<<<<<<< HEAD
                       <el-form-item :label="t.settings.provider">
+=======
+                      <el-form-item :label="t.settings.channelProvider">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-select v-model="channelForm.provider" :disabled="channelForm.type === 'email'">
-                          <el-option v-for="item in messageProviderOptions" :key="item.value" :label="item.label" :value="item.value" />
+                          <el-option v-for="item in MESSAGE_PROVIDER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
                       </el-form-item>
                       <el-form-item :label="t.settings.channelStatus">
@@ -1441,13 +1535,21 @@ onMounted(() => {
                     </div>
 
                     <el-form-item :label="t.settings.channelDesc">
+<<<<<<< HEAD
                       <el-input v-model="channelForm.description" type="textarea" :rows="2" :placeholder="t.settings.channelDescPlaceholder" />
+=======
+                      <el-input v-model="channelForm.description" type="textarea" :rows="2" :placeholder="t.settings.noDescription" />
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     </el-form-item>
 
                     <template v-if="channelForm.type === 'webhook'">
                       <div class="ops-form-grid-3col">
                         <el-form-item :label="t.settings.webhookUrl" style="grid-column: span 2;">
+<<<<<<< HEAD
                           <el-input v-model="channelForm.webhookUrl" />
+=======
+                          <el-input v-model="channelForm.webhookUrl" placeholder="https://your-webhook-endpoint" />
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         </el-form-item>
                         <el-form-item :label="t.settings.webhookSecret">
                           <el-input v-model="channelForm.webhookSecret" show-password :placeholder="t.common.none" />
@@ -1456,6 +1558,7 @@ onMounted(() => {
                     </template>
                     <template v-else>
                       <div class="ops-form-grid-2col channel-email-grid">
+<<<<<<< HEAD
                         <el-form-item :label="t.settings.smtpHost">
                           <el-input v-model="channelForm.emailHost" />
                         </el-form-item>
@@ -1472,16 +1575,38 @@ onMounted(() => {
                           <el-input v-model="channelForm.emailFrom" />
                         </el-form-item>
                         <el-form-item :label="t.settings.enableTls">
+=======
+                        <el-form-item :label="t.settings.emailHost">
+                          <el-input v-model="channelForm.emailHost" placeholder="例如：smtp.example.com" />
+                        </el-form-item>
+                        <el-form-item :label="t.settings.emailPort">
+                          <el-input-number v-model="channelForm.emailPort" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+                        </el-form-item>
+                        <el-form-item :label="t.settings.emailUser">
+                          <el-input v-model="channelForm.emailUsername" :placeholder="t.common.none" />
+                        </el-form-item>
+                        <el-form-item :label="t.settings.emailPass">
+                          <el-input v-model="channelForm.emailPassword" show-password :placeholder="t.common.none" />
+                        </el-form-item>
+                        <el-form-item :label="t.settings.emailFrom">
+                          <el-input v-model="channelForm.emailFrom" placeholder="例如：noreply@example.com" />
+                        </el-form-item>
+                        <el-form-item :label="t.settings.emailTLS">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                           <el-switch v-model="channelForm.emailUseTLS" />
                         </el-form-item>
                       </div>
 
+<<<<<<< HEAD
                       <el-form-item :label="t.settings.emailRecipients">
+=======
+                      <el-form-item :label="t.settings.emailTo">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-input
                           v-model="channelForm.emailRecipientsText"
                           type="textarea"
                           :rows="4"
-                          placeholder="ops@example.com&#10;owner@example.com"
+                          :placeholder="locale === 'zh' ? 'ops@example.com\\nowner@example.com' : 'ops@example.com\\nowner@example.com'"
                         />
                       </el-form-item>
                     </template>
@@ -1491,7 +1616,11 @@ onMounted(() => {
                         v-model="channelForm.extraConfigText"
                         type="textarea"
                         :rows="4"
+<<<<<<< HEAD
                         :placeholder="t.settings.extraConfigPlaceholder"
+=======
+                        :placeholder='locale === "zh" ? "可选，例如：{\"headers\":{\"X-Token\":\"abc\"}}" : "Optional, e.g. {\"headers\":{\"X-Token\":\"abc\"}}"'
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       />
                     </el-form-item>
                   </el-form>
@@ -1506,7 +1635,11 @@ onMounted(() => {
 
       <el-tab-pane name="monitoring">
         <template #label>
+<<<<<<< HEAD
           <span class="tab-label"><el-icon><Monitor /></el-icon>{{ t.settings.alarmConfig }}</span>
+=======
+          <span class="tab-label"><el-icon><Monitor /></el-icon>{{ t.settings.monitoring }}</span>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
         </template>
 
         <div class="tab-content ops-settings-tab" v-loading="alertLoading">
@@ -1514,11 +1647,19 @@ onMounted(() => {
             <div class="ops-toolbar-v2" style="margin-bottom: 0;">
               <div class="toolbar-left">
                 <el-icon class="toolbar-icon"><Bell /></el-icon>
+<<<<<<< HEAD
                 <span class="toolbar-label">{{ t.settings.alarmRules }}</span>
                 <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">{{ t.settings.alarmRulesDesc }}</span>
               </div>
               <div class="toolbar-right">
                 <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addAlarmRule }}</el-button>
+=======
+                <span class="toolbar-label">{{ locale === 'zh' ? '告警规则' : 'Alarm Rules' }}</span>
+                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">{{ locale === 'zh' ? '当事件达到规则阈值时，自动通过关联的通知渠道发送告警' : 'Automatically send alerts via associated channels when events reach thresholds.' }}</span>
+              </div>
+              <div class="toolbar-right">
+                <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addRule }}</el-button>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
               </div>
             </div>
 
@@ -1536,9 +1677,17 @@ onMounted(() => {
                           <div class="entity-subline">{{ eventLabel(item.event_code) }}</div>
                         </div>
                       </div>
+<<<<<<< HEAD
                       <div class="entity-detail-v2">{{ t.settings.ruleSummary.replace('{sec}', String(item.window_sec)).replace('{count}', String(item.threshold)) }} · {{ ruleChannelNames(item.channel_ids) }}</div>
                       <div class="entity-actions-v2">
                         <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? t.settings.channelEnabled : t.settings.channelDisabled }}</el-tag>
+=======
+                      <div class="entity-detail-v2">{{ item.window_sec }} {{ locale === 'zh' ? '秒内累计' : 's window,' }} {{ item.threshold }} {{ locale === 'zh' ? '次' : 'times' }} · {{ ruleChannelNames(item.channel_ids) }}</div>
+                      <div class="entity-actions-v2">
+                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">
+                          {{ item.enabled ? (locale === 'zh' ? '启用' : 'Active') : (locale === 'zh' ? '停用' : 'Disabled') }}
+                        </el-tag>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <div class="action-btn-group">
                           <el-button link type="primary" size="small" @click.stop="openRuleDialog('edit', item)">{{ t.common.edit }}</el-button>
                           <el-divider direction="vertical" />
@@ -1560,9 +1709,15 @@ onMounted(() => {
                 </div>
                 <div v-else class="ops-empty-state">
                   <div class="empty-icon-large rule"><el-icon><Timer /></el-icon></div>
+<<<<<<< HEAD
                   <div class="empty-state-title">{{ t.settings.noAlarmRule }}</div>
                   <div class="empty-state-desc">{{ t.settings.noAlarmRuleDesc }}</div>
                   <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addFirstAlarmRule }}</el-button>
+=======
+                  <div class="empty-state-title">{{ locale === 'zh' ? '尚未配置告警规则' : 'No alarm rules configured' }}</div>
+                  <div class="empty-state-desc">{{ locale === 'zh' ? '配置阈值并关联消息渠道，系统将自动监控异常。' : 'Configure thresholds and notification channels to monitor system health.' }}</div>
+                  <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addRule }}</el-button>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                 </div>
               </div>
               <Transition name="slide-panel">
@@ -1572,10 +1727,17 @@ onMounted(() => {
                     <div class="editor-head-content">
                       <div>
                         <div class="editor-title">{{ ruleEditorTitle }}</div>
+<<<<<<< HEAD
                         <div class="editor-subtitle">{{ t.settings.alarmRulesDesc }}</div>
                       </div>
                       <div class="editor-actions">
                         <el-button @click="testAlertNotification" :loading="alertTesting">{{ t.settings.testNotice }}</el-button>
+=======
+                        <div class="editor-subtitle">{{ locale === 'zh' ? '当事件达到阈值时，通过指定渠道发送告警通知。' : 'Sends alarm notifications via channels when event frequency exceeds thresholds.' }}</div>
+                      </div>
+                      <div class="editor-actions">
+                        <el-button @click="testAlertNotification" :loading="alertTesting">{{ t.settings.testRule }}</el-button>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-button @click="closeRuleEditor">{{ t.common.cancel }}</el-button>
                         <el-button type="primary" :loading="alertSaving" @click="saveRuleDraft">{{ t.common.confirm }}</el-button>
                       </div>
@@ -1583,8 +1745,13 @@ onMounted(() => {
                   </div>
                   <el-form label-position="left" label-width="80px" class="compact-form editor-form inline-label-form" style="padding-right: 16px;">
                     <div class="ops-form-grid-3col">
+<<<<<<< HEAD
                       <el-form-item :label="t.common.name"><el-input v-model="ruleForm.name" /></el-form-item>
                       <el-form-item :label="t.common.type">
+=======
+                      <el-form-item :label="t.settings.ruleName"><el-input v-model="ruleForm.name" :placeholder="locale === 'zh' ? '例如：服务下线连续告警' : 'e.g. Service Offline Alerts'" /></el-form-item>
+                      <el-form-item :label="t.settings.eventType">
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-select v-model="ruleForm.event_code" @change="handleEventCodeChange">
                           <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
@@ -1594,16 +1761,27 @@ onMounted(() => {
                     <div class="ops-form-grid-3col">
                       <el-form-item :label="t.settings.notificationChannel">
                         <el-select v-model="ruleForm.channel_ids" multiple collapse-tags collapse-tags-tooltip>
+<<<<<<< HEAD
                           <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（${t.settings.channelDisabled}）`" :value="item.id" />
                         </el-select>
                       </el-form-item>
                       <el-form-item :label="t.settings.ruleCondition" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">{{ t.settings.ruleConditionPrefix }}</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" /><span style="font-size:13px; color:var(--text-secondary)">{{ t.settings.ruleConditionSuffix }}</span></div></el-form-item>
+=======
+                          <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}${locale === 'zh' ? '（已停用）' : ' (Disabled)'}`" :value="item.id" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item :label="locale === 'zh' ? '触发条件' : 'Threshold'" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" placeholder="s" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">{{ locale === 'zh' ? '秒内累计发生' : 's window,' }}</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" placeholder="x" /><span style="font-size:13px; color:var(--text-secondary)">{{ locale === 'zh' ? '次告警' : 'times' }}</span></div></el-form-item>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     </div>
 
                     <div class="template-section" style="margin-top: 16px; border: 1px solid var(--border-color); overflow: hidden;">
                       <div class="template-section-header" style="background: rgba(0,0,0,0.02); padding: 12px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
                         <el-icon><Operation /></el-icon>
+<<<<<<< HEAD
                         <span style="font-weight: 600; font-size: 14px;">{{ t.settings.messageTemplate }}</span>
+=======
+                        <span style="font-weight: 600; font-size: 14px;">{{ t.settings.templates }}</span>
+>>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       </div>
 
                       <div style="padding: 16px; display: flex; gap: 16px;">
@@ -1649,34 +1827,34 @@ onMounted(() => {
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="showDialog" title="新建 API Key" width="560px" top="6vh" class="glass-dialog credential-dialog">
+    <el-dialog v-model="showDialog" :title="t.settings.newApiKey" width="560px" top="6vh" class="glass-dialog credential-dialog">
       <el-form label-position="top" class="compact-form credential-dialog-form">
         <el-form-item label="API Key">
           <div class="key-preview-shell">
             <div class="key-preview-value" :title="keyForm.key">{{ keyForm.key }}</div>
             <el-button class="regenerate-key-btn" @click="generateRandKey" :icon="RefreshRight" />
           </div>
-          <div class="field-hint">创建前可重复生成，完整密钥会按原样展示。</div>
+          <div class="field-hint">{{ locale === 'zh' ? '创建前可重复生成，完整密钥会按原样展示。' : 'Can be regenerated before creation, the full key is displayed as-is.' }}</div>
         </el-form-item>
 
-        <el-form-item label="描述">
-          <el-input v-model="keyForm.description" type="textarea" :rows="3" placeholder="用于说明此 API Key 的用途" />
+        <el-form-item :label="t.settings.description">
+          <el-input v-model="keyForm.description" type="textarea" :rows="3" :placeholder="t.settings.apiKeyDesc" />
         </el-form-item>
 
-        <el-form-item label="有效期">
+        <el-form-item :label="locale === 'zh' ? '有效期' : 'Expiration'">
           <el-select v-model="keyForm.expDays" style="width: 100%">
-            <el-option label="永不过期" :value="0" />
-            <el-option label="7 天" :value="7" />
-            <el-option label="30 天" :value="30" />
-            <el-option label="90 天" :value="90" />
-            <el-option label="365 天" :value="365" />
+            <el-option :label="t.settings.neverExpire" :value="0" />
+            <el-option label="7 {{ t.settings.expireIn.replace('{n}', '7') }}" :value="7" />
+            <el-option label="30 {{ t.settings.expireIn.replace('{n}', '30') }}" :value="30" />
+            <el-option label="90 {{ t.settings.expireIn.replace('{n}', '90') }}" :value="90" />
+            <el-option label="365 {{ t.settings.expireIn.replace('{n}', '365') }}" :value="365" />
           </el-select>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleGenerate">创建</el-button>
+        <el-button @click="showDialog = false">{{ t.common.cancel }}</el-button>
+        <el-button type="primary" @click="handleGenerate">{{ locale === 'zh' ? '创建' : 'Create' }}</el-button>
       </template>
     </el-dialog>
 

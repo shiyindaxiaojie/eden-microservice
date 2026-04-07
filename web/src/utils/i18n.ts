@@ -317,6 +317,12 @@ export const messages = {
       nodeSync: 'Node Sync',
       serviceHeartbeat: 'Service Heartbeat',
       serviceRemove: 'Service Remove',
+      providers: {
+        generic: 'Generic Webhook',
+        dingtalk: 'DingTalk',
+        feishu: 'Lark/Feishu',
+        wecom: 'WeCom',
+      },
     },
     docs: {
       title: 'Documentation',
@@ -640,6 +646,12 @@ export const messages = {
       nodeSync: '节点同步',
       serviceHeartbeat: '服务心跳',
       serviceRemove: '服务移除',
+      providers: {
+        generic: '通用 Webhook',
+        dingtalk: '钉钉',
+        feishu: '飞书',
+        wecom: '企业微信',
+      },
     },
     docs: {
       title: '操作文档',
