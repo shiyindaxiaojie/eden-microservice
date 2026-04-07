@@ -1,9 +1,18 @@
 package nacosapi
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"net"
+	"net/http"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	nacosclients "github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
@@ -21,14 +30,28 @@ type ServiceInstance struct {
 }
 
 type Client struct {
-	raw       nacosclients.INamingClient
-	groupName string
+	raw             nacosclients.INamingClient
+	groupName       string
+	namespace       string
+	apiKey          string
+	reportTargets   []string
+	httpClient      *http.Client
+
+	mu               sync.RWMutex
+	consumerService  string
+	providers        map[string]struct{}
+	topologyChecksum string
 }
 
 func New(raw nacosclients.INamingClient) *Client {
 	return &Client{
-		raw:       raw,
-		groupName: constant.DEFAULT_GROUP,
+		raw:           raw,
+		groupName:     constant.DEFAULT_GROUP,
+		namespace:     normalizeNamespace(envOr("NACOS_NAMESPACE", "public")),
+		apiKey:        envOr("NACOS_API_KEY", ""),
+		reportTargets: normalizeTargets(splitAddrs(envOr("NACOS_ADDR", "127.0.0.1:8500"))),
+		httpClient:    &http.Client{Timeout: 5 * time.Second},
+		providers:     make(map[string]struct{}),
 	}
 }
 
@@ -84,6 +107,10 @@ func (c *Client) Register(inst *ServiceInstance) error {
 		weight = 1
 	}
 
+	c.mu.Lock()
+	c.consumerService = inst.ServiceName
+	c.mu.Unlock()
+
 	_, err := c.raw.RegisterInstance(vo.RegisterInstanceParam{
 		Ip:          inst.Host,
 		Port:        uint64(inst.Port),
@@ -116,6 +143,9 @@ func (c *Client) Heartbeat(inst *ServiceInstance) error {
 }
 
 func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
+	c.rememberProvider(serviceName)
+	c.reportTopology()
+
 	items, err := c.raw.SelectInstances(vo.SelectInstancesParam{
 		ServiceName: serviceName,
 		GroupName:   c.groupName,
@@ -144,6 +174,9 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 }
 
 func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)) error {
+	c.rememberProvider(serviceName)
+	c.reportTopology()
+
 	return c.raw.Subscribe(&vo.SubscribeParam{
 		ServiceName: serviceName,
 		GroupName:   c.groupName,
@@ -175,4 +208,139 @@ func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)
 func (c *Client) Close() error {
 	c.raw.CloseClient()
 	return nil
+}
+
+func (c *Client) rememberProvider(serviceName string) {
+	serviceName = strings.TrimSpace(serviceName)
+	if serviceName == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.consumerService == "" || serviceName == c.consumerService {
+		return
+	}
+	c.providers[serviceName] = struct{}{}
+}
+
+func (c *Client) reportTopology() {
+	consumerService, providers, checksum := c.topologySnapshot()
+	if consumerService == "" || checksum == "" {
+		return
+	}
+
+	c.mu.RLock()
+	lastChecksum := c.topologyChecksum
+	c.mu.RUnlock()
+	if checksum == lastChecksum {
+		return
+	}
+
+	payload := map[string]interface{}{
+		"namespace":        c.namespace,
+		"consumer_service": consumerService,
+		"providers":        providers,
+		"checksum":         checksum,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	for _, target := range c.reportTargets {
+		req, err := http.NewRequest(http.MethodPost, target+"/v1/catalog/topology/report", bytes.NewReader(data))
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if c.apiKey != "" {
+			req.Header.Set("X-API-Key", c.apiKey)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			continue
+		}
+		_, _ = bytes.NewBuffer(nil).ReadFrom(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			c.mu.Lock()
+			c.topologyChecksum = checksum
+			c.mu.Unlock()
+			return
+		}
+	}
+}
+
+func (c *Client) topologySnapshot() (string, []string, string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.consumerService == "" || len(c.providers) == 0 {
+		return "", nil, ""
+	}
+
+	providers := make([]string, 0, len(c.providers))
+	for serviceName := range c.providers {
+		if serviceName == "" || serviceName == c.consumerService {
+			continue
+		}
+		providers = append(providers, serviceName)
+	}
+	if len(providers) == 0 {
+		return c.consumerService, nil, ""
+	}
+
+	sort.Strings(providers)
+	payload, _ := json.Marshal(map[string]interface{}{
+		"namespace": c.namespace,
+		"consumer":  c.consumerService,
+		"providers": providers,
+	})
+	sum := sha256.Sum256(payload)
+	return c.consumerService, providers, fmt.Sprintf("%x", sum[:])
+}
+
+func envOr(key, def string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return def
+}
+
+func splitAddrs(raw string) []string {
+	parts := strings.Split(raw, ",")
+	addrs := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			addrs = append(addrs, part)
+		}
+	}
+	return addrs
+}
+
+func normalizeTargets(addrs []string) []string {
+	targets := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
+			targets = append(targets, addr)
+			continue
+		}
+		if strings.HasPrefix(addr, ":") {
+			targets = append(targets, "http://127.0.0.1"+addr)
+			continue
+		}
+		targets = append(targets, "http://"+addr)
+	}
+	return targets
+}
+
+func normalizeNamespace(namespace string) string {
+	ns := strings.TrimSpace(namespace)
+	if ns == "" || strings.EqualFold(ns, constant.DEFAULT_NAMESPACE_ID) {
+		return ""
+	}
+	return ns
 }

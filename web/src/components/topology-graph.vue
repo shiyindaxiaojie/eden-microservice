@@ -31,7 +31,7 @@ const TITLE_MAX_CHARS = 20
 const TITLE_MAX_LINES = 3
 const INSTANCE_ICON_SIZE = 16
 const INSTANCE_ICON_GAP = 8
-const INSTANCE_ICON_OFFSET_X = 12
+const INSTANCE_ICON_OFFSET_X = INSTANCE_ICON_SIZE + INSTANCE_ICON_GAP
 const INSTANCE_TOP_GAP = 14
 const EDGE_ARROW_SIZE = 8
 const EDGE_LANE_GAP = 18
@@ -250,7 +250,10 @@ function wrapServiceName(name: string, maxCharsPerLine = TITLE_MAX_CHARS, maxLin
 
 function serviceMetrics(node: TopologyNode): ServiceNodeMetrics {
   const wrappedTitle = wrapServiceName(node.name)
-  const iconColumns = Math.max(1, Math.floor((SERVICE_CARD_WIDTH - CARD_PADDING_X * 2 - INSTANCE_ICON_OFFSET_X + INSTANCE_ICON_GAP) / (INSTANCE_ICON_SIZE + INSTANCE_ICON_GAP)))
+  const iconColumns = Math.max(
+    1,
+    Math.floor((SERVICE_CARD_WIDTH - CARD_PADDING_X * 2 - INSTANCE_ICON_OFFSET_X + INSTANCE_ICON_GAP) / (INSTANCE_ICON_SIZE + INSTANCE_ICON_GAP)),
+  )
   const iconRows = node.instances.length ? Math.ceil(node.instances.length / iconColumns) : 0
   const headerHeight = Math.max(STATUS_LINE_HEIGHT, TITLE_LINE_HEIGHT)
   const titleExtraHeight = Math.max(0, wrappedTitle.lines - 1) * TITLE_LINE_HEIGHT
@@ -721,6 +724,24 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
         fontFamily: 'Inter, system-ui, sans-serif',
       },
       extraCssText: 'border-radius: 12px; box-shadow: 0 12px 32px rgba(15,23,42,0.12);',
+      position(point: [number, number], _params: any, _el: any, _rect: any, size: any) {
+        const [viewWidth, viewHeight] = size.viewSize as [number, number]
+        const [contentWidth, contentHeight] = size.contentSize as [number, number]
+        const gap = 16
+        const margin = 12
+        const maxX = Math.max(margin, viewWidth - contentWidth - margin)
+        const maxY = Math.max(margin, viewHeight - contentHeight - margin)
+        const aboveY = point[1] - contentHeight - gap
+        const belowY = point[1] + gap
+        let x = point[0] + gap
+        let y = aboveY >= margin ? aboveY : belowY
+
+        if (x > maxX) {
+          x = point[0] - contentWidth - gap
+        }
+
+        return [clamp(x, margin, maxX), clamp(y, margin, maxY)]
+      },
       formatter(params: any) {
         if (params.dataType === 'edge') {
           return `<span style="color:#64748b">${escapeHtml(params.data.source)}</span> &rarr; <span style="color:#64748b">${escapeHtml(params.data.target)}</span>`
@@ -778,6 +799,10 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
         },
         lineStyle: {
           opacity: 0.95,
+        },
+        emphasis: {
+          focus: 'none',
+          scale: false,
         },
       },
     ],

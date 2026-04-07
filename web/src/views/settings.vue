@@ -508,12 +508,6 @@ const isDirty = computed(() => {
   return JSON.stringify(normalizeForCompare(draftSettings.value)) !== JSON.stringify(normalizeForCompare(appliedSettings.value))
 })
 
-const messageProviderOptions = computed(() =>
-  channelForm.value.type === 'email'
-    ? [{ label: 'SMTP', value: 'smtp' }]
-    : MESSAGE_PROVIDER_OPTIONS.value,
-)
-
 const notifyNodeDirty = computed(() => (draftSettings.value.notify_alert_node_id || '') !== (appliedSettings.value.notify_alert_node_id || ''))
 const ruleChannelOptions = computed(() => notifyConfig.value.channels)
 const channelEditorTitle = computed(() => (channelMode.value === 'create' ? t.value.settings.addChannel : t.value.settings.editChannel))
@@ -1045,21 +1039,12 @@ onMounted(() => {
                             <div class="toggle-option" :class="{ selected: previewMode === 'cp' }" @click="setDraftMode('cp')">
                               <div class="toggle-bg"></div>
                               <div class="toggle-text">
-<<<<<<< HEAD
                                 <span class="primary">{{ t.settings.cpModeShort }}</span>
                                 <span class="secondary">{{ t.settings.consistencyFirst }}</span>
                               </div>
                             </div>
                           </div>
                           <div class="mode-desc-v7" v-else>{{ t.settings.modeDescCluster }}</div>
-=======
-                                <span class="primary">{{ t.settings.cpMode }}</span>
-                                <span class="secondary">{{ t.settings.strongConsistency }}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div class="mode-desc-v7" v-else>{{ t.settings.clusterDesc }}</div>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         </div>
                       </div>
                     </div>
@@ -1071,7 +1056,6 @@ onMounted(() => {
                     <el-icon><InfoFilled /></el-icon>
                     <div class="bubble-content">
                       <template v-if="previewEnvironment === 'standalone'">
-<<<<<<< HEAD
                         <strong>{{ t.settings.singleTitle }}:</strong> {{ t.settings.modeDescStandalone }}
                       </template>
                       <template v-else-if="previewMode === 'ap'">
@@ -1079,15 +1063,6 @@ onMounted(() => {
                       </template>
                       <template v-else>
                         <strong>{{ t.settings.cpModeShort }} (Raft):</strong> {{ t.settings.cpDesc }}
-=======
-                        <strong>{{ t.settings.singleTitle }}:</strong> {{ t.settings.standaloneDesc }}
-                      </template>
-                      <template v-else-if="previewMode === 'ap'">
-                        <strong>{{ t.settings.apMode }} (Gossip):</strong> {{ t.settings.apDetailed }}
-                      </template>
-                      <template v-else>
-                        <strong>{{ t.settings.cpMode }} (Raft):</strong> {{ t.settings.cpDetailed }}
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       </template>
                     </div>
                   </div>
@@ -1098,15 +1073,9 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Connection /></el-icon>
                   <div class="section-title-with-tip">
-<<<<<<< HEAD
                     <h4>{{ t.settings.survivalStrategy }}</h4>
                     <el-tooltip
                       :content="t.settings.survivalStrategyTip" placement="top"
-=======
-                    <h4>{{ t.settings.strategy }}</h4>
-                    <el-tooltip
-                      :content="t.settings.strategyTooltip" placement="top"
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1118,13 +1087,8 @@ onMounted(() => {
                     <el-form-item class="switch-form-item">
                       <template #label>
                         <span class="label-with-tip">
-<<<<<<< HEAD
                           {{ t.settings.clientAuth }}
                           <el-tooltip :content="t.settings.clientAuthTip" placement="top">
-=======
-                          {{ t.settings.apiKeyAuth }}
-                          <el-tooltip :content="t.settings.apiKeyAuthTooltip" placement="top">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
                         </span>
@@ -1137,15 +1101,9 @@ onMounted(() => {
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
-<<<<<<< HEAD
                           {{ t.settings.heartbeatTimeout }}
                           <el-tooltip
                             :content="t.settings.heartbeatTimeoutTip" placement="top"
-=======
-                          {{ t.settings.heartbeatThreshold }}
-                          <el-tooltip
-                            :content="t.settings.heartbeatThresholdTooltip" placement="top"
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1163,15 +1121,9 @@ onMounted(() => {
                     <el-form-item>
                       <template #label>
                         <span class="label-with-tip">
-<<<<<<< HEAD
                           {{ t.settings.instanceRetention }}
                           <el-tooltip
                             :content="t.settings.instanceRetentionTip" placement="top"
-=======
-                          {{ t.settings.removalDelay }}
-                          <el-tooltip
-                            :content="t.settings.removalDelayTooltip" placement="top"
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                           >
                             <el-icon class="help-icon"><InfoFilled /></el-icon>
                           </el-tooltip>
@@ -1205,11 +1157,7 @@ onMounted(() => {
                     </div>
                   </el-form-item>
 
-<<<<<<< HEAD
                   <el-form-item :label="t.settings.triggerEvents">
-=======
-                  <el-form-item :label="t.settings.events">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     <el-checkbox-group v-model="draftSettings.event_types" class="event-checkbox-grid">
                       <el-checkbox v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.value">
                         {{ item.label }}
@@ -1223,15 +1171,9 @@ onMounted(() => {
                 <div class="section-header">
                   <el-icon><Document /></el-icon>
                   <div class="section-title-with-tip">
-<<<<<<< HEAD
                     <h4>{{ t.settings.logConfig }}</h4>
                     <el-tooltip
                       :content="t.settings.logConfigTip" placement="top"
-=======
-                    <h4>{{ t.settings.logSettings }}</h4>
-                    <el-tooltip
-                      :content="t.settings.logConfigTooltip" placement="top"
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     >
                       <el-icon class="help-icon"><InfoFilled /></el-icon>
                     </el-tooltip>
@@ -1240,11 +1182,7 @@ onMounted(() => {
 
                 <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
                   <el-form-item :label="t.settings.logLevel">
-<<<<<<< HEAD
                     <div class="log-level-options" role="radiogroup" :aria-label="t.settings.logLevel">
-=======
-                    <div class="log-level-options" role="radiogroup" aria-label="日志级别">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       <button
                         v-for="level in LOG_LEVEL_OPTIONS"
                         :key="level"
@@ -1354,7 +1292,7 @@ onMounted(() => {
               <el-table-column prop="status" :label="t.common.status" width="100">
                 <template #default="scope">
                   <el-tag :type="scope.row.status === 'expired' ? 'danger' : 'success'" size="small">
-                    {{ scope.row.status === 'expired' ? t.settings.expiredTag : t.settings.activeTag }}
+                    {{ scope.row.status === 'expired' ? t.settings.expired : t.settings.activeStatus }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -1385,32 +1323,19 @@ onMounted(() => {
             <div class="ops-toolbar-v2">
               <div class="toolbar-left">
                 <el-icon class="toolbar-icon"><Connection /></el-icon>
-<<<<<<< HEAD
                 <span class="toolbar-label">{{ t.settings.messageSendNode }}</span>
                 <el-tooltip :content="t.settings.messageSendNodeTip" placement="bottom">
-=======
-                <span class="toolbar-label">{{ t.settings.notifyNode }}</span>
-                <el-tooltip :content="t.settings.notifyNodeTooltip" placement="bottom">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                   <el-select v-model="draftSettings.notify_alert_node_id" class="minimal-select" size="default" style="width: 200px">
                     <el-option
                       v-for="item in members"
                       :key="item.id"
-<<<<<<< HEAD
                       :label="`${item.id}${item.is_local ? `（${t.cluster.currentNode}）` : ''}`"
-=======
-                      :label="`${item.id}${item.is_local ? (locale === 'zh' ? '（当前节点）' : ' (Local)') : ''}`"
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       :value="item.id"
                     />
                   </el-select>
                 </el-tooltip>
                 <el-button v-if="notifyNodeDirty" type="primary" link :loading="notifyNodeSaving" @click="saveNotifyAlertNode">
-<<<<<<< HEAD
                   {{ t.settings.saveNodeConfig }}
-=======
-                  {{ t.settings.saveNode }}
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                 </el-button>
               </div>
               <div class="toolbar-right">
@@ -1442,11 +1367,7 @@ onMounted(() => {
                         </div>
                       </div>
                       <div class="entity-actions-v2">
-<<<<<<< HEAD
                         <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? t.settings.channelEnabled : t.settings.channelDisabled }}</el-tag>
-=======
-                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? (locale === 'zh' ? '启用' : 'Active') : (locale === 'zh' ? '停用' : 'Disabled') }}</el-tag>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <div class="action-btn-group">
                           <el-button link type="primary" size="small" @click.stop="openChannelDialog('edit', item)">{{ t.common.edit }}</el-button>
                           <el-divider direction="vertical" />
@@ -1470,15 +1391,9 @@ onMounted(() => {
                   <div class="empty-icon-large">
                     <el-icon><Share /></el-icon>
                   </div>
-<<<<<<< HEAD
                   <div class="empty-state-title">{{ t.settings.noChannel }}</div>
                   <div class="empty-state-desc">{{ t.settings.noChannelDesc }}</div>
                   <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">{{ t.settings.addFirstChannel }}</el-button>
-=======
-                  <div class="empty-state-title">{{ locale === 'zh' ? '尚未配置消息渠道' : 'No message channels configured' }}</div>
-                  <div class="empty-state-desc">{{ locale === 'zh' ? '新增 Webhook 或邮件渠道后，模板和规则都会基于此进行关联推送。' : 'No webhook or email channels found. Add one to start sending alerts.' }}</div>
-                  <el-button type="primary" :icon="Plus" @click="openChannelDialog('create')">{{ t.settings.addChannel }}</el-button>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                 </div>
               </div>
 
@@ -1492,11 +1407,7 @@ onMounted(() => {
                       </div>
                       <div class="editor-actions">
                         <el-button @click="closeChannelEditor">{{ t.common.cancel }}</el-button>
-<<<<<<< HEAD
                         <el-button :icon="Bell" @click="testChannelNotification">{{ t.settings.testNotice }}</el-button>
-=======
-                        <el-button :icon="Bell" @click="testChannelNotification">{{ t.settings.test }}</el-button>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-button type="primary" :loading="messageSaving" @click="saveChannelDraft">{{ t.common.confirm }}</el-button>
                       </div>
                     </div>
@@ -1504,27 +1415,16 @@ onMounted(() => {
 
                   <el-form label-position="left" label-width="100px" class="compact-form editor-form inline-label-form">
                     <div class="ops-form-grid-3col">
-<<<<<<< HEAD
                       <el-form-item :label="t.common.name">
                         <el-input v-model="channelForm.name" />
                       </el-form-item>
                       <el-form-item :label="t.common.type">
-=======
-                      <el-form-item :label="t.settings.channelName">
-                        <el-input v-model="channelForm.name" :placeholder="locale === 'zh' ? '例如：生产环境告警' : 'e.g. Production Alerts'" />
-                      </el-form-item>
-                      <el-form-item :label="t.settings.channelType">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-select v-model="channelForm.type" @change="handleChannelTypeChange">
                           <el-option :label="t.settings.webhook" value="webhook" />
                           <el-option :label="t.settings.email" value="email" />
                         </el-select>
                       </el-form-item>
-<<<<<<< HEAD
                       <el-form-item :label="t.settings.provider">
-=======
-                      <el-form-item :label="t.settings.channelProvider">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-select v-model="channelForm.provider" :disabled="channelForm.type === 'email'">
                           <el-option v-for="item in MESSAGE_PROVIDER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
@@ -1535,21 +1435,13 @@ onMounted(() => {
                     </div>
 
                     <el-form-item :label="t.settings.channelDesc">
-<<<<<<< HEAD
                       <el-input v-model="channelForm.description" type="textarea" :rows="2" :placeholder="t.settings.channelDescPlaceholder" />
-=======
-                      <el-input v-model="channelForm.description" type="textarea" :rows="2" :placeholder="t.settings.noDescription" />
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     </el-form-item>
 
                     <template v-if="channelForm.type === 'webhook'">
                       <div class="ops-form-grid-3col">
                         <el-form-item :label="t.settings.webhookUrl" style="grid-column: span 2;">
-<<<<<<< HEAD
                           <el-input v-model="channelForm.webhookUrl" />
-=======
-                          <el-input v-model="channelForm.webhookUrl" placeholder="https://your-webhook-endpoint" />
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         </el-form-item>
                         <el-form-item :label="t.settings.webhookSecret">
                           <el-input v-model="channelForm.webhookSecret" show-password :placeholder="t.common.none" />
@@ -1558,7 +1450,6 @@ onMounted(() => {
                     </template>
                     <template v-else>
                       <div class="ops-form-grid-2col channel-email-grid">
-<<<<<<< HEAD
                         <el-form-item :label="t.settings.smtpHost">
                           <el-input v-model="channelForm.emailHost" />
                         </el-form-item>
@@ -1575,33 +1466,11 @@ onMounted(() => {
                           <el-input v-model="channelForm.emailFrom" />
                         </el-form-item>
                         <el-form-item :label="t.settings.enableTls">
-=======
-                        <el-form-item :label="t.settings.emailHost">
-                          <el-input v-model="channelForm.emailHost" placeholder="例如：smtp.example.com" />
-                        </el-form-item>
-                        <el-form-item :label="t.settings.emailPort">
-                          <el-input-number v-model="channelForm.emailPort" :min="1" :max="65535" controls-position="right" style="width: 100%" />
-                        </el-form-item>
-                        <el-form-item :label="t.settings.emailUser">
-                          <el-input v-model="channelForm.emailUsername" :placeholder="t.common.none" />
-                        </el-form-item>
-                        <el-form-item :label="t.settings.emailPass">
-                          <el-input v-model="channelForm.emailPassword" show-password :placeholder="t.common.none" />
-                        </el-form-item>
-                        <el-form-item :label="t.settings.emailFrom">
-                          <el-input v-model="channelForm.emailFrom" placeholder="例如：noreply@example.com" />
-                        </el-form-item>
-                        <el-form-item :label="t.settings.emailTLS">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                           <el-switch v-model="channelForm.emailUseTLS" />
                         </el-form-item>
                       </div>
 
-<<<<<<< HEAD
                       <el-form-item :label="t.settings.emailRecipients">
-=======
-                      <el-form-item :label="t.settings.emailTo">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-input
                           v-model="channelForm.emailRecipientsText"
                           type="textarea"
@@ -1616,11 +1485,7 @@ onMounted(() => {
                         v-model="channelForm.extraConfigText"
                         type="textarea"
                         :rows="4"
-<<<<<<< HEAD
                         :placeholder="t.settings.extraConfigPlaceholder"
-=======
-                        :placeholder='locale === "zh" ? "可选，例如：{\"headers\":{\"X-Token\":\"abc\"}}" : "Optional, e.g. {\"headers\":{\"X-Token\":\"abc\"}}"'
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       />
                     </el-form-item>
                   </el-form>
@@ -1635,11 +1500,7 @@ onMounted(() => {
 
       <el-tab-pane name="monitoring">
         <template #label>
-<<<<<<< HEAD
           <span class="tab-label"><el-icon><Monitor /></el-icon>{{ t.settings.alarmConfig }}</span>
-=======
-          <span class="tab-label"><el-icon><Monitor /></el-icon>{{ t.settings.monitoring }}</span>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
         </template>
 
         <div class="tab-content ops-settings-tab" v-loading="alertLoading">
@@ -1647,19 +1508,11 @@ onMounted(() => {
             <div class="ops-toolbar-v2" style="margin-bottom: 0;">
               <div class="toolbar-left">
                 <el-icon class="toolbar-icon"><Bell /></el-icon>
-<<<<<<< HEAD
                 <span class="toolbar-label">{{ t.settings.alarmRules }}</span>
                 <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">{{ t.settings.alarmRulesDesc }}</span>
               </div>
               <div class="toolbar-right">
                 <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addAlarmRule }}</el-button>
-=======
-                <span class="toolbar-label">{{ locale === 'zh' ? '告警规则' : 'Alarm Rules' }}</span>
-                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">{{ locale === 'zh' ? '当事件达到规则阈值时，自动通过关联的通知渠道发送告警' : 'Automatically send alerts via associated channels when events reach thresholds.' }}</span>
-              </div>
-              <div class="toolbar-right">
-                <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addRule }}</el-button>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
               </div>
             </div>
 
@@ -1677,17 +1530,9 @@ onMounted(() => {
                           <div class="entity-subline">{{ eventLabel(item.event_code) }}</div>
                         </div>
                       </div>
-<<<<<<< HEAD
                       <div class="entity-detail-v2">{{ t.settings.ruleSummary.replace('{sec}', String(item.window_sec)).replace('{count}', String(item.threshold)) }} · {{ ruleChannelNames(item.channel_ids) }}</div>
                       <div class="entity-actions-v2">
                         <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">{{ item.enabled ? t.settings.channelEnabled : t.settings.channelDisabled }}</el-tag>
-=======
-                      <div class="entity-detail-v2">{{ item.window_sec }} {{ locale === 'zh' ? '秒内累计' : 's window,' }} {{ item.threshold }} {{ locale === 'zh' ? '次' : 'times' }} · {{ ruleChannelNames(item.channel_ids) }}</div>
-                      <div class="entity-actions-v2">
-                        <el-tag :type="item.enabled ? 'success' : 'info'" size="small" effect="plain" class="status-tag">
-                          {{ item.enabled ? (locale === 'zh' ? '启用' : 'Active') : (locale === 'zh' ? '停用' : 'Disabled') }}
-                        </el-tag>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <div class="action-btn-group">
                           <el-button link type="primary" size="small" @click.stop="openRuleDialog('edit', item)">{{ t.common.edit }}</el-button>
                           <el-divider direction="vertical" />
@@ -1709,15 +1554,9 @@ onMounted(() => {
                 </div>
                 <div v-else class="ops-empty-state">
                   <div class="empty-icon-large rule"><el-icon><Timer /></el-icon></div>
-<<<<<<< HEAD
                   <div class="empty-state-title">{{ t.settings.noAlarmRule }}</div>
                   <div class="empty-state-desc">{{ t.settings.noAlarmRuleDesc }}</div>
                   <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addFirstAlarmRule }}</el-button>
-=======
-                  <div class="empty-state-title">{{ locale === 'zh' ? '尚未配置告警规则' : 'No alarm rules configured' }}</div>
-                  <div class="empty-state-desc">{{ locale === 'zh' ? '配置阈值并关联消息渠道，系统将自动监控异常。' : 'Configure thresholds and notification channels to monitor system health.' }}</div>
-                  <el-button type="primary" :icon="Plus" @click="openRuleDialog('create')">{{ t.settings.addRule }}</el-button>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                 </div>
               </div>
               <Transition name="slide-panel">
@@ -1727,17 +1566,10 @@ onMounted(() => {
                     <div class="editor-head-content">
                       <div>
                         <div class="editor-title">{{ ruleEditorTitle }}</div>
-<<<<<<< HEAD
                         <div class="editor-subtitle">{{ t.settings.alarmRulesDesc }}</div>
                       </div>
                       <div class="editor-actions">
                         <el-button @click="testAlertNotification" :loading="alertTesting">{{ t.settings.testNotice }}</el-button>
-=======
-                        <div class="editor-subtitle">{{ locale === 'zh' ? '当事件达到阈值时，通过指定渠道发送告警通知。' : 'Sends alarm notifications via channels when event frequency exceeds thresholds.' }}</div>
-                      </div>
-                      <div class="editor-actions">
-                        <el-button @click="testAlertNotification" :loading="alertTesting">{{ t.settings.testRule }}</el-button>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-button @click="closeRuleEditor">{{ t.common.cancel }}</el-button>
                         <el-button type="primary" :loading="alertSaving" @click="saveRuleDraft">{{ t.common.confirm }}</el-button>
                       </div>
@@ -1745,13 +1577,8 @@ onMounted(() => {
                   </div>
                   <el-form label-position="left" label-width="80px" class="compact-form editor-form inline-label-form" style="padding-right: 16px;">
                     <div class="ops-form-grid-3col">
-<<<<<<< HEAD
                       <el-form-item :label="t.common.name"><el-input v-model="ruleForm.name" /></el-form-item>
                       <el-form-item :label="t.common.type">
-=======
-                      <el-form-item :label="t.settings.ruleName"><el-input v-model="ruleForm.name" :placeholder="locale === 'zh' ? '例如：服务下线连续告警' : 'e.g. Service Offline Alerts'" /></el-form-item>
-                      <el-form-item :label="t.settings.eventType">
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                         <el-select v-model="ruleForm.event_code" @change="handleEventCodeChange">
                           <el-option v-for="item in EVENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                         </el-select>
@@ -1761,27 +1588,16 @@ onMounted(() => {
                     <div class="ops-form-grid-3col">
                       <el-form-item :label="t.settings.notificationChannel">
                         <el-select v-model="ruleForm.channel_ids" multiple collapse-tags collapse-tags-tooltip>
-<<<<<<< HEAD
                           <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}（${t.settings.channelDisabled}）`" :value="item.id" />
                         </el-select>
                       </el-form-item>
                       <el-form-item :label="t.settings.ruleCondition" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">{{ t.settings.ruleConditionPrefix }}</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" /><span style="font-size:13px; color:var(--text-secondary)">{{ t.settings.ruleConditionSuffix }}</span></div></el-form-item>
-=======
-                          <el-option v-for="item in ruleChannelOptions" :key="item.id" :label="item.enabled ? item.name : `${item.name}${locale === 'zh' ? '（已停用）' : ' (Disabled)'}`" :value="item.id" />
-                        </el-select>
-                      </el-form-item>
-                      <el-form-item :label="locale === 'zh' ? '触发条件' : 'Threshold'" style="grid-column: span 2;"><div style="display:flex; gap:8px; align-items:center;"><el-input-number v-model="ruleForm.window_sec" :min="60" controls-position="right" style="width: 120px;" placeholder="s" /><span style="font-size:13px; color:var(--text-secondary); white-space:nowrap">{{ locale === 'zh' ? '秒内累计发生' : 's window,' }}</span><el-input-number v-model="ruleForm.threshold" :min="1" controls-position="right" style="width: 100px;" placeholder="x" /><span style="font-size:13px; color:var(--text-secondary)">{{ locale === 'zh' ? '次告警' : 'times' }}</span></div></el-form-item>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                     </div>
 
                     <div class="template-section" style="margin-top: 16px; border: 1px solid var(--border-color); overflow: hidden;">
                       <div class="template-section-header" style="background: rgba(0,0,0,0.02); padding: 12px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
                         <el-icon><Operation /></el-icon>
-<<<<<<< HEAD
                         <span style="font-weight: 600; font-size: 14px;">{{ t.settings.messageTemplate }}</span>
-=======
-                        <span style="font-weight: 600; font-size: 14px;">{{ t.settings.templates }}</span>
->>>>>>> 3ffcf5bfebde25286b92cd9296de91cc68e67a06
                       </div>
 
                       <div style="padding: 16px; display: flex; gap: 16px;">
@@ -1838,7 +1654,12 @@ onMounted(() => {
         </el-form-item>
 
         <el-form-item :label="t.settings.description">
-          <el-input v-model="keyForm.description" type="textarea" :rows="3" :placeholder="t.settings.apiKeyDesc" />
+          <el-input
+            v-model="keyForm.description"
+            type="textarea"
+            :rows="3"
+            :placeholder="locale === 'zh' ? '请输入描述' : 'Enter a description'"
+          />
         </el-form-item>
 
         <el-form-item :label="locale === 'zh' ? '有效期' : 'Expiration'">
