@@ -85,25 +85,21 @@ func (s *InstanceRegistry) DeregisterNS(namespace, serviceName, instanceID strin
 	if !ok {
 		return nil, false
 	}
-	instances, ok := nsSvcs[serviceName]
-	if !ok {
-		return nil, false
-	}
 
-	inst, exists := instances[instanceID]
-	if !exists {
+	resolvedService, instances, inst, ok := s.resolveInstanceNoLock(ns, serviceName, instanceID)
+	if !ok {
 		return nil, false
 	}
 
 	delete(instances, instanceID)
 	if len(instances) == 0 {
-		delete(nsSvcs, serviceName)
+		delete(nsSvcs, resolvedService)
 	}
 	if len(nsSvcs) == 0 {
 		delete(s.services, ns)
 	}
 
-	s.notifyNoLock(ns, serviceName, "offline")
+	s.notifyNoLock(ns, resolvedService, "offline")
 
 	return inst, true
 }
@@ -114,16 +110,8 @@ func (s *InstanceRegistry) SetInstanceStatus(namespace, serviceName, instanceID 
 	defer s.mu.Unlock()
 
 	ns := effectiveNS(namespace)
-	nsSvcs, ok := s.services[ns]
+	resolvedService, _, inst, ok := s.resolveInstanceNoLock(ns, serviceName, instanceID)
 	if !ok {
-		return nil, false
-	}
-	instances, ok := nsSvcs[serviceName]
-	if !ok {
-		return nil, false
-	}
-	inst, exists := instances[instanceID]
-	if !exists {
 		return nil, false
 	}
 
@@ -140,7 +128,7 @@ func (s *InstanceRegistry) SetInstanceStatus(namespace, serviceName, instanceID 
 	} else if status == HealthCritical {
 		action = "offline"
 	}
-	s.notifyNoLock(ns, serviceName, action)
+	s.notifyNoLock(ns, resolvedService, action)
 
 	return inst, true
 }
@@ -156,16 +144,8 @@ func (s *InstanceRegistry) HeartbeatNS(namespace, serviceName, instanceID string
 	defer s.mu.Unlock()
 
 	ns := effectiveNS(namespace)
-	nsSvcs, ok := s.services[ns]
+	resolvedService, _, inst, ok := s.resolveInstanceNoLock(ns, serviceName, instanceID)
 	if !ok {
-		return nil, false
-	}
-	instances, ok := nsSvcs[serviceName]
-	if !ok {
-		return nil, false
-	}
-	inst, exists := instances[instanceID]
-	if !exists {
 		return nil, false
 	}
 	inst.LastHeartbeat = time.Now()
@@ -176,10 +156,33 @@ func (s *InstanceRegistry) HeartbeatNS(namespace, serviceName, instanceID string
 	}
 
 	if recovered {
-		s.notifyNoLock(ns, serviceName, "online")
+		s.notifyNoLock(ns, resolvedService, "online")
 	}
 
 	return inst, recovered
+}
+
+func (s *InstanceRegistry) resolveInstanceNoLock(namespace, serviceName, instanceID string) (string, map[string]*Instance, *Instance, bool) {
+	nsSvcs, ok := s.services[effectiveNS(namespace)]
+	if !ok || instanceID == "" {
+		return "", nil, nil, false
+	}
+
+	if serviceName != "" {
+		if instances, ok := nsSvcs[serviceName]; ok {
+			if inst, exists := instances[instanceID]; exists {
+				return serviceName, instances, inst, true
+			}
+		}
+	}
+
+	for resolvedService, instances := range nsSvcs {
+		if inst, exists := instances[instanceID]; exists {
+			return resolvedService, instances, inst, true
+		}
+	}
+
+	return "", nil, nil, false
 }
 
 // GetService returns all instances for a given service name (default namespace).

@@ -104,7 +104,7 @@ func (s *registry) Register(inst *Instance) error {
 	mode := s.mode()
 	if mode == "cp" && s.cpNode != nil {
 		if !s.cpNode.IsLeader() {
-			return s.forwardToLeader("register", inst, "", "")
+			return s.forwardToLeader("register", inst, "", "", "")
 		}
 		cmd := replication.Command{Type: replication.CmdRegister, Instance: toReplicatedInstance(inst)}
 		return s.cpNode.Apply(cmd, 5*time.Second)
@@ -121,7 +121,7 @@ func (s *registry) Deregister(namespace, serviceName, instanceID string) error {
 	mode := s.mode()
 	if mode == "cp" && s.cpNode != nil {
 		if !s.cpNode.IsLeader() {
-			return s.forwardToLeader("deregister", &Instance{Namespace: namespace}, serviceName, instanceID)
+			return s.forwardToLeader("deregister", &Instance{Namespace: namespace}, serviceName, instanceID, "")
 		}
 		cmd := replication.Command{Type: replication.CmdDeregister, Namespace: namespace, ServiceName: serviceName, InstanceID: instanceID}
 		return s.cpNode.Apply(cmd, 5*time.Second)
@@ -137,7 +137,7 @@ func (s *registry) Deregister(namespace, serviceName, instanceID string) error {
 		return fmt.Errorf("instance not found: %s/%s", serviceName, instanceID)
 	}
 
-	s.state.AppendEvent(EventTypeServiceOffline, serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Instance deregistered")
+	s.state.AppendEvent(EventTypeServiceOffline, inst.ServiceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Instance deregistered")
 	return nil
 }
 
@@ -172,17 +172,43 @@ func (s *registry) SetInstanceStatus(namespace, serviceName, instanceID string, 
 		return fmt.Errorf("invalid status: %s, must be 'online' or 'offline'", status)
 	}
 
+	mode := s.mode()
+	if mode == "cp" && s.cpNode != nil {
+		if !s.cpNode.IsLeader() {
+			return s.forwardToLeader("set_instance_status", &Instance{Namespace: namespace}, serviceName, instanceID, status)
+		}
+		cmd := replication.Command{
+			Type:        replication.CmdSetInstanceStatus,
+			Namespace:   namespace,
+			ServiceName: serviceName,
+			InstanceID:  instanceID,
+			Status:      status,
+		}
+		return s.cpNode.Apply(cmd, 5*time.Second)
+	}
+
+	data := map[string]string{
+		"namespace":    namespace,
+		"service_name": serviceName,
+		"instance_id":  instanceID,
+		"status":       status,
+	}
+	if s.apNode != nil {
+		return s.apNode.Apply("set_instance_status", data, false)
+	}
+
 	inst, ok := s.state.SetInstanceStatus(namespace, serviceName, instanceID, healthStatus)
 	if !ok {
 		return fmt.Errorf("instance not found: %s/%s", serviceName, instanceID)
 	}
+	resolvedService := inst.ServiceName
 	eventType := EventTypeServiceOffline
 	message := "Instance taken offline"
 	if status == "online" {
 		eventType = EventTypeServiceOnline
 		message = "Instance restored online"
 	}
-	s.state.AppendEvent(eventType, serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), message)
+	s.state.AppendEvent(eventType, resolvedService, fmt.Sprintf("%s:%d", inst.Host, inst.Port), message)
 	return nil
 }
 
@@ -190,7 +216,7 @@ func (s *registry) Heartbeat(namespace, serviceName, instanceID string) error {
 	mode := s.mode()
 	if mode == "cp" && s.cpNode != nil {
 		if !s.cpNode.IsLeader() {
-			return s.forwardToLeader("heartbeat", &Instance{Namespace: namespace}, serviceName, instanceID)
+			return s.forwardToLeader("heartbeat", &Instance{Namespace: namespace}, serviceName, instanceID, "")
 		}
 		cmd := replication.Command{Type: replication.CmdHeartbeat, Namespace: namespace, ServiceName: serviceName, InstanceID: instanceID}
 		return s.cpNode.Apply(cmd, 5*time.Second)
@@ -203,9 +229,10 @@ func (s *registry) Heartbeat(namespace, serviceName, instanceID string) error {
 	if inst == nil {
 		return fmt.Errorf("instance not found")
 	}
-	s.state.AppendEvent(EventTypeServiceHeartbeat, serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Heartbeat received")
+	resolvedService := inst.ServiceName
+	s.state.AppendEvent(EventTypeServiceHeartbeat, resolvedService, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Heartbeat received")
 	if recovered {
-		s.state.AppendEvent(EventTypeServiceOnline, serviceName, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Heartbeat recovered instance to online")
+		s.state.AppendEvent(EventTypeServiceOnline, resolvedService, fmt.Sprintf("%s:%d", inst.Host, inst.Port), "Heartbeat recovered instance to online")
 	}
 	return nil
 }
@@ -605,7 +632,7 @@ func (s *registry) handleNotify(namespace, serviceName, action string, instances
 	}
 }
 
-func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, instanceID string) error {
+func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, instanceID, status string) error {
 	leaderID := s.cpNode.LeaderID()
 	if leaderID == "" {
 		return fmt.Errorf("no leader available")
@@ -645,6 +672,13 @@ func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, i
 			Namespace:   inst.Namespace,
 			ServiceName: serviceName,
 			InstanceId:  instanceID,
+		})
+	case "set_instance_status":
+		_, err = client.SetInstanceStatus(ctx, &grpc_registry.SetInstanceStatusRequest{
+			Namespace:   inst.Namespace,
+			ServiceName: serviceName,
+			InstanceId:  instanceID,
+			Status:      status,
 		})
 	case "heartbeat":
 		_, err = client.Heartbeat(ctx, &grpc_registry.HeartbeatRequest{

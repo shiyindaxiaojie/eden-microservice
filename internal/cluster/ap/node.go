@@ -159,6 +159,17 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 		if d, ok := data.(map[string]string); ok {
 			n.State.Catalog.Instances.DeregisterNS(d["namespace"], d["service_name"], d["instance_id"])
 		}
+	case "set_instance_status":
+		if d, ok := data.(map[string]string); ok {
+			status := catalog.HealthCritical
+			if d["status"] == "online" {
+				status = catalog.HealthPassing
+			}
+			inst, _ := n.State.SetInstanceStatus(d["namespace"], d["service_name"], d["instance_id"], status)
+			if inst == nil {
+				return fmt.Errorf("instance not found")
+			}
+		}
 	case "heartbeat":
 		if d, ok := data.(map[string]string); ok {
 			inst, _ := n.State.HeartbeatNS(d["namespace"], d["service_name"], d["instance_id"])

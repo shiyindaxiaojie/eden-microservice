@@ -994,8 +994,10 @@ onMounted(() => {
                       </el-tag>
                     </div>
                     <div class="status-indicator" v-if="appliedEnvironment === 'cluster'">
-                      <span class="dot-label">{{ t.settings.consistency }}:</span>
+                      <span class="dot-label">{{ t.settings.consistency }}</span>
+                      <span class="consistency-mode-tag" :class="appliedMode === 'cp' ? 'tag-cp-soft' : 'tag-ap-soft'">
                         {{ appliedMode === 'cp' ? t.settings.cpTitle : t.settings.apTitle }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1056,13 +1058,13 @@ onMounted(() => {
                     <el-icon><InfoFilled /></el-icon>
                     <div class="bubble-content">
                       <template v-if="previewEnvironment === 'standalone'">
-                        <strong>{{ t.settings.singleTitle }}:</strong> {{ t.settings.modeDescStandalone }}
+                        <span class="bubble-copy"><strong>{{ t.settings.singleTitle }}:</strong><span>{{ t.settings.modeDescStandalone }}</span></span>
                       </template>
                       <template v-else-if="previewMode === 'ap'">
-                        <strong>{{ t.settings.apModeShort }} (Gossip):</strong> {{ t.settings.apDesc }}
+                        <span class="bubble-copy"><strong>{{ t.settings.apModeShort }} (Gossip):</strong><span>{{ t.settings.apDesc }}</span></span>
                       </template>
                       <template v-else>
-                        <strong>{{ t.settings.cpModeShort }} (Raft):</strong> {{ t.settings.cpDesc }}
+                        <span class="bubble-copy"><strong>{{ t.settings.cpModeShort }} (Raft):</strong><span>{{ t.settings.cpDesc }}</span></span>
                       </template>
                     </div>
                   </div>
@@ -1149,7 +1151,7 @@ onMounted(() => {
                   <h4>{{ t.settings.eventSettings }}</h4>
                 </div>
 
-                <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
+                <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
                   <el-form-item :label="t.settings.retention">
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.event_retention_days" :min="1" :max="365" style="flex: 1" />
@@ -1180,7 +1182,7 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <el-form label-position="left" label-width="108px" class="compact-form basic-inline-form side-inline-form">
+                <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
                   <el-form-item :label="t.settings.logLevel">
                     <div class="log-level-options" role="radiogroup" :aria-label="t.settings.logLevel">
                       <button
@@ -2070,6 +2072,7 @@ onMounted(() => {
 
 .status-tags {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -2077,10 +2080,12 @@ onMounted(() => {
 .status-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .indicator-dot {
@@ -2097,8 +2102,40 @@ onMounted(() => {
 
 .dot-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
+}
+
+.status-indicator :deep(.el-tag) {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.consistency-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.tag-ap-soft {
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.tag-cp-soft {
+  color: #c2410c;
+  border-color: rgba(249, 115, 22, 0.24);
+  background: rgba(249, 115, 22, 0.1);
 }
 
 .consistency-wrapper-v7 {
@@ -2269,7 +2306,7 @@ onMounted(() => {
 .info-bubble-v7 {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   padding: 13px 16px;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -2277,14 +2314,30 @@ onMounted(() => {
 }
 
 .info-bubble-v7 .el-icon {
-  margin-top: 2px;
   font-size: 18px;
+  flex-shrink: 0;
 }
 
 .bubble-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-height: 24px;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.bubble-copy {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bubble-copy strong {
+  color: var(--text-primary);
+  font-weight: 700;
 }
 
 .info-bubble-v7.ap {
@@ -2358,6 +2411,11 @@ onMounted(() => {
 
 .side-inline-form :deep(.el-form-item__label) {
   padding-top: 4px;
+  padding-right: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .registry-form :deep(.el-form-item__label) {
@@ -2517,7 +2575,18 @@ onMounted(() => {
 .event-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 8px;
+  gap: 10px 18px;
+}
+
+.event-checkbox-grid :deep(.el-checkbox) {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0;
+  min-height: 28px;
+}
+
+.event-checkbox-grid :deep(.el-checkbox__label) {
+  padding-left: 8px;
 }
 
 .save-toolbar {
@@ -2715,34 +2784,36 @@ onMounted(() => {
 
 .key-preview-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 10px;
   align-items: stretch;
+  width: 100%;
 }
 
 .key-preview-value {
-  min-height: 54px;
-  padding: 14px 16px;
-  border-radius: 14px;
+  min-height: 46px;
+  padding: 11px 14px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.92));
   color: var(--text-primary);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.45;
   word-break: break-all;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
 .regenerate-key-btn {
-  width: 52px;
-  min-height: 54px;
-  border-radius: 14px;
+  width: 44px;
+  min-height: 46px;
+  padding: 0;
+  border-radius: 12px;
 }
 
 .field-hint {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.5;
@@ -2842,7 +2913,14 @@ onMounted(() => {
 
 :deep(.credential-dialog .el-dialog__header) {
   margin-right: 0;
-  padding: 22px 22px 8px;
+  padding: 20px 22px 6px;
+}
+
+:deep(.credential-dialog .el-dialog__title) {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
 }
 
 :deep(.credential-dialog .el-dialog__headerbtn) {
@@ -2860,11 +2938,11 @@ onMounted(() => {
 }
 
 :deep(.credential-dialog .el-form-item) {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 :deep(.credential-dialog .el-form-item__label) {
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   color: var(--text-primary);
   font-weight: 700;
   line-height: 1.4;
@@ -2872,12 +2950,12 @@ onMounted(() => {
 
 :deep(.credential-dialog .el-input__wrapper),
 :deep(.credential-dialog .el-select__wrapper) {
-  min-height: 44px;
+  min-height: 42px;
   border-radius: 12px;
 }
 
 :deep(.credential-dialog .el-textarea__inner) {
-  min-height: 96px !important;
+  min-height: 84px !important;
   border-radius: 12px;
 }
 
@@ -2932,7 +3010,7 @@ onMounted(() => {
   }
 
   .side-inline-form :deep(.el-form-item__label) {
-    width: 108px !important;
+    width: 144px !important;
   }
 }
 

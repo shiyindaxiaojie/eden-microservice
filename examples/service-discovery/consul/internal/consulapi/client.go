@@ -71,7 +71,11 @@ func (c *Client) Deregister(inst *ServiceInstance) error {
 }
 
 func (c *Client) Heartbeat(inst *ServiceInstance) error {
-	return c.raw.Agent().PassTTL("service:"+inst.ID, "heartbeat")
+	err := c.raw.Agent().PassTTL("service:"+inst.ID, "heartbeat")
+	if err != nil && isInstanceNotFound(err) {
+		return c.Register(inst)
+	}
+	return err
 }
 
 func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
@@ -254,4 +258,12 @@ func normalizeTargets(addrs []string) []string {
 		targets = append(targets, "http://"+addr)
 	}
 	return targets
+}
+
+func isInstanceNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "instance not found") || strings.Contains(message, "unexpected response code: 404")
 }

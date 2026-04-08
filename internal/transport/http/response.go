@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
 )
 
 // httpError writes a JSON error response.
@@ -47,9 +49,9 @@ func (h *Handler) writeLeaderRedirect(w http.ResponseWriter, err error) {
 	errMsg := err.Error()
 	// Check if this is a Raft redirect error
 	if strings.Contains(errMsg, "not leader") || strings.Contains(errMsg, "redirect to") {
-		leader := h.cluster.LeaderAddr()
+		leader := h.leaderHTTPAddr()
 		if leader != "" {
-			w.Header().Set("Location", h.normalizeAddr(leader))
+			w.Header().Set("Location", leader)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			json.NewEncoder(w).Encode(map[string]string{
 				"error":  "not leader",
@@ -63,4 +65,35 @@ func (h *Handler) writeLeaderRedirect(w http.ResponseWriter, err error) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"error": errMsg,
 	})
+}
+
+func (h *Handler) leaderHTTPAddr() string {
+	if h == nil || h.cluster == nil {
+		return ""
+	}
+
+	leaderRaftAddr := strings.TrimSpace(h.cluster.LeaderAddr())
+	if leaderRaftAddr == "" {
+		return h.normalizeAddr(h.config.HTTPAddr)
+	}
+
+	members, err := clusterpkg.BuildClusterMemberViews(h.config, h.settings, h.cluster, &h.nodeCache)
+	if err == nil {
+		for _, member := range members {
+			if member == nil {
+				continue
+			}
+			if member.Role == "Leader" && member.HTTPAddr != "" {
+				return h.normalizeAddr(member.HTTPAddr)
+			}
+			if member.RaftAddr != "" && member.RaftAddr == leaderRaftAddr && member.HTTPAddr != "" {
+				return h.normalizeAddr(member.HTTPAddr)
+			}
+			if member.Address != "" && member.Address == leaderRaftAddr && member.HTTPAddr != "" {
+				return h.normalizeAddr(member.HTTPAddr)
+			}
+		}
+	}
+
+	return h.normalizeAddr(leaderRaftAddr)
 }

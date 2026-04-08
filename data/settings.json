@@ -1,6 +1,6 @@
 {
-  "mode": "ap",
-  "environment": "standalone",
+  "mode": "cp",
+  "environment": "cluster",
   "log_level": "INFO",
   "event_retention_days": 7,
   "log_retention_days": 30,
@@ -30,10 +30,10 @@
           ],
           "title_template": "注册中心告警 - {{ event_name }}",
           "body_template": "服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。",
-          "enabled": true
+          "enabled": false
         }
       ],
-      "updated_at": "2026-04-03T00:28:01+08:00"
+      "updated_at": "2026-04-08T09:49:58+08:00"
     }
   },
   "notify_configs": {

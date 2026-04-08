@@ -38,6 +38,21 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 	case replication.CmdDeregister:
 		_, ok := f.state.Catalog.Instances.DeregisterNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		return ok
+	case replication.CmdSetInstanceStatus:
+		var healthStatus catalog.HealthStatus
+		switch cmd.Status {
+		case "online":
+			healthStatus = catalog.HealthPassing
+		case "offline":
+			healthStatus = catalog.HealthCritical
+		default:
+			return fmt.Errorf("invalid status: %s", cmd.Status)
+		}
+		inst, ok := f.state.SetInstanceStatus(cmd.Namespace, cmd.ServiceName, cmd.InstanceID, healthStatus)
+		if !ok || inst == nil {
+			return fmt.Errorf("instance not found")
+		}
+		return nil
 	case replication.CmdHeartbeat:
 		inst, _ := f.state.HeartbeatNS(cmd.Namespace, cmd.ServiceName, cmd.InstanceID)
 		if inst == nil {

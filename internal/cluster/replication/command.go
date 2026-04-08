@@ -8,6 +8,7 @@ type CommandType string
 const (
 	CmdRegister                       CommandType = "register"
 	CmdDeregister                     CommandType = "deregister"
+	CmdSetInstanceStatus              CommandType = "set_instance_status"
 	CmdHeartbeat                      CommandType = "heartbeat"
 	CmdAddAPIKey                      CommandType = "add_api_key"
 	CmdDeleteAPIKey                   CommandType = "delete_api_key"
@@ -72,6 +73,7 @@ type Command struct {
 	Namespace   string      `json:"namespace,omitempty"`
 	ServiceName string      `json:"service_name,omitempty"`
 	InstanceID  string      `json:"instance_id,omitempty"`
+	Status      string      `json:"status,omitempty"`
 	APIKey      *APIKey     `json:"api_key,omitempty"`
 	User        *User       `json:"user,omitempty"`
 	Key         string      `json:"key,omitempty"`

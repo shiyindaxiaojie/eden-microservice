@@ -44,18 +44,7 @@ func (a *HTTPAdapter) DeregisterCatalogService(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	inst, err := a.findInstance(req.Namespace, func(inst *catalog.Instance) bool {
-		if req.ServiceName != "" && inst.ServiceName != req.ServiceName {
-			return false
-		}
-		return inst.ID == req.InstanceID
-	})
-	if err != nil {
-		httpError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if err := a.catalog.Deregister(req.Namespace, inst.ServiceName, inst.ID); err != nil {
+	if err := a.catalog.Deregister(req.Namespace, req.ServiceName, req.InstanceID); err != nil {
 		httpError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -76,15 +65,7 @@ func (a *HTTPAdapter) DeregisterAgentService(w http.ResponseWriter, r *http.Requ
 	}
 
 	namespace := requestNamespace(r)
-	inst, err := a.findInstance(namespace, func(inst *catalog.Instance) bool {
-		return inst.ID == serviceID
-	})
-	if err != nil {
-		httpError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if err := a.catalog.Deregister(namespace, inst.ServiceName, inst.ID); err != nil {
+	if err := a.catalog.Deregister(namespace, "", serviceID); err != nil {
 		httpError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -249,10 +230,29 @@ func (a *HTTPAdapter) ListDatacenters(w http.ResponseWriter, r *http.Request) {
 
 func (a *HTTPAdapter) applyAgentCheckStatus(w http.ResponseWriter, r *http.Request, checkID, status string) {
 	namespace := requestNamespace(r)
-	inst, err := a.findInstance(namespace, func(inst *catalog.Instance) bool {
-		if strings.HasPrefix(checkID, "service:") && inst.ID == strings.TrimPrefix(checkID, "service:") {
-			return true
+	if instanceID := serviceInstanceIDFromCheckID(checkID); instanceID != "" {
+		switch status {
+		case consulapi.HealthPassing:
+			if err := a.catalog.SetInstanceStatus(namespace, "", instanceID, "online"); err != nil {
+				httpError(w, http.StatusNotFound, err.Error())
+				return
+			}
+			if err := a.catalog.Heartbeat(namespace, "", instanceID); err != nil {
+				httpError(w, http.StatusNotFound, err.Error())
+				return
+			}
+		default:
+			if err := a.catalog.SetInstanceStatus(namespace, "", instanceID, "offline"); err != nil {
+				httpError(w, http.StatusNotFound, err.Error())
+				return
+			}
 		}
+
+		jsonOK(w, map[string]string{"status": "ok"})
+		return
+	}
+
+	inst, err := a.findInstance(namespace, func(inst *catalog.Instance) bool {
 		return compat.StoredCheckID(inst.Metadata) == checkID
 	})
 	if err != nil {
@@ -278,6 +278,13 @@ func (a *HTTPAdapter) applyAgentCheckStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+func serviceInstanceIDFromCheckID(checkID string) string {
+	if !strings.HasPrefix(checkID, "service:") {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(checkID, "service:"))
 }
 
 func (a *HTTPAdapter) serviceNames(namespace string) ([]string, error) {
