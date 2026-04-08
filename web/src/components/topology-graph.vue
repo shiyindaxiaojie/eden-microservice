@@ -623,6 +623,9 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
           },
         },
       },
+      emphasis: {
+        disabled: true,
+      },
     }
   })
 
@@ -660,6 +663,9 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
           shadowBlur: selectedParent ? 12 : 8,
         },
         label: { show: false },
+        emphasis: {
+          disabled: true,
+        },
       }
     })
   })

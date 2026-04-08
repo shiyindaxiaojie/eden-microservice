@@ -6,7 +6,7 @@
         "consul-user-center"
       ],
       "checksum": "e7db0364114700893f98bfb7427872dbd5b5e04ca1e0cda8b9ddb24a61ea4777",
-      "updated_at": "2026-04-07T17:03:15+08:00"
+      "updated_at": "2026-04-08T09:18:02+08:00"
     },
     "consul-order-center": {
       "consumer_service": "consul-order-center",
@@ -15,7 +15,7 @@
         "consul-user-center"
       ],
       "checksum": "0d2545e394ae7b2c64143dcd34f6f2c34fcd829c64ad496dfdc9f856a2ac37a5",
-      "updated_at": "2026-04-07T17:03:18+08:00"
+      "updated_at": "2026-04-08T09:18:06+08:00"
     },
     "consul-user-center": {
       "consumer_service": "consul-user-center",
@@ -23,7 +23,7 @@
         "consul-auth-center"
       ],
       "checksum": "c4eac8305dab8591d131ba8610726fd8c941d5e6a285e910a56bee0fd2585b09",
-      "updated_at": "2026-04-07T17:03:08+08:00"
+      "updated_at": "2026-04-08T09:18:05+08:00"
     }
   }
 }
