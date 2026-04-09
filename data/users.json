@@ -2,14 +2,14 @@
   "users": {
     "admin": {
       "username": "admin",
-      "password": "$2a$10$9aLQ8EnmgxUnddSUgI3nC.1EkxZteusrXUjEFPfufgxQYTd6oFIVa",
+      "password": "$2a$10$jhMWSah1aBdkvsCokJV/OeHg3EblEPctFHFTzd0xUOAzqDcjVHPlG",
       "nickname": "",
       "phone": "",
       "email": "",
       "remark": "",
       "role": "admin",
       "is_builtin": true,
-      "guide_completed": true
+      "guide_completed": false
     }
   }
 }

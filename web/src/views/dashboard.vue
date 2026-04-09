@@ -37,7 +37,6 @@ type DashboardPanel = 'events' | 'logs'
 type EventTimeFilter = 'all' | '1h' | '24h' | '7d'
 
 const AUTO_REFRESH_MS = 10000
-const LOG_LINE_COUNT = 160
 const MEMORY_TREND_WINDOW_MS = 10 * 60 * 1000
 const MEMORY_CHART_WIDTH = 320
 const MEMORY_CHART_HEIGHT = 118
@@ -76,6 +75,8 @@ const activeEventType = ref('all')
 const activeEventTime = ref<EventTimeFilter>('all')
 const autoScrollLogs = ref(true)
 const logsScrollRef = ref<HTMLDivElement | null>(null)
+const logLineCount = ref(100)
+const logSearchText = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
 
 const leaderNoteText = computed(() => {
@@ -104,8 +105,13 @@ const noMatchedEventsLabel = computed(() =>
   locale.value === 'zh' ? '没有符合筛选条件的事件' : 'No matching events',
 )
 const logLinesLabel = computed(() =>
-  locale.value === 'zh' ? `最近 ${LOG_LINE_COUNT} 行` : `Last ${LOG_LINE_COUNT} lines`,
+  locale.value === 'zh' ? `最近 ${logLineCount.value} 行` : `Last ${logLineCount.value} lines`,
 )
+const logLineOptions = computed(() => [
+  { value: 100, label: locale.value === 'zh' ? '100 行' : '100 Lines' },
+  { value: 500, label: locale.value === 'zh' ? '500 行' : '500 Lines' },
+  { value: 1000, label: locale.value === 'zh' ? '1000 行' : '1000 Lines' },
+])
 const eventTypeFilterLabel = computed(() => (locale.value === 'zh' ? '事件类型' : 'Event Type'))
 const eventTimeFilterLabel = computed(() => (locale.value === 'zh' ? '发生时间' : 'Occurred'))
 const autoScrollLabel = computed(() => (locale.value === 'zh' ? '自动滚动' : 'Auto Scroll'))
@@ -276,7 +282,14 @@ const localizedLogFiles = computed(() =>
   })),
 )
 
-const parsedLogs = computed<ParsedLogLine[]>(() => logs.value.map((line) => parseLogLine(line)))
+const parsedLogs = computed<ParsedLogLine[]>(() => {
+  let currentLogs = logs.value
+  if (logSearchText.value) {
+    const searchLower = logSearchText.value.toLowerCase()
+    currentLogs = currentLogs.filter(line => line.toLowerCase().includes(searchLower))
+  }
+  return currentLogs.map((line) => parseLogLine(line))
+})
 
 const eventTypeOptions = computed(() => {
   const seenTypes = new Set(events.value.map((event) => event.type).filter(Boolean))
@@ -356,7 +369,7 @@ async function fetchLogs(file = activeLogFile.value) {
 
   logsLoading.value = true
   try {
-    const response = await getLogs(file, LOG_LINE_COUNT)
+    const response = await getLogs(file, logLineCount.value)
     logs.value = response.data || []
     await nextTick()
     syncLogsScroll()
@@ -551,10 +564,16 @@ function syncLogsScroll() {
     return
   }
 
-  const element = logsScrollRef.value
-  if (!element) return
-  element.scrollTop = element.scrollHeight
+  requestAnimationFrame(() => {
+    const element = logsScrollRef.value
+    if (!element) return
+    element.scrollTop = element.scrollHeight
+  })
 }
+
+watch(logLineCount, () => {
+  fetchLogs(activeLogFile.value)
+})
 
 watch(activeLogFile, (file, previousFile) => {
   if (!file) {
@@ -579,6 +598,11 @@ watch(autoScrollLogs, async (enabled) => {
     await nextTick()
     syncLogsScroll()
   }
+})
+
+watch(logSearchText, async () => {
+  await nextTick()
+  syncLogsScroll()
 })
 
 onMounted(() => {
@@ -774,6 +798,30 @@ onBeforeUnmount(() => {
             <span class="panel-filter-label">{{ autoScrollLabel }}</span>
             <el-switch v-model="autoScrollLogs" size="small" />
           </label>
+
+          <el-input
+            v-model="logSearchText"
+            :placeholder="locale === 'zh' ? '搜索内容...' : 'Search...'"
+            clearable
+            class="panel-input log-search-input"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+
+          <el-select
+            v-model="logLineCount"
+            class="panel-select log-lines-select"
+            :teleported="false"
+          >
+            <el-option
+              v-for="item in logLineOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
 
           <el-select
             v-model="activeLogFile"
@@ -1798,6 +1846,31 @@ onBeforeUnmount(() => {
 
 .log-file-select {
   width: 180px;
+}
+
+.log-lines-select {
+  width: 120px;
+}
+
+.log-search-input {
+  width: 200px;
+}
+
+.log-search-input :deep(.el-input__wrapper) {
+  min-height: 38px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  box-shadow: none !important;
+}
+
+.log-search-input :deep(.el-input__inner) {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.log-search-input :deep(.el-input__inner::placeholder) {
+  color: var(--text-muted);
 }
 
 .log-scroll-toggle {

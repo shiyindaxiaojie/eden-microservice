@@ -1,56 +1,19 @@
 {
-  "mode": "cp",
-  "environment": "cluster",
+  "mode": "ap",
+  "environment": "standalone",
   "log_level": "INFO",
-  "event_retention_days": 7,
+  "event_retention_days": 30,
   "log_retention_days": 30,
   "event_types": [
-    "registry_node_sync",
-    "service_heartbeat",
     "service_register",
     "service_online",
     "service_offline",
+    "registry_node_sync",
+    "service_heartbeat",
     "service_remove"
   ],
   "heartbeat_max_failures": 3,
   "instance_removal_delay_seconds": 600,
   "api_key_auth_enabled": false,
-  "notify_alert_node_id": "node-1",
-  "alert_configs": {
-    "default": {
-      "rules": [
-        {
-          "id": "rule-mnhouwpu-2uvdtn",
-          "name": "测试",
-          "event_code": "service_offline",
-          "threshold": 1,
-          "window_sec": 300,
-          "channel_ids": [
-            "channel-mngv305a-ifp9bm"
-          ],
-          "title_template": "注册中心告警 - {{ event_name }}",
-          "body_template": "服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。",
-          "enabled": false
-        }
-      ],
-      "updated_at": "2026-04-08T09:49:58+08:00"
-    }
-  },
-  "notify_configs": {
-    "default": {
-      "channels": [
-        {
-          "id": "channel-mngv305a-ifp9bm",
-          "name": "钉钉通知",
-          "type": "webhook",
-          "provider": "dingtalk",
-          "enabled": true,
-          "config": {
-            "url": "https://oapi.dingtalk.com/robot/send?access_token=d6671540350195d27ec62673e732f12763d5eca4840aab9cf118e7a08272a79b"
-          }
-        }
-      ],
-      "updated_at": "2026-04-03T00:23:43+08:00"
-    }
-  }
+  "notify_alert_node_id": "node-1"
 }

@@ -1,23 +1,26 @@
-# Eden 用户手册
+# Eden 用户使用说明
 
-本文档用于说明 Eden 的启动方式、基础配置、认证约定、常用调用以及客户端集成方法。
+本文档旨在为用户提供清晰、准确的 Eden 分布式注册中心使用指南，包含快速启动、核心配置、认证授权方式以及客户端接入说明。
 
 ## 1. 快速启动
 
-### 1.1 启动后端
+### 1.1 启动服务端进程
+
+使用默认配置或指定配置文件启动注册中心：
 
 ```bash
 go run ./cmd/server/main.go -config configs/config.yaml
 ```
 
-当前服务端支持的命令行参数如下：
+**支持的命令行参数：**
+- `-config`: 指定配置文件路径 (如 `configs/config.yaml`)。
+- `-data-dir`: 指定数据持久化目录，其优先级高于配置文件。
+- `-node-id`: 指定当前节点的唯一标识。
+- `-http-addr`: 覆盖配置中的 HTTP 监听地址。
 
-- `-config`
-- `-data-dir`
-- `-node-id`
-- `-http-addr`
+### 1.2 启动 Web 控制台
 
-### 1.2 启动前端控制台
+如果你需要使用可视化管理后台，可启动自带的前端控制台：
 
 ```bash
 cd web
@@ -25,23 +28,27 @@ npm install
 npm run dev
 ```
 
-默认开发地址如下：
+**默认地址：**
+- 控制台访问地址：`http://127.0.0.1:2019`
+- 服务端后台 API：`http://127.0.0.1:8500`
 
-- 控制台：`http://127.0.0.1:2019`
-- 后端 API：`http://127.0.0.1:8500`
+> 提示：开发模式下，前端默认会将 `/v1/*` 路径的请求代理至后端 HTTP API。
 
-前端会将 `/v1/*` 代理到后端 HTTP API。
 
-## 2. 配置说明
+## 2. 核心配置说明
 
-### 2.1 AP 集群节点示例
+Eden 支持 `AP` (高可用) 和 `CP` (强一致) 两种集群模式，可通过修改 YAML 配置文件进行切换。
+
+### 2.1 集群节点 (AP 模式)
+
+在 AP 模式下，Eden 优先保证服务数据的高吞吐与可用性：
 
 ```yaml
 node_id: "node-1"
 mode: "cluster"
 consistency: "ap"
 http_addr: ":8500"
-grpc_addr: ":0"
+grpc_addr: ":0"       # 留空或设为 :0，系统将自动分配空闲端口
 quic_addr: ""
 data_dir: "./data"
 transport:
@@ -49,13 +56,11 @@ transport:
   quic: "off"
   raft: "off"
 ```
+**注意**：集群其他成员的信息统一在控制台进行维护和动态分发，无需在配置中使用 `seeds` 声明。
 
-说明：
+### 2.2 Leader 节点 (CP 模式)
 
-- 集群成员统一在控制台的节点管理中维护，不再通过 `seeds` 写在常规配置里。
-- `grpc_addr` 与 `quic_addr` 可以留空或设为 `:0`，服务端会自动分配端口。
-
-### 2.2 CP 首节点示例
+在 CP 模式下，系统使用 Raft 协议保证强一致性。首个节点配置需开启 `bootstrap`：
 
 ```yaml
 node_id: "node-1"
@@ -65,10 +70,12 @@ http_addr: ":8500"
 grpc_addr: ":9000"
 raft_addr: "127.0.0.1:7000"
 bootstrap: true
-data_dir: "./data"
+data_dir: "./data/node-1"
 ```
 
-### 2.3 CP 普通节点示例
+### 2.3 Follower 节点 (CP 模式)
+
+加入 CP 集群的普通节点配置示例：
 
 ```yaml
 node_id: "node-2"
@@ -79,49 +86,39 @@ grpc_addr: ":9001"
 raft_addr: "127.0.0.1:7001"
 data_dir: "./data/node-2"
 ```
+**注意**：普通（Follower）节点启动后，需要在 Leader 节点的 Web 控制台中进行“添加节点 (Join)”操作。系统已弃用静态配置项中的 `join` 参数。
 
-说明：
 
-- 其他 CP 节点启动后，通过 Leader 控制台的节点管理添加进集群。
-- `join` 不再作为常规配置项对外暴露。
-
-## 3. 认证约定
+## 3. 认证授权机制
 
 ### 3.1 控制台登录
 
-登录接口为：
+登录接口 `POST /v1/auth/login` 为了保证传输安全，不接受明文密码，需传递其 **SHA-256 哈希值**。
 
-- `POST /v1/auth/login`
+默认初始账户：
+- 账户：`admin`
+- 密码：`admin`
+- 接口应提交的 SHA-256 密文：`8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918`
 
-当前前端提交的不是明文密码，而是原始密码的 `SHA-256` 值。若直接调用该接口，应遵循同样约定。
+### 3.2 HTTP API Key 鉴权
 
-默认情况下，若未覆盖 `auth.users`：
-
-- 用户名：`admin`
-- 原始密码：`admin`
-
-对应的 `SHA-256(admin)` 为：
-
-- `8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918`
-
-### 3.2 HTTP API Key
-
-当 `auth.api_key.enabled=true` 时，以下 HTTP 接口要求 API Key：
-
+若服务端开启了 `auth.api_key.enabled=true` 拦截验证，以下重点接口调用时必须提供 API Key：
 - `POST /v1/catalog/register`
 - `POST /v1/catalog/heartbeat`
 - `POST /v1/catalog/topology/report`
 
-传递方式如下：
+**参数传递规范：**
+- **Header 方式 (推荐)**：追加 HTTP Header `X-API-Key: <your-key>`
+- **Query 方式**：追加 URL 参数 `?api_key=<your-key>`
 
-- Header：`X-API-Key: <your-key>`
-- Query：`?api_key=<your-key>`
 
-## 4. 官方 SDK 集成
+## 4. 官方 SDK 集成指南
 
-### 4.1 纯 gRPC 模式
+官方 Go SDK 可以同时兼容极高效率的 gRPC 模式，以及备用的 HTTP 和 QUIC 协议。
 
-纯 gRPC 模式要求客户端直接持有注册中心节点的 `grpc_addr` 列表。若需要与原有 SDK 相同的动态节点发现能力，应使用 `DiscoveryMode=auto`。
+### 4.1 纯 gRPC 接入 (推荐)
+
+此模式要求直连注册中心暴露的 `grpc_addr` 端口阵列。建议启用 `DiscoveryMode="auto"` 从而开启服务注册中心集群动态成员发现能力。
 
 ```go
 client, err := eden.NewWithConfig(&eden.Config{
@@ -137,18 +134,9 @@ if err != nil {
 defer client.Close()
 ```
 
-该模式下：
+### 4.2 纯 HTTP 接入
 
-- 注册、心跳、发现、订阅、节点发现、拓扑上报全部走 `RegistryService`
-- 节点发现走 `GetMembers`
-- 拓扑上报走 `ReportTopology`
-- 不需要调用 `GET /v1/cluster/members`
-- 不需要调用 `POST /v1/catalog/topology/report`
-- 若将 `DiscoveryMode` 改为 `static`，则关闭动态成员发现，仅在传入地址集合内做故障转移
-
-### 4.2 纯 HTTP 模式
-
-纯 HTTP 模式要求客户端只使用注册中心的 `http_addr`。
+当应用环境受限，仅可使用基础的 HTTP/RESTful 通信时：
 
 ```go
 client, err := eden.NewWithConfig(&eden.Config{
@@ -157,24 +145,12 @@ client, err := eden.NewWithConfig(&eden.Config{
     Datacenter: "dc1",
     Transport:  "http",
 })
-if err != nil {
-    panic(err)
-}
-defer client.Close()
 ```
+> 配置此模式后，SDK 缺少了底层的流控能力，会自动降级为长轮询刷新状态。
 
-该模式下：
+### 4.3 QUIC 接入 (弱网适用)
 
-- 注册走 `POST /v1/catalog/register`
-- 心跳走 `POST /v1/catalog/heartbeat`
-- 发现走 `GET /v1/catalog/service/{name}`
-- 实例下线走 `POST /v1/catalog/instance/status`
-- SDK 订阅语义通过轮询实现
-- 如启用动态成员同步，才会额外访问 `/v1/cluster/members`
-
-### 4.3 QUIC 说明
-
-`QUIC` 不是独立业务协议，而是 gRPC 的可选传输层。若需要在弱网场景下保留 gRPC 语义，可将 `Transport` 设置为 `quic`，并使用节点的 `quic_addr` 作为直连地址。
+QUIC 是 gRPC 底层的替代传输层方案，针对复杂弱网或高丢包环境推荐使用 QUIC。在初始化时，确保直接指向节点的 `quic_addr`：
 
 ```go
 client, err := eden.NewWithConfig(&eden.Config{
@@ -182,39 +158,23 @@ client, err := eden.NewWithConfig(&eden.Config{
     Namespace:     "default",
     Datacenter:    "dc1",
     Transport:     "quic",
-    DiscoveryMode: "static",
+    DiscoveryMode: "static", // 依据业务情况灵活选择 auto/static
 })
 ```
 
-### 4.4 配置项说明
 
-| 配置项 | 是否必填 | 说明 |
-|---|---|---|
-| `Addresses` | 是 | 入口地址列表；纯 gRPC/QUIC 模式填直接传输地址，HTTP 模式填 `http://` 地址 |
-| `Transport` | 否 | `grpc`、`quic`、`http`；默认值为 `grpc` |
-| `DiscoveryMode` | 否 | `auto` 或 `static`；`auto` 会按当前传输协议执行动态成员发现，`static` 会关闭成员同步 |
-| `Namespace` | 否 | 命名空间 |
-| `Datacenter` | 否 | 发现请求的数据中心过滤条件 |
-| `APIKey` | 否 | 仅 HTTP 路径会自动写入 `X-API-Key` 请求头 |
-| `CacheDir` | 否 | 本地缓存目录 |
+## 5. 多语言通用接入规范
 
-## 5. 自定义客户端集成
+当业务系统使用了未经官方 SDK 支持的框架或语言开发时，可自主对接本原生 API 标准。
 
-### 5.1 自定义 HTTP 客户端
+### 5.1 原生 HTTP API 接入
 
-接口列表如下：
+- **注册实例**：`POST /v1/catalog/register`
+- **心跳续约**：`POST /v1/catalog/heartbeat`
+- **服务发现**：`GET /v1/catalog/service/{name}`
+- **修改实例状态**：`POST /v1/catalog/instance/status`
 
-| 用途 | 方法 | 路径 |
-|---|---|---|
-| 注册实例 | `POST` | `/v1/catalog/register` |
-| 心跳续约 | `POST` | `/v1/catalog/heartbeat` |
-| 服务发现 | `GET` | `/v1/catalog/service/{name}` |
-| 实例上下线 | `POST` | `/v1/catalog/instance/status` |
-| 依赖拓扑上报 | `POST` | `/v1/catalog/topology/report` |
-| 可选成员同步 | `GET` | `/v1/cluster/members` |
-
-注册实例：
-
+**示例：以 Curl 注册微服务实例**
 ```bash
 curl -X POST http://127.0.0.1:8500/v1/catalog/register \
   -H "Content-Type: application/json" \
@@ -226,96 +186,22 @@ curl -X POST http://127.0.0.1:8500/v1/catalog/register \
     "port": 8080,
     "weight": 100,
     "dc": "dc1",
-    "metadata": {
-      "version": "1.0.0"
-    }
+    "metadata": {"version": "1.0.0"}
   }'
 ```
 
-发送心跳：
+### 5.2 原生 gRPC API 接入
 
-```bash
-curl -X POST http://127.0.0.1:8500/v1/catalog/heartbeat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "namespace": "default",
-    "service_name": "order-service",
-    "instance_id": "order-srv-1"
-  }'
-```
+基于底层协议 IDL 能够自由生成各类开发语言的通信桩代码。
+- **Proto 契约文件**：`api/proto/registry/v1/registry.proto`
+- **服务桩定义**：`eden.registry.v1.RegistryService`
 
-服务发现：
+核心方法：
+- `Register` / `Heartbeat` / `Discover` (Unary 常规调用)
+- `Watch` (Server Streaming 流式调用)
+- `GetMembers` (用于自适应控制获取对等节点网络列表)
 
-```bash
-curl "http://127.0.0.1:8500/v1/catalog/service/user-center?passing=true&namespace=default&dc=dc1&consumer_service=order-center"
-```
-
-实例下线：
-
-```bash
-curl -X POST http://127.0.0.1:8500/v1/catalog/instance/status \
-  -H "Content-Type: application/json" \
-  -d '{
-    "namespace": "default",
-    "service_name": "order-service",
-    "instance_id": "order-srv-1",
-    "status": "offline"
-  }'
-```
-
-说明：
-
-- HTTP 路径支持 API Key。
-- HTTP 路径当前没有与 gRPC `Watch` 对等的服务端推流接口；如需订阅语义，应由客户端自行轮询 `GET /v1/catalog/service/{name}`。
-- `consumer_service` 查询参数可用于在发现链路中记录消费者与提供者关系。
-- `/v1/cluster/members` 是可选接口，只在客户端需要动态维护节点列表时使用。
-
-### 5.2 自定义 gRPC 客户端
-
-协议入口如下：
-
-- Proto 文件：`api/proto/registry/v1/registry.proto`
-- 服务名：`eden.registry.v1.RegistryService`
-
-RPC 列表如下：
-
-| RPC | 类型 | 用途 |
-|---|---|---|
-| `Register` | Unary | 注册实例 |
-| `Heartbeat` | Unary | 心跳续约 |
-| `Discover` | Unary | 查询实例列表 |
-| `Watch` | Server Streaming | 订阅实例变化 |
-| `GetMembers` | Unary | 查询集群成员与节点地址 |
-| `ReportTopology` | Unary | 上报消费者与提供者关系 |
-| `SetInstanceStatus` | Unary | 设置实例为 `online` 或 `offline` |
-| `Deregister` | Unary | 兼容接口，当前语义等价于下线实例 |
-
-注册实例：
-
-```bash
-grpcurl -plaintext \
-  -import-path ./api/proto \
-  -proto registry/v1/registry.proto \
-  -d '{
-    "instance": {
-      "id": "order-srv-1",
-      "service_name": "order-service",
-      "namespace": "default",
-      "host": "127.0.0.1",
-      "port": 8080,
-      "weight": 100,
-      "datacenter": "dc1",
-      "metadata": {
-        "version": "1.0.0"
-      }
-    }
-  }' \
-  127.0.0.1:9000 \
-  eden.registry.v1.RegistryService/Register
-```
-
-服务发现：
-
+**示例：以 grpcurl 验证发起服务发现调用**
 ```bash
 grpcurl -plaintext \
   -H "x-consumer-service: order-center" \
@@ -331,84 +217,28 @@ grpcurl -plaintext \
   eden.registry.v1.RegistryService/Discover
 ```
 
-查询节点列表：
+## 6. 常见运维命令
 
-```bash
-grpcurl -plaintext \
-  -import-path ./api/proto \
-  -proto registry/v1/registry.proto \
-  -d '{}' \
-  127.0.0.1:9000 \
-  eden.registry.v1.RegistryService/GetMembers
-```
-
-订阅服务变化：
-
-```bash
-grpcurl -plaintext \
-  -H "x-consumer-service: order-center" \
-  -import-path ./api/proto \
-  -proto registry/v1/registry.proto \
-  -d '{
-    "namespace": "default",
-    "service_name": "user-center"
-  }' \
-  127.0.0.1:9000 \
-  eden.registry.v1.RegistryService/Watch
-```
-
-上报依赖拓扑：
-
-```bash
-grpcurl -plaintext \
-  -import-path ./api/proto \
-  -proto registry/v1/registry.proto \
-  -d '{
-    "namespace": "default",
-    "consumer_service": "order-center",
-    "providers": ["user-center", "auth-center"],
-    "checksum": "manual-demo"
-  }' \
-  127.0.0.1:9000 \
-  eden.registry.v1.RegistryService/ReportTopology
-```
-
-说明：
-
-- 自定义 gRPC 客户端可以通过 `GetMembers` 实现纯 gRPC 节点发现。
-- 若希望记录消费者拓扑，可在 `Discover` 或 `Watch` 的 metadata 中附带 `x-consumer-service`。
-- 如需主动、确定性地上报依赖关系，可直接调用 `ReportTopology`。
-- 当前 gRPC 入口未实现与 HTTP 对齐的 API Key / JWT 拦截器；若生产环境需要统一鉴权，应在服务端补充 gRPC interceptor。
-
-## 6. 常用运维调用
-
-查看集群成员：
-
+**查询当前集群成员拓扑**：
 ```bash
 curl http://127.0.0.1:8500/v1/cluster/members
 ```
 
-调整日志级别：
-
+**动态调整系统存储层日志级别**：
 ```bash
 curl -X POST http://127.0.0.1:8500/v1/settings/storage \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "log_level": "DEBUG"
-  }'
+  -d '{"log_level": "DEBUG"}'
 ```
 
-## 7. 选型建议
+## 7. 接入选型建议
 
-| 场景 | 推荐方案 |
+| 业务场景 | 建议使用的接入方案 |
 |---|---|
-| 只允许 gRPC 通信 | SDK 纯 gRPC 模式，或自定义 gRPC 客户端 |
-| 只允许 HTTP 通信 | SDK 纯 HTTP 模式，或自定义 HTTP 客户端 |
-| 需要实时订阅服务变化 | 优先使用 gRPC `Watch` |
-| 需要与现有 REST 网关统一接入 | 优先使用 HTTP |
-| 非 Go 语言接入 | 按语言生态选择自定义 HTTP 或自定义 gRPC 客户端 |
+| 微服务内部通信，追求极低延迟和高性能 | 强烈建议：**官方 SDK + 纯 gRPC 模式**，使用 `Watch` 实时跟随系统状态。 |
+| IoT设备或网络状况频繁断点重连、较高丢包 | 建议：**官方 SDK + QUIC 模式**。 |
+| 未提供官方 SDK 的语言（如 Java/Python/Node等） | 依据开发语言引入 proto 自行生成 **定制 gRPC 客户端** 或退化采用 **RESTful HTTP 端点** 进行通信对接。 |
 
-## 8. 相关文档
 
-- [架构文档](./architecture_zh.md)
+> 更多底层的通信交互逻辑、状态机实现、共识细节说明，请参阅同目录下的白皮书：[Eden 架构设计与技术规范](./architecture_zh.md)
