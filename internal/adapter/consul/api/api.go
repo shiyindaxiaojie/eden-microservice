@@ -120,7 +120,14 @@ func (c *Client) doGet(path string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("consul-compat: status %d: %s", resp.StatusCode, string(data))
+	}
+	return data, nil
 }
 
 // ---------- Agent ----------
@@ -230,6 +237,7 @@ func (a *Agent) UpdateTTL(checkID, output, status string) error {
 		return err
 	}
 
+	var lastErr error
 	for serviceName := range services {
 		body := map[string]string{
 			"service_name": serviceName,
@@ -239,8 +247,12 @@ func (a *Agent) UpdateTTL(checkID, output, status string) error {
 		if err == nil {
 			return nil
 		}
+		lastErr = err
 	}
-	return nil
+	if lastErr != nil {
+		return lastErr
+	}
+	return fmt.Errorf("service instance %s not found", instanceID)
 }
 
 // PassTTL is a helper for updating a TTL check to passing.

@@ -242,7 +242,14 @@ func (c *NamingClient) doGet(path string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("nacos-compat: status %d: %s", resp.StatusCode, string(data))
+	}
+	return data, nil
 }
 
 func instancesHash(instances []nacosmodel.Instance) string {

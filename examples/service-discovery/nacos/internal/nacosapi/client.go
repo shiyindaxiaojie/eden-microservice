@@ -30,12 +30,12 @@ type ServiceInstance struct {
 }
 
 type Client struct {
-	raw             nacosclients.INamingClient
-	groupName       string
-	namespace       string
-	apiKey          string
-	reportTargets   []string
-	httpClient      *http.Client
+	raw           nacosclients.INamingClient
+	groupName     string
+	namespace     string
+	apiKey        string
+	reportTargets []string
+	httpClient    *http.Client
 
 	mu               sync.RWMutex
 	consumerService  string
@@ -111,19 +111,21 @@ func (c *Client) Register(inst *ServiceInstance) error {
 	c.consumerService = inst.ServiceName
 	c.mu.Unlock()
 
-	_, err := c.raw.RegisterInstance(vo.RegisterInstanceParam{
-		Ip:          inst.Host,
-		Port:        uint64(inst.Port),
-		Weight:      float64(weight),
-		Enable:      true,
-		Healthy:     true,
-		Metadata:    inst.Metadata,
-		ClusterName: "DEFAULT",
-		ServiceName: inst.ServiceName,
-		GroupName:   c.groupName,
-		Ephemeral:   false,
+	return retryLeaderAction(func() error {
+		_, err := c.raw.RegisterInstance(vo.RegisterInstanceParam{
+			Ip:          inst.Host,
+			Port:        uint64(inst.Port),
+			Weight:      float64(weight),
+			Enable:      true,
+			Healthy:     true,
+			Metadata:    inst.Metadata,
+			ClusterName: "DEFAULT",
+			ServiceName: inst.ServiceName,
+			GroupName:   c.groupName,
+			Ephemeral:   false,
+		})
+		return err
 	})
-	return err
 }
 
 func (c *Client) Deregister(inst *ServiceInstance) error {
@@ -139,7 +141,7 @@ func (c *Client) Deregister(inst *ServiceInstance) error {
 }
 
 func (c *Client) Heartbeat(inst *ServiceInstance) error {
-	return nil
+	return c.Register(inst)
 }
 
 func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
@@ -335,6 +337,30 @@ func normalizeTargets(addrs []string) []string {
 		targets = append(targets, "http://"+addr)
 	}
 	return targets
+}
+
+func retryLeaderAction(action func() error) error {
+	var lastErr error
+	for attempt := 0; attempt < 8; attempt++ {
+		if err := action(); err != nil {
+			lastErr = err
+			if !isLeaderUnavailable(err) {
+				return err
+			}
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func isLeaderUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "no leader available") || strings.Contains(message, "not leader")
 }
 
 func normalizeNamespace(namespace string) string {

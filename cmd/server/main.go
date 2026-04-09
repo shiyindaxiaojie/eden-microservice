@@ -289,6 +289,10 @@ func main() {
 	raftEnabled := cfg.RaftEnabled(cfg.Mode, cfg.Consistency)
 	grpcEnabled := cfg.GRPCEnabled(cfg.Mode)
 	quicEnabled := cfg.QUICEnabled(cfg.Mode)
+	if raftEnabled && cfg.Mode == "cluster" && cfg.Consistency == "cp" && len(runtimeState.GetSeeds()) == 0 && !cfg.Bootstrap {
+		cfg.Bootstrap = true
+		logger.Warn("[Raft] no seeds configured in CP mode; enabling single-node bootstrap automatically")
+	}
 
 	if raftEnabled {
 		cfg.RaftAddr = resolvePortRange(cfg.RaftAddr, 7000, 7999, "tcp")

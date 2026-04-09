@@ -55,14 +55,16 @@ func (c *Client) Register(inst *ServiceInstance) error {
 	c.consumerService = inst.ServiceName
 	c.mu.Unlock()
 
-	return c.raw.Agent().ServiceRegister(&consulapi.AgentServiceRegistration{
-		ID:      inst.ID,
-		Name:    inst.ServiceName,
-		Address: inst.Host,
-		Port:    inst.Port,
-		Meta:    inst.Metadata,
-		Weights: &consulapi.AgentWeights{Passing: inst.Weight},
-		Check:   &consulapi.AgentServiceCheck{TTL: "30s"},
+	return retryLeaderAction(func() error {
+		return c.raw.Agent().ServiceRegister(&consulapi.AgentServiceRegistration{
+			ID:      inst.ID,
+			Name:    inst.ServiceName,
+			Address: inst.Host,
+			Port:    inst.Port,
+			Meta:    inst.Metadata,
+			Weights: &consulapi.AgentWeights{Passing: inst.Weight},
+			Check:   &consulapi.AgentServiceCheck{TTL: "30s"},
+		})
 	})
 }
 
@@ -71,7 +73,9 @@ func (c *Client) Deregister(inst *ServiceInstance) error {
 }
 
 func (c *Client) Heartbeat(inst *ServiceInstance) error {
-	err := c.raw.Agent().PassTTL("service:"+inst.ID, "heartbeat")
+	err := retryLeaderAction(func() error {
+		return c.raw.Agent().PassTTL("service:"+inst.ID, "heartbeat")
+	})
 	if err != nil && isInstanceNotFound(err) {
 		return c.Register(inst)
 	}
@@ -266,4 +270,28 @@ func isInstanceNotFound(err error) bool {
 	}
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "instance not found") || strings.Contains(message, "unexpected response code: 404")
+}
+
+func retryLeaderAction(action func() error) error {
+	var lastErr error
+	for attempt := 0; attempt < 8; attempt++ {
+		if err := action(); err != nil {
+			lastErr = err
+			if !isLeaderUnavailable(err) {
+				return err
+			}
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func isLeaderUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "no leader available") || strings.Contains(message, "not leader")
 }
