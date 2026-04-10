@@ -181,10 +181,11 @@ export const getClusterStats = () => api.get<ClusterStats>('/v1/cluster/stats')
 export const addClusterMember = (data: { addresses: string[] }) => api.post('/v1/cluster/member', data)
 export const removeClusterMember = (address: string, node_id?: string) => 
   api.delete(`/v1/cluster/member?address=${address}${node_id ? '&node_id=' + node_id : ''}`)
-export const getEvents = () => api.get<RegistryEvent[]>('/v1/events')
+export const getEvents = (count = 100, offset = 0, query = '', date = '', type = '', service = '', startTime = '', endTime = '') =>
+  api.get<{total: number, data: RegistryEvent[]}>(`/v1/events?count=${count}&offset=${offset}${query ? `&query=${encodeURIComponent(query)}` : ''}${date ? `&date=${date}` : ''}${type ? `&type=${type}` : ''}${service ? `&service=${service}` : ''}${startTime ? `&start_time=${startTime}` : ''}${endTime ? `&end_time=${endTime}` : ''}`)
 export const getLogFiles = () => api.get<{name: string, file: string}[]>('/v1/cluster/log-files')
-export const getLogs = (file = '', count = 100) =>
-  api.get<string[]>(`/v1/cluster/logs?count=${count}${file ? `&file=${encodeURIComponent(file)}` : ''}`)
+export const getLogs = (file = '', count = 100, offset = 0, query = '') =>
+  api.get<{total: number, data: string[]}>(`/v1/cluster/logs?count=${count}&offset=${offset}${file ? `&file=${encodeURIComponent(file)}` : ''}${query ? `&query=${encodeURIComponent(query)}` : ''}`)
 export const getStorage = () => api.get<any>('/v1/settings/storage')
 export const updateStorage = (data: any) => api.post('/v1/settings/storage', data)
 export const getSystemSettings = () => api.get<SystemSettings>('/v1/settings/system')

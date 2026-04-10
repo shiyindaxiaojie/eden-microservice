@@ -41,6 +41,10 @@ var eventTypeAliases = map[string][]string{
 		EventTypeServiceOffline,
 		EventTypeServiceRemove,
 	},
+	"register":   {EventTypeServiceRegister},
+	"deregister": {EventTypeServiceOffline},
+	"online":     {EventTypeServiceOnline},
+	"offline":    {EventTypeServiceOffline},
 	"heartbeat":        {EventTypeServiceHeartbeat},
 	"server node sync": {EventTypeRegistryNodeSync},
 

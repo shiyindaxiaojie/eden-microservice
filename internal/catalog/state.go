@@ -95,6 +95,10 @@ func (s *State) ListEvents() []*Event {
 	return s.Events.List()
 }
 
+func (s *State) QueryEvents(count, offset int, query, date, startTime, endTime, eventType, service string) ([]*Event, int) {
+	return s.Events.QueryEvents(count, offset, query, date, startTime, endTime, eventType, service)
+}
+
 func (s *State) AppendEvent(eventType, service, instance, message string) {
 	normalized := NormalizeEventTypes([]string{eventType})
 	if len(normalized) == 0 {

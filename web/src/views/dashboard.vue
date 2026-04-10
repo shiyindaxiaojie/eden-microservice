@@ -50,8 +50,6 @@ const KNOWN_EVENT_TYPES = [
   'service_heartbeat',
   'service_remove',
   'registry_node_sync',
-  'register',
-  'deregister',
   'health_change',
 ] as const
 
@@ -77,7 +75,23 @@ const autoScrollLogs = ref(true)
 const logsScrollRef = ref<HTMLDivElement | null>(null)
 const logLineCount = ref(100)
 const logSearchText = ref('')
+const logSearchDate = ref<[Date, Date] | null>(null)
+const logOffset = ref(0)
+const logTotal = ref(0)
+const logCurrentPage = ref(1)
+const hasMoreLogs = ref(true)
+const isFetchingMore = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
+
+const eventLineCount = ref(100)
+const eventOffset = ref(0)
+const eventTotal = ref(0)
+const currentPage = ref(1)
+const hasMoreEvents = ref(true)
+const isFetchingMoreEvents = ref(false)
+const eventSearchText = ref('')
+const eventSearchDate = ref<[Date, Date] | null>(null)
+const eventsScrollRef = ref<HTMLDivElement | null>(null)
 
 const leaderNoteText = computed(() => {
   if (!stats.value) return '-'
@@ -105,27 +119,94 @@ const noMatchedEventsLabel = computed(() =>
   locale.value === 'zh' ? '没有符合筛选条件的事件' : 'No matching events',
 )
 const logLinesLabel = computed(() =>
-  locale.value === 'zh' ? `最近 ${logLineCount.value} 行` : `Last ${logLineCount.value} lines`,
+  locale.value === 'zh' ? `已加载 ${logs.value.length} 行` : `Loaded ${logs.value.length} lines`,
 )
 const logLineOptions = computed(() => [
   { value: 100, label: locale.value === 'zh' ? '100 行' : '100 Lines' },
   { value: 500, label: locale.value === 'zh' ? '500 行' : '500 Lines' },
   { value: 1000, label: locale.value === 'zh' ? '1000 行' : '1000 Lines' },
+  { value: 2000, label: locale.value === 'zh' ? '2000 行' : '2000 Lines' },
+  { value: 5000, label: locale.value === 'zh' ? '5000 行' : '5000 Lines' },
+])
+const eventLineOptions = computed(() => [
+  { value: 100, label: locale.value === 'zh' ? '100 条' : '100 Events' },
+  { value: 500, label: locale.value === 'zh' ? '500 条' : '500 Events' },
+  { value: 1000, label: locale.value === 'zh' ? '1000 条' : '1000 Events' },
+  { value: 2000, label: locale.value === 'zh' ? '2000 条' : '2000 Events' },
+  { value: 5000, label: locale.value === 'zh' ? '5000 条' : '5000 Events' },
 ])
 const eventTypeFilterLabel = computed(() => (locale.value === 'zh' ? '事件类型' : 'Event Type'))
 const eventTimeFilterLabel = computed(() => (locale.value === 'zh' ? '发生时间' : 'Occurred'))
 const autoScrollLabel = computed(() => (locale.value === 'zh' ? '自动滚动' : 'Auto Scroll'))
-const eventSummaryText = computed(() => {
-  const total = events.value.length
-  const filtered = filteredEvents.value.length
-  const isFiltered = activeEventType.value !== 'all' || activeEventTime.value !== 'all'
 
-  if (locale.value === 'zh') {
-    return isFiltered ? `筛选 ${filtered} / 总计 ${total}` : `总计 ${total} 条`
-  }
+const datePickerShortcuts = computed(() => [
+  {
+    text: locale.value === 'zh' ? '近 30 分钟' : 'Last 30m',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 30 * 60 * 1000)
+      return [start, end]
+    },
+  },
+  {
+    text: locale.value === 'zh' ? '近 1 小时' : 'Last 1h',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000)
+      return [start, end]
+    },
+  },
+  {
+    text: locale.value === 'zh' ? '近 6 小时' : 'Last 6h',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 6)
+      return [start, end]
+    },
+  },
+  {
+    text: locale.value === 'zh' ? '近 24 小时' : 'Last 24h',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24)
+      return [start, end]
+    },
+  },
+  {
+    text: locale.value === 'zh' ? '最近 3 天' : 'Last 3 days',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 3)
+      return [start, end]
+    },
+  },
+  {
+    text: locale.value === 'zh' ? '最近 7 天' : 'Last 7 days',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
+      return [start, end]
+    },
+  },
+])
 
-  return isFiltered ? `${filtered} filtered / ${total} total` : `${total} total`
-})
+const logPickerShortcuts = computed(() => datePickerShortcuts.value)
+
+const eventTimeOptions = computed(() => [
+  { value: 'all', label: locale.value === 'zh' ? '全部' : 'All' },
+  { value: '30m', label: locale.value === 'zh' ? '近 30 分钟' : 'Last 30m' },
+  { value: '1h', label: locale.value === 'zh' ? '近 1 小时' : 'Last 1h' },
+  { value: '6h', label: locale.value === 'zh' ? '近 6 小时' : 'Last 6h' },
+  { value: '24h', label: locale.value === 'zh' ? '近 24 小时' : 'Last 24h' },
+])
+
+const activeEventQuickTime = ref('all')
 
 const localizedRoleText = computed(() => {
   const role = (stats.value?.role || '').toLowerCase()
@@ -291,101 +372,138 @@ const parsedLogs = computed<ParsedLogLine[]>(() => {
   return currentLogs.map((line) => parseLogLine(line))
 })
 
-const eventTypeOptions = computed(() => {
+const eventTypeOptionsRaw = computed(() => {
   const seenTypes = new Set(events.value.map((event) => event.type).filter(Boolean))
-  const orderedTypes = KNOWN_EVENT_TYPES.filter((type) => seenTypes.has(type))
-  const extraTypes = [...seenTypes].filter((type) => !KNOWN_EVENT_TYPES.includes(type as typeof KNOWN_EVENT_TYPES[number])).sort()
-  const allTypes = [...orderedTypes, ...extraTypes]
-
-  return [
-    {
-      value: 'all',
-      label: locale.value === 'zh' ? '全部类型' : 'All Types',
-    },
-    ...allTypes.map((type) => ({
-      value: type,
-      label: getEventTypeLabel(type),
-    })),
-  ]
+  return [...new Set([...KNOWN_EVENT_TYPES, ...seenTypes])]
 })
 
-const eventTimeOptions = computed(() => [
-  {
-    value: 'all',
-    label: locale.value === 'zh' ? '全部时间' : 'All Time',
-  },
-  {
-    value: '1h',
-    label: locale.value === 'zh' ? '近 1 小时' : 'Last 1 hour',
-  },
-  {
-    value: '24h',
-    label: locale.value === 'zh' ? '近 24 小时' : 'Last 24 hours',
-  },
-  {
-    value: '7d',
-    label: locale.value === 'zh' ? '近 7 天' : 'Last 7 days',
-  },
-])
+const eventSummaryText = computed(() => {
+  if (eventTotal.value === 0) return '0 条'
+  return `${eventTotal.value} 条`
+})
 
 const filteredEvents = computed(() => {
-  const now = Date.now()
-
   return [...events.value]
-    .filter((event) => {
-      if (activeEventType.value !== 'all' && event.type !== activeEventType.value) {
-        return false
-      }
-
-      if (activeEventTime.value === 'all') {
-        return true
-      }
-
-      const eventTime = new Date(event.timestamp).getTime()
-      if (!Number.isFinite(eventTime)) {
-        return false
-      }
-
-      const elapsed = now - eventTime
-      switch (activeEventTime.value) {
-        case '1h':
-          return elapsed <= 60 * 60 * 1000
-        case '24h':
-          return elapsed <= 24 * 60 * 60 * 1000
-        case '7d':
-          return elapsed <= 7 * 24 * 60 * 60 * 1000
-        default:
-          return true
-      }
-    })
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 })
 
-async function fetchLogs(file = activeLogFile.value) {
+async function fetchEvents(forceOffset = -1) {
+  try {
+    let startTime = ''
+    let endTime = ''
+
+    if (eventSearchDate.value && eventSearchDate.value.length === 2) {
+      startTime = eventSearchDate.value[0].toISOString()
+      endTime = eventSearchDate.value[1].toISOString()
+    }
+
+    const offset = forceOffset >= 0 ? forceOffset : (currentPage.value - 1) * eventLineCount.value
+    const response = await getEvents(
+      eventLineCount.value, 
+      offset, 
+      eventSearchText.value, 
+      '', // Date is replaced by startTime/endTime range
+      activeEventType.value !== 'all' ? activeEventType.value : '',
+      '',
+      startTime,
+      endTime
+    )
+    events.value = response.data.data || []
+    eventTotal.value = response.data.total || 0
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchEvents()
+}
+
+function handleSizeChange(size: number) {
+  eventLineCount.value = size
+  currentPage.value = 1
+  fetchEvents()
+}
+
+async function handleEventScroll(e: Event) {
+  // Infinite scroll disabled in favor of pagination
+}
+
+async function fetchLogs(file = activeLogFile.value, force = false, forceOffset = -1) {
   if (!file) {
     logs.value = []
+    logTotal.value = 0
+    return
+  }
+
+  if (!force && !autoScrollLogs.value && logs.value.length > 0) {
     return
   }
 
   logsLoading.value = true
   try {
-    const response = await getLogs(file, logLineCount.value)
-    logs.value = response.data || []
-    await nextTick()
-    syncLogsScroll()
+    const offset = forceOffset >= 0 ? forceOffset : (logCurrentPage.value - 1) * logLineCount.value
+    const response = await getLogs(file, logLineCount.value, offset, logSearchText.value)
+    
+    logs.value = response.data.data || []
+    logTotal.value = response.data.total || 0
+    
+    if (force || autoScrollLogs.value) {
+      await nextTick()
+      syncLogsScroll()
+    }
   } catch (error) {
     console.error('fetch dashboard logs failed', error)
     logs.value = []
+    logTotal.value = 0
   } finally {
     logsLoading.value = false
   }
 }
 
+function handleLogPageChange(page: number) {
+  logCurrentPage.value = page
+  autoScrollLogs.value = false
+  fetchLogs(activeLogFile.value, true)
+}
+
+function handleLogSizeChange(size: number) {
+  logLineCount.value = size
+  logCurrentPage.value = 1
+  fetchLogs(activeLogFile.value, true)
+}
+
+async function handleLogScroll(e: Event) {
+  // Infinite scroll disabled in favor of pagination
+}
+
+// Watchers
+watch([activePanel, activeLogFile, logLineCount, logSearchText, logSearchDate], () => {
+  if (activePanel.value === 'logs') {
+    logCurrentPage.value = 1
+    fetchLogs(activeLogFile.value, true)
+  }
+})
+
+watch([eventSearchText, eventSearchDate, activeEventType, eventLineCount], () => {
+  if (activePanel.value === 'events') {
+    currentPage.value = 1
+    fetchEvents()
+  }
+})
+
 async function fetchData() {
   try {
+    const dateStr = eventSearchDate.value ? new Date(eventSearchDate.value).toISOString().split('T')[0] : ''
     const [statsRes, eventsRes, logFilesRes, namespacesRes, usersRes] = await Promise.allSettled([
       getClusterStats(),
-      getEvents(),
+      getEvents(
+        eventLineCount.value, 
+        0, 
+        eventSearchText.value, 
+        dateStr,
+        activeEventType.value !== 'all' ? activeEventType.value : ''
+      ),
       getLogFiles(),
       getNamespaces(),
       getRbacUsers(),
@@ -397,7 +515,8 @@ async function fetchData() {
     }
 
     if (eventsRes.status === 'fulfilled') {
-      events.value = eventsRes.value.data || []
+      events.value = eventsRes.value.data.data || []
+      eventTotal.value = eventsRes.value.data.total || 0
     }
 
     if (logFilesRes.status === 'fulfilled') {
@@ -409,9 +528,10 @@ async function fetchData() {
 
       if (nextActiveFile !== activeLogFile.value) {
         activeLogFile.value = nextActiveFile
-      } else {
-        await fetchLogs(nextActiveFile)
+        logCurrentPage.value = 1
       }
+      
+      await fetchLogs(activeLogFile.value)
     }
 
     if (namespacesRes.status === 'fulfilled') {
@@ -513,10 +633,11 @@ function getEventMessage(event: RegistryEvent) {
   const exactMessages: Record<string, string> = {
     'Instance registered': '实例已注册',
     'Heartbeat received': '收到实例心跳',
-    'Heartbeat recovered instance to online': '心跳恢复，实例已重新上线',
+    'Heartbeat recovered instance to online': '实例已恢复上线',
     'Instance manually set to offline': '实例已手动下线',
     'Instance manually set to online': '实例已手动上线',
-    'Health checker marked instance offline after missed heartbeats': '健康检查发现心跳超时，实例已标记为下线',
+    'Instance restored online': '实例已恢复上线',
+    'Health checker marked instance offline after missed heartbeats': '心跳丢失，健康检查已将其标记为下线',
     'Instance removed after retention window': '实例在保留窗口结束后已移除',
     'Full sync completed': '节点全量同步完成',
   }
@@ -572,7 +693,28 @@ function syncLogsScroll() {
 }
 
 watch(logLineCount, () => {
-  fetchLogs(activeLogFile.value)
+  fetchLogs(activeLogFile.value, true)
+})
+
+watch(eventLineCount, () => {
+  eventOffset.value = 0
+  fetchEvents()
+})
+
+watch([activeEventType, eventSearchDate, activeEventQuickTime], () => {
+  currentPage.value = 1
+  fetchEvents()
+})
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+watch([logSearchText, eventSearchText], () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    logCurrentPage.value = 1
+    fetchLogs(activeLogFile.value, true)
+    currentPage.value = 1
+    fetchEvents()
+  }, 500)
 })
 
 watch(activeLogFile, (file, previousFile) => {
@@ -582,7 +724,8 @@ watch(activeLogFile, (file, previousFile) => {
   }
 
   if (file !== previousFile) {
-    fetchLogs(file)
+    logCurrentPage.value = 1
+    fetchLogs(file, true)
   }
 })
 
@@ -763,165 +906,225 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="activePanel === 'events'" class="panel-actions panel-actions--events">
-          <div class="panel-filter">
-            <span class="panel-filter-label">{{ eventTypeFilterLabel }}</span>
-            <el-select v-model="activeEventType" class="panel-select" :teleported="false">
-              <el-option
-                v-for="item in eventTypeOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </el-select>
-          </div>
+          <!-- 搜索内容 -->
+          <el-input
+            v-model="eventSearchText"
+            :placeholder="locale === 'zh' ? '搜索内容...' : 'Search...'"
+            clearable
+            class="panel-input"
+            style="width: 200px;"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
 
+          <!-- 发生时间范围 -->
           <div class="panel-filter">
             <span class="panel-filter-label">{{ eventTimeFilterLabel }}</span>
-            <el-select v-model="activeEventTime" class="panel-select panel-select--time" :teleported="false">
+            <el-date-picker
+              v-model="eventSearchDate"
+              type="datetimerange"
+              :start-placeholder="locale === 'zh' ? '开始时间' : 'Start'"
+              :end-placeholder="locale === 'zh' ? '结束时间' : 'End'"
+              size="default"
+              class="panel-date-picker"
+              style="width: 360px;"
+              :shortcuts="datePickerShortcuts"
+              @change="fetchEvents(0)"
+            />
+          </div>
+          
+          <!-- 事件类型 -->
+          <div class="panel-filter">
+            <span class="panel-filter-label">{{ eventTypeFilterLabel }}</span>
+            <el-select v-model="activeEventType" class="panel-select" :teleported="false" style="width: 140px;">
+              <el-option value="all" :label="locale === 'zh' ? '全部类型' : 'All Types'" />
               <el-option
-                v-for="item in eventTimeOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
+                v-for="item in eventTypeOptionsRaw"
+                :key="item"
+                :label="getEventTypeLabel(item)"
+                :value="item"
               />
             </el-select>
-          </div>
-
-          <div class="panel-summary">
-            <span class="panel-summary-kicker">{{ eventsTabText }}</span>
-            <strong class="panel-summary-value">{{ eventSummaryText }}</strong>
           </div>
         </div>
 
         <div v-else class="panel-actions panel-actions--logs">
-          <label class="log-scroll-toggle">
+          <!-- 自动滚动 -->
+          <div class="panel-filter">
             <span class="panel-filter-label">{{ autoScrollLabel }}</span>
-            <el-switch v-model="autoScrollLogs" size="small" />
-          </label>
+            <el-switch v-model="autoScrollLogs" size="default" />
+          </div>
 
+          <!-- 搜索内容 -->
           <el-input
             v-model="logSearchText"
             :placeholder="locale === 'zh' ? '搜索内容...' : 'Search...'"
             clearable
-            class="panel-input log-search-input"
+            class="panel-input"
+            style="width: 200px;"
           >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
+            <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
 
-          <el-select
-            v-model="logLineCount"
-            class="panel-select log-lines-select"
-            :teleported="false"
-          >
-            <el-option
-              v-for="item in logLineOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
+          <!-- 记录时间范围 -->
+          <div class="panel-filter">
+            <span class="panel-filter-label">{{ locale === 'zh' ? '记录时间' : 'Logged At' }}</span>
+            <el-date-picker
+              v-model="logSearchDate"
+              type="datetimerange"
+              :start-placeholder="locale === 'zh' ? '开始时间' : 'Start'"
+              :end-placeholder="locale === 'zh' ? '结束时间' : 'End'"
+              size="default"
+              class="panel-date-picker"
+              style="width: 320px;"
+              :shortcuts="logPickerShortcuts"
             />
-          </el-select>
+          </div>
 
-          <el-select
-            v-model="activeLogFile"
-            class="panel-select log-file-select"
-            :placeholder="logSelectPlaceholder"
-            :teleported="false"
-            :disabled="localizedLogFiles.length === 0"
-          >
-            <el-option
-              v-for="item in localizedLogFiles"
-              :key="item.file"
-              :label="item.label"
-              :value="item.file"
-            />
-          </el-select>
+          <!-- 日志文件 -->
+          <div class="panel-filter">
+            <span class="panel-filter-label">{{ locale === 'zh' ? '日志文件' : 'Log File' }}</span>
+            <el-select
+              v-model="activeLogFile"
+              class="panel-select"
+              :placeholder="logSelectPlaceholder"
+              :teleported="false"
+              :disabled="localizedLogFiles.length === 0"
+              style="width: 160px;"
+            >
+              <el-option
+                v-for="item in localizedLogFiles"
+                :key="item.file"
+                :label="item.label"
+                :value="item.file"
+              />
+            </el-select>
+          </div>
+
+          <!-- 显示行数 -->
+          <div class="panel-filter">
+            <span class="panel-filter-label">{{ locale === 'zh' ? '行数' : 'Lines' }}</span>
+            <el-select v-model="logLineCount" class="panel-select" :teleported="false" style="width: 100px;">
+              <el-option v-for="item in logLineOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </div>
         </div>
       </header>
 
-      <div v-if="activePanel === 'events'" class="panel-scroll">
-        <div v-if="loading" class="panel-empty">
-          <el-icon><Loading /></el-icon>
-          <p>{{ loadingLabel }}</p>
-        </div>
+      <div v-if="activePanel === 'events'" class="panel-content-wrapper event-content-wrapper">
+        <div class="panel-scroll event-scroll" ref="eventsScrollRef">
+          <div v-if="loading" class="panel-empty">
+            <el-icon><Loading /></el-icon>
+            <p>{{ loadingLabel }}</p>
+          </div>
 
-        <div v-else-if="events.length === 0" class="panel-empty">
-          <el-icon><DocumentDelete /></el-icon>
-          <p>{{ t.dashboard.noEvents }}</p>
-        </div>
+          <div v-else-if="events.length === 0" class="panel-empty">
+            <el-icon><DocumentDelete /></el-icon>
+            <p>{{ t.dashboard.noEvents }}</p>
+          </div>
 
-        <div v-else-if="filteredEvents.length === 0" class="panel-empty">
-          <el-icon><Filter /></el-icon>
-          <p>{{ noMatchedEventsLabel }}</p>
-        </div>
-
-        <template v-else>
-          <div v-for="evt in filteredEvents" :key="evt.id" class="event-entry">
-            <div class="event-dot" :class="getEventToneClass(evt.type)"></div>
-
-            <div class="event-body">
-              <div class="event-meta">
-                <div class="event-meta-main">
-                  <span class="event-type" :class="getEventToneClass(evt.type)">{{ getEventTypeLabel(evt.type) }}</span>
-
-                  <div class="event-title">
-                    <strong>{{ evt.service || '-' }}</strong>
-                    <code>{{ evt.instance || '-' }}</code>
-                  </div>
-                </div>
-
-                <span class="event-time">{{ formatTime(evt.timestamp) }}</span>
+          <div v-else class="event-feed">
+            <div v-for="event in events" :key="event.id" class="event-node">
+              <div class="event-node-aside">
+                <div class="event-node-dot" :class="getEventToneClass(event.type)"></div>
+                <div class="event-node-line"></div>
               </div>
-
-              <p class="event-message">{{ getEventMessage(evt) }}</p>
+              <div class="event-node-main">
+                <div class="event-node-meta">
+                  <span class="event-node-type" :class="getEventToneClass(event.type)">
+                    {{ getEventTypeLabel(event.type) }}
+                  </span>
+                  <span class="event-node-id">{{ event.service }}</span>
+                  <span class="event-node-scope">{{ event.instance }}</span>
+                  <span class="event-node-time">{{ new Date(event.timestamp).toLocaleString() }}</span>
+                </div>
+                <div class="event-node-copy">
+                  {{ getEventMessage(event) }}
+                </div>
+              </div>
             </div>
           </div>
-        </template>
+        </div>
+        
+        <div class="panel-pagination">
+          <div class="pagination-info">
+            {{ locale === 'zh' ? `共计 ${eventTotal} 条` : `Total ${eventTotal}` }}
+          </div>
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="eventLineCount"
+            :page-sizes="[100, 500, 1000, 2000, 5000]"
+            layout="sizes, prev, pager, next, jumper"
+            :total="eventTotal"
+            @size-change="handleSizeChange"
+            @current-change="handlePageChange"
+            size="small"
+            background
+          >
+          </el-pagination>
+        </div>
       </div>
 
-      <div v-else ref="logsScrollRef" class="panel-scroll log-scroll">
-        <div v-if="loading || logsLoading" class="panel-empty">
-          <el-icon><Loading /></el-icon>
-          <p>{{ loadingLabel }}</p>
-        </div>
+      <div v-else class="panel-content-wrapper log-content-wrapper">
+        <div ref="logsScrollRef" class="panel-scroll log-scroll" @scroll="handleLogScroll">
+          <div v-if="loading || logsLoading" class="panel-empty">
+            <el-icon><Loading /></el-icon>
+            <p>{{ loadingLabel }}</p>
+          </div>
 
-        <div v-else-if="localizedLogFiles.length === 0" class="panel-empty">
-          <el-icon><Document /></el-icon>
-          <p>{{ noLogFilesLabel }}</p>
-        </div>
+          <div v-else-if="localizedLogFiles.length === 0" class="panel-empty">
+            <el-icon><Document /></el-icon>
+            <p>{{ noLogFilesLabel }}</p>
+          </div>
 
-        <div v-else-if="logs.length === 0" class="panel-empty">
-          <el-icon><Tickets /></el-icon>
-          <p>{{ noLogsLabel }}</p>
-        </div>
+          <div v-else-if="logs.length === 0" class="panel-empty">
+            <el-icon><Tickets /></el-icon>
+            <p>{{ noLogsLabel }}</p>
+          </div>
 
-        <template v-else>
-          <div class="log-toolbar-note">{{ logLinesLabel }}</div>
+          <template v-else>
+            <div class="log-toolbar-note">
+              <el-icon><InfoFilled /></el-icon>
+              <span>{{ locale === 'zh' ? '正在查看日志文件...' : 'Viewing log file...' }}</span>
+            </div>
 
-          <div class="log-list">
-            <div
-              v-for="(entry, index) in parsedLogs"
-              :key="`${activeLogFile}-${index}-${entry.raw}`"
-              class="log-line"
-              :class="`is-${entry.levelClass}`"
-            >
-              <span class="log-index">{{ index + 1 }}</span>
-
-              <div class="log-main">
-                <template v-if="entry.parsed">
-                  <span class="log-time">{{ entry.timestamp }}</span>
-                  <span class="log-level" :class="`is-${entry.levelClass}`">{{ entry.level }}</span>
-                  <span v-if="entry.thread" class="log-thread">#{{ entry.thread }}</span>
-                  <span v-if="entry.scope" class="log-scope">{{ entry.scope }}</span>
-                  <span class="log-text">{{ entry.message }}</span>
-                </template>
-
-                <code v-else class="log-raw">{{ entry.raw }}</code>
+            <div class="log-viewer">
+              <div v-for="(entry, index) in parsedLogs" :key="index" class="log-line" :class="`is-${entry.levelClass}`">
+                <span class="log-index">{{ (logCurrentPage - 1) * logLineCount + index + 1 }}</span>
+                
+                <div class="log-main">
+                  <template v-if="entry.parsed">
+                    <div class="log-meta">
+                       <span class="log-time">{{ entry.timestamp }}</span>
+                       <span class="log-level" :class="`is-${entry.levelClass}`">{{ entry.level }}</span>
+                    </div>
+                    <span v-if="entry.thread" class="log-thread">#{{ entry.thread }}</span>
+                    <span v-if="entry.scope" class="log-scope">{{ entry.scope }}</span>
+                    <span class="log-text">{{ entry.message }}</span>
+                  </template>
+                  <code v-else class="log-raw">{{ entry.raw }}</code>
+                </div>
               </div>
             </div>
+          </template>
+        </div>
+
+        <div class="panel-pagination">
+          <div class="pagination-info">
+            {{ locale === 'zh' ? `共计 ${logTotal} 条` : `Total ${logTotal}` }}
           </div>
-        </template>
+          <el-pagination
+            v-model:current-page="logCurrentPage"
+            v-model:page-size="logLineCount"
+            :page-sizes="[100, 500, 1000, 2000, 5000]"
+            layout="sizes, prev, pager, next, jumper"
+            :total="logTotal"
+            @size-change="handleLogSizeChange"
+            @current-change="handleLogPageChange"
+            size="small"
+            background
+          />
+        </div>
       </div>
     </section>
   </div>
@@ -1243,16 +1446,214 @@ onBeforeUnmount(() => {
   align-content: start;
 }
 
-.system-stat {
+.panel-content-wrapper {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 92px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(148, 163, 184, 0.05);
+  overflow: hidden;
 }
+
+.panel-scroll.event-scroll {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.panel-actions--logs,
+.panel-actions--events {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.panel-filter {
+  display: flex;
+  align-items: center;
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  padding: 2px 4px 2px 10px;
+  height: 32px;
+  transition: all 0.2s ease;
+}
+
+.panel-filter:hover {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.panel-filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.panel-filter :deep(.el-input__wrapper),
+.panel-filter :deep(.el-select__wrapper) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.panel-filter :deep(.el-input__inner) {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.panel-pagination {
+  padding: 12px 20px;
+  background: var(--surface-color);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.pagination-info {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+:deep(.el-pagination__jump) {
+  margin-left: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+:deep(.el-pagination__jump-prev),
+:deep(.el-pagination__jump-next) {
+  display: none !important;
+}
+
+:deep(.el-pagination__goto) {
+  display: none !important;
+}
+
+:deep(.el-pagination__jump)::before {
+  content: v-bind("locale === 'zh' ? '跳转至' : 'Go to'");
+  margin-right: 8px;
+}
+
+.event-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.event-node {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.event-node-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.event-node-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: #fff;
+  z-index: 1;
+}
+
+.event-node-line {
+  position: absolute;
+  top: 10px;
+  bottom: -24px;
+  width: 1px;
+  background: var(--border-color);
+}
+
+.event-node:last-child .event-node-line {
+  display: none;
+}
+
+.panel-pill-group :deep(.el-radio-button__inner) {
+  border-radius: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  background: rgba(148, 163, 184, 0.04) !important;
+  margin-right: 6px;
+  font-size: 13px;
+  min-width: 60px;
+  padding: 8px 12px;
+  box-shadow: none !important;
+}
+
+.panel-pill-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: var(--accent-blue) !important;
+  color: #fff !important;
+  border-color: var(--accent-blue) !important;
+}
+
+.event-node:last-child .event-node-line {
+  display: none;
+}
+
+.event-node-main {
+  flex: 1;
+}
+
+.event-node-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.event-node-type {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.event-node-id {
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+.event-node-scope {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.event-node-time {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.event-node-copy {
+  color: var(--text-body);
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+.event-node-dot.is-green { color: #10b981; }
+.event-node-dot.is-red { color: #ef4444; }
+.event-node-dot.is-blue { color: #3b82f6; }
+.event-node-dot.is-orange { color: #f59e0b; }
+.event-node-dot.is-cyan { color: #06b6d4; }
+
+.event-node-type.is-green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.event-node-type.is-red { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.event-node-type.is-blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.event-node-type.is-orange { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.event-node-type.is-cyan { background: rgba(6, 182, 212, 0.1); color: #06b6d4; }
+
 
 .system-stat-label {
   font-size: 12px;
@@ -1699,7 +2100,7 @@ onBeforeUnmount(() => {
 }
 
 .event-message {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -1720,17 +2121,18 @@ onBeforeUnmount(() => {
 .log-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .log-line {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  display: flex;
   gap: 12px;
-  align-items: start;
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 6px 12px;
+  border-radius: 8px;
   transition: background 0.18s ease;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .log-line:hover {
@@ -1749,6 +2151,10 @@ onBeforeUnmount(() => {
   background: rgba(239, 68, 68, 0.04);
 }
 
+.log-line.is-fatal {
+  background: rgba(159, 18, 57, 0.04);
+}
+
 .log-line.is-debug {
   background: rgba(6, 182, 212, 0.04);
 }
@@ -1763,32 +2169,36 @@ onBeforeUnmount(() => {
 }
 
 .log-main {
+  flex: 1;
   min-width: 0;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-primary);
-  word-break: break-word;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
 }
 
-.log-time,
-.log-level,
-.log-thread,
-.log-scope {
-  display: inline-block;
-  margin-right: 8px;
-  margin-bottom: 2px;
+.log-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .log-time {
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .log-level {
-  padding: 1px 7px;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 22px;
+  border-radius: 6px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .log-level.is-info {
@@ -1804,6 +2214,11 @@ onBeforeUnmount(() => {
 .log-level.is-error {
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.14);
+}
+
+.log-level.is-fatal {
+  color: #9f1239;
+  background: rgba(159, 18, 57, 0.14);
 }
 
 .log-level.is-debug {

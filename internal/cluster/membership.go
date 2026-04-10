@@ -19,6 +19,7 @@ type Membership interface {
 	GetMembers() (interface{}, error)
 	RemoveMember(nodeID string) error
 	ListEvents() ([]*catalog.Event, error)
+	QueryEvents(count, offset int, query, date, startTime, endTime, eventType, service string) ([]*catalog.Event, int, error)
 	GetStats() (*catalog.Stats, error)
 	IsLeader() bool
 	LeaderAddr() string
@@ -68,6 +69,11 @@ func (m *membership) RemoveMember(nodeID string) error {
 
 func (m *membership) ListEvents() ([]*catalog.Event, error) {
 	return m.catalog.ListEvents(), nil
+}
+
+func (m *membership) QueryEvents(count, offset int, query, date, startTime, endTime, eventType, service string) ([]*catalog.Event, int, error) {
+	events, total := m.catalog.QueryEvents(count, offset, query, date, startTime, endTime, eventType, service)
+	return events, total, nil
 }
 
 func (m *membership) GetStats() (*catalog.Stats, error) {

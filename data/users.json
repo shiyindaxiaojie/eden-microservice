@@ -9,7 +9,7 @@
       "remark": "",
       "role": "admin",
       "is_builtin": true,
-      "guide_completed": false
+      "guide_completed": true
     }
   }
 }

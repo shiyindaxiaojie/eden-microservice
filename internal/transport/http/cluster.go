@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,12 +296,34 @@ func (h *Handler) clusterStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listEvents(w http.ResponseWriter, r *http.Request) {
-	events, err := h.cluster.ListEvents()
+	countStr := r.URL.Query().Get("count")
+	count := 1000 // By default, act like before (maxEvents=1000)
+	if countStr != "" {
+		fmt.Sscanf(countStr, "%d", &count)
+	}
+
+	offsetStr := r.URL.Query().Get("offset")
+	offset := 0
+	if offsetStr != "" {
+		fmt.Sscanf(offsetStr, "%d", &offset)
+	}
+
+	query := r.URL.Query().Get("query")
+	date := r.URL.Query().Get("date") // Expects YYYY-MM-DD
+	startTime := r.URL.Query().Get("start_time") // Expects YYYY-MM-DDTHH:MM:SS
+	endTime := r.URL.Query().Get("end_time")     // Expects YYYY-MM-DDTHH:MM:SS
+	eventType := r.URL.Query().Get("type")
+	service := r.URL.Query().Get("service")
+
+	events, total, err := h.cluster.QueryEvents(count, offset, query, date, startTime, endTime, eventType, service)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	jsonOK(w, events)
+	jsonOK(w, map[string]interface{}{
+		"total": total,
+		"data":  events,
+	})
 }
 
 func (h *Handler) updateStorage(w http.ResponseWriter, r *http.Request) {
@@ -395,6 +418,14 @@ func (h *Handler) getLogs(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(countStr, "%d", &count)
 	}
 
+	offsetStr := r.URL.Query().Get("offset")
+	offset := 0
+	if offsetStr != "" {
+		fmt.Sscanf(offsetStr, "%d", &offset)
+	}
+
+	query := r.URL.Query().Get("query")
+
 	fileName := r.URL.Query().Get("file")
 	if fileName == "" {
 		fileName = "logs/info.log" // Default
@@ -436,17 +467,51 @@ func (h *Handler) getLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// tail -n count
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-		if len(lines) > count {
-			lines = lines[len(lines)-count:]
-		}
+	windowSize := count + offset
+	if windowSize <= 0 {
+		jsonOK(w, []string{})
+		return
 	}
 
-	jsonOK(w, lines)
+	window := make([]string, windowSize)
+	idx := 0
+	total := 0
+	scanner := bufio.NewScanner(file)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		text := scanner.Text()
+		if query != "" && !strings.Contains(strings.ToLower(text), strings.ToLower(query)) {
+			continue
+		}
+		window[idx%windowSize] = text
+		idx++
+		total++
+	}
+
+	var result []string
+	startIdx := 0
+	available := total
+	if total > windowSize {
+		startIdx = idx % windowSize
+		available = windowSize
+	}
+
+	for i := 0; i < available; i++ {
+		result = append(result, window[(startIdx+i)%windowSize])
+	}
+
+	dropOffset := offset
+	if dropOffset > len(result) {
+		dropOffset = len(result)
+	}
+	
+	validItems := result[:len(result)-dropOffset]
+	jsonOK(w, map[string]interface{}{
+		"total": total,
+		"data":  validItems,
+	})
 }
 
 // Internal sync handlers
