@@ -885,7 +885,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section class="activity-panel" data-guide="dashboard-activity">
-      <header class="activity-head">
+      <header class="activity-head panel-header">
         <div class="panel-tabs">
           <button
             type="button"
@@ -911,15 +911,14 @@ onBeforeUnmount(() => {
             v-model="eventSearchText"
             :placeholder="locale === 'zh' ? '搜索内容...' : 'Search...'"
             clearable
-            class="panel-input"
-            style="width: 200px;"
+            style="width: 180px;"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
 
           <!-- 发生时间范围 -->
-          <div class="panel-filter">
-            <span class="panel-filter-label">{{ eventTimeFilterLabel }}</span>
+          <div class="filter-item">
+            <span class="filter-label">{{ eventTimeFilterLabel }}</span>
             <el-date-picker
               v-model="eventSearchDate"
               type="datetimerange"
@@ -927,16 +926,15 @@ onBeforeUnmount(() => {
               :end-placeholder="locale === 'zh' ? '结束时间' : 'End'"
               size="default"
               class="panel-date-picker"
-              style="width: 360px;"
+              style="width: 320px;"
               :shortcuts="datePickerShortcuts"
               @change="fetchEvents(0)"
             />
           </div>
           
-          <!-- 事件类型 -->
-          <div class="panel-filter">
-            <span class="panel-filter-label">{{ eventTypeFilterLabel }}</span>
-            <el-select v-model="activeEventType" class="panel-select" :teleported="false" style="width: 140px;">
+          <div class="filter-item">
+            <span class="filter-label">{{ eventTypeFilterLabel }}</span>
+            <el-select v-model="activeEventType" class="panel-select" :teleported="false" style="width: 130px;">
               <el-option value="all" :label="locale === 'zh' ? '全部类型' : 'All Types'" />
               <el-option
                 v-for="item in eventTypeOptionsRaw"
@@ -949,48 +947,42 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-else class="panel-actions panel-actions--logs">
-          <!-- 自动滚动 -->
-          <div class="panel-filter">
-            <span class="panel-filter-label">{{ autoScrollLabel }}</span>
+          <div class="filter-item">
+            <span class="filter-label">{{ autoScrollLabel }}</span>
             <el-switch v-model="autoScrollLogs" size="default" />
           </div>
 
-          <!-- 搜索内容 -->
           <el-input
             v-model="logSearchText"
             :placeholder="locale === 'zh' ? '搜索内容...' : 'Search...'"
             clearable
-            class="panel-input"
-            style="width: 200px;"
+            style="width: 180px;"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
 
-          <!-- 记录时间范围 -->
-          <div class="panel-filter">
-            <span class="panel-filter-label">{{ locale === 'zh' ? '记录时间' : 'Logged At' }}</span>
+          <div class="filter-item">
+            <span class="filter-label">{{ locale === 'zh' ? '记录时间' : 'Logged At' }}</span>
             <el-date-picker
               v-model="logSearchDate"
               type="datetimerange"
               :start-placeholder="locale === 'zh' ? '开始时间' : 'Start'"
               :end-placeholder="locale === 'zh' ? '结束时间' : 'End'"
               size="default"
-              class="panel-date-picker"
-              style="width: 320px;"
+              style="width: 300px;"
               :shortcuts="logPickerShortcuts"
             />
           </div>
 
-          <!-- 日志文件 -->
-          <div class="panel-filter">
-            <span class="panel-filter-label">{{ locale === 'zh' ? '日志文件' : 'Log File' }}</span>
+          <div class="filter-item">
+            <span class="filter-label">{{ locale === 'zh' ? '日志文件' : 'Log File' }}</span>
             <el-select
               v-model="activeLogFile"
               class="panel-select"
               :placeholder="logSelectPlaceholder"
               :teleported="false"
               :disabled="localizedLogFiles.length === 0"
-              style="width: 160px;"
+              style="width: 140px;"
             >
               <el-option
                 v-for="item in localizedLogFiles"
@@ -1468,39 +1460,62 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.panel-filter {
+.panel-actions--logs,
+.panel-actions--events {
   display: flex;
   align-items: center;
-  background: rgba(148, 163, 184, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 10px;
-  padding: 2px 4px 2px 10px;
-  height: 32px;
-  transition: all 0.2s ease;
+  gap: 16px;
+  flex: 1;
+  justify-content: flex-end;
 }
 
-.panel-filter:hover {
-  background: rgba(148, 163, 184, 0.1);
-  border-color: rgba(148, 163, 184, 0.2);
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.panel-filter-label {
-  font-size: 12px;
-  font-weight: 600;
+.filter-label {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
-  margin-right: 8px;
   white-space: nowrap;
 }
 
-.panel-filter :deep(.el-input__wrapper),
-.panel-filter :deep(.el-select__wrapper) {
-  background: transparent !important;
-  box-shadow: none !important;
+/* Minimalist Element Plus overrides */
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 1px var(--border-color) inset !important;
+  transition: all 0.2s ease;
 }
 
-.panel-filter :deep(.el-input__inner) {
-  font-size: 13px;
-  font-weight: 500;
+:deep(.el-input__wrapper.is-focus),
+:deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--accent-blue) inset !important;
+}
+
+:deep(.el-range-editor.el-input__inner) {
+  border-radius: 8px !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+:deep(.el-range-editor.is-active) {
+  border-color: var(--accent-blue) !important;
+}
+
+.activity-head {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .panel-pagination {
