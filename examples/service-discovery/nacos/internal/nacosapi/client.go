@@ -26,6 +26,7 @@ type ServiceInstance struct {
 	Host        string
 	Port        int
 	Weight      int
+	Healthy     bool
 	Metadata    map[string]string
 }
 
@@ -169,6 +170,7 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 			Host:        item.Ip,
 			Port:        int(item.Port),
 			Weight:      weight,
+			Healthy:     item.Healthy,
 			Metadata:    item.Metadata,
 		})
 	}
@@ -199,6 +201,7 @@ func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)
 					Host:        service.Ip,
 					Port:        int(service.Port),
 					Weight:      weight,
+					Healthy:     service.Healthy,
 					Metadata:    service.Metadata,
 				})
 			}

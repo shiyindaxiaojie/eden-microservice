@@ -14,6 +14,7 @@ import (
 	"time"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/eden/internal/instanceguard"
 	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/eden/internal/registrygrpc"
 	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
 )
@@ -49,16 +50,27 @@ func main() {
 		logger.Warn("subscribe eden-grpc-user-center failed: %v", err)
 	}
 
+	heartbeatStopCh, err := instanceguard.WatchSelfOffline(reg, instance.ServiceName, instance.ID)
+	if err != nil {
+		logger.Warn("watch self service failed: %v", err)
+	}
+
 	// Report heartbeats periodically to keep the instance discoverable.
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			if err := reg.Heartbeat(instance); err != nil {
-				logger.Warn("heartbeat failed: %v", err)
-				continue
+		for {
+			select {
+			case <-heartbeatStopCh:
+				logger.Info("self instance marked offline, stop heartbeats")
+				return
+			case <-ticker.C:
+				if err := reg.Heartbeat(instance); err != nil {
+					logger.Warn("heartbeat failed: %v", err)
+					continue
+				}
+				logger.Info("heartbeat ok")
 			}
-			logger.Info("heartbeat ok")
 		}
 	}()
 

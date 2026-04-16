@@ -5,12 +5,16 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, RefreshRight, Search } from '@element-plus/icons-vue'
 import { getServiceInstances, setInstanceStatus, type Instance } from '../api/registry'
 import { useI18n } from '../utils/i18n'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import en from 'element-plus/es/locale/lang/en'
 
-type StatusFilter = 'all' | 'passing' | 'critical' | 'manual_offline'
+type HealthFilter = 'all' | 'passing' | 'critical'
+type LifecycleFilter = 'all' | 'online' | 'offline'
 
 const route = useRoute()
 const router = useRouter()
 const { locale } = useI18n()
+const elLocale = computed(() => (locale.value === 'zh' ? zhCn : en))
 
 const isZh = computed(() => locale.value === 'zh')
 const text = (zh: string, en: string) => (isZh.value ? zh : en)
@@ -18,8 +22,12 @@ const text = (zh: string, en: string) => (isZh.value ? zh : en)
 const instances = ref<Instance[]>([])
 const loading = ref(false)
 const actionTarget = ref('')
-const search = ref('')
-const statusFilter = ref<StatusFilter>('all')
+const searchId = ref('')
+const searchIp = ref('')
+const healthFilter = ref<HealthFilter>('all')
+const lifecycleFilter = ref<LifecycleFilter>('all')
+const currentPage = ref(1)
+const pageSize = ref(12)
 
 function decodeName(value: string) {
   try {
@@ -37,35 +45,50 @@ const namespace = computed(() => {
 
 const stats = computed(() => {
   const total = instances.value.length
-  const passing = instances.value.filter((item) => !item.manual_offline && item.status === 'passing').length
-  const critical = instances.value.filter((item) => !item.manual_offline && item.status === 'critical').length
+  const passing = instances.value.filter((item) => item.status === 'passing').length
+  const critical = instances.value.filter((item) => item.status === 'critical').length
   const manualOffline = instances.value.filter((item) => item.manual_offline).length
-  return { total, passing, critical, manualOffline }
+  return {
+    total,
+    passing,
+    critical,
+    manualOffline,
+    online: total - manualOffline,
+  }
 })
 
 const filteredInstances = computed(() => {
-  const query = search.value.trim().toLowerCase()
+  const idQuery = searchId.value.trim().toLowerCase()
+  const ipQuery = searchIp.value.trim().toLowerCase()
+
   return instances.value.filter((item) => {
     const addr = `${item.host}:${item.port}`.toLowerCase()
-    const matchesSearch = !query || item.id.toLowerCase().includes(query) || addr.includes(query)
+    const matchesId = !idQuery || item.id.toLowerCase().includes(idQuery)
+    const matchesIp = !ipQuery || addr.includes(ipQuery)
+    const matchesSearch = matchesId && matchesIp
 
-    switch (statusFilter.value) {
-      case 'passing':
-        return matchesSearch && !item.manual_offline && item.status === 'passing'
-      case 'critical':
-        return matchesSearch && !item.manual_offline && item.status === 'critical'
-      case 'manual_offline':
-        return matchesSearch && !!item.manual_offline
-      default:
-        return matchesSearch
-    }
+    const matchesHealth =
+      healthFilter.value === 'all' ||
+      (healthFilter.value === 'passing' ? item.status === 'passing' : item.status === 'critical')
+    const matchesLifecycle =
+      lifecycleFilter.value === 'all' ||
+      (lifecycleFilter.value === 'online' ? !item.manual_offline : !!item.manual_offline)
+
+    return matchesSearch && matchesHealth && matchesLifecycle
   })
 })
 
+const pagedInstances = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredInstances.value.slice(start, start + pageSize.value)
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredInstances.value.length / pageSize.value)))
+
 function formatTime(value?: string) {
-  if (!value) return '-'
+  if (!value || value.startsWith('0001')) return '-'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
+  if (Number.isNaN(date.getTime())) return '-'
   return date.toLocaleString(isZh.value ? 'zh-CN' : 'en-US')
 }
 
@@ -73,18 +96,30 @@ function instanceAddress(instance: Instance) {
   return `${instance.host}:${instance.port}`
 }
 
-function instanceStateText(instance: Instance) {
-  if (instance.manual_offline) return text('手动下线', 'Manual Offline')
+function isManuallyOffline(instance: Instance) {
+  return !!instance.manual_offline
+}
+
+function healthStateText(instance: Instance) {
+  if (isManuallyOffline(instance)) return text('手动下线', 'Manual Offline')
   return instance.status === 'passing' ? text('健康', 'Passing') : text('异常', 'Critical')
 }
 
-function instanceStateType(instance: Instance) {
-  if (instance.manual_offline) return 'warning'
+function healthStateType(instance: Instance) {
+  if (isManuallyOffline(instance)) return 'warning'
   return instance.status === 'passing' ? 'success' : 'danger'
 }
 
+function lifecycleStateText(instance: Instance) {
+  return isManuallyOffline(instance) ? text('已下线', 'Offline') : text('在线', 'Online')
+}
+
+function lifecycleStateType(instance: Instance) {
+  return isManuallyOffline(instance) ? 'warning' : 'success'
+}
+
 function actionLabel(instance: Instance) {
-  return instance.manual_offline ? text('上线', 'Online') : text('下线', 'Offline')
+  return isManuallyOffline(instance) ? text('恢复上线', 'Restore Online') : text('下线', 'Offline')
 }
 
 async function loadInstances() {
@@ -112,12 +147,13 @@ function goBack() {
 }
 
 async function toggleStatus(instance: Instance) {
-  const nextStatus = instance.manual_offline ? 'online' : 'offline'
+  const isRestore = isManuallyOffline(instance)
+  const nextStatus = isRestore ? 'online' : 'offline'
   const addr = instanceAddress(instance)
 
   try {
     await ElMessageBox.confirm(
-      nextStatus === 'online'
+      isRestore
         ? text(`确定要将实例 ${addr} 恢复上线吗？`, `Bring instance ${addr} online?`)
         : text(`确定要将实例 ${addr} 手动下线吗？`, `Take instance ${addr} offline?`),
       text('状态确认', 'Status Confirmation'),
@@ -131,7 +167,7 @@ async function toggleStatus(instance: Instance) {
   try {
     await setInstanceStatus(namespace.value, serviceName.value, instance.id, nextStatus)
     ElMessage.success(
-      nextStatus === 'online'
+      isRestore
         ? text('实例已恢复上线', 'Instance is back online')
         : text('实例已手动下线', 'Instance is offline'),
     )
@@ -150,366 +186,549 @@ watch(
   },
 )
 
+watch([searchId, searchIp, healthFilter, lifecycleFilter], () => {
+  currentPage.value = 1
+})
+
+watch(pageSize, () => {
+  currentPage.value = 1
+})
+
+watch(filteredInstances, () => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value
+  }
+})
+
 onMounted(() => {
   loadInstances().catch((error) => console.error('load service detail failed', error))
 })
 </script>
 
 <template>
-  <div class="detail-shell">
-    <section class="detail-hero">
-      <button type="button" class="back-btn" @click="goBack">
-        <el-icon><ArrowLeft /></el-icon>
-        <span>{{ text('返回服务列表', 'Back to Services') }}</span>
-      </button>
+  <div class="svc-shell">
+    <div class="svc-main glass-card">
+      <div class="svc-toolbar">
+        <div class="toolbar-row">
+          <div class="toolbar-group">
+            <button type="button" class="back-link-btn" @click="goBack" :title="text('返回服务列表', 'Back to Services')">
+              <el-icon><ArrowLeft /></el-icon>
+            </button>
+            <div class="title-wrap">
+              <h1 class="page-title">{{ serviceName }}</h1>
+              <span class="ns-badge">{{ namespace }}</span>
+            </div>
+          </div>
 
-      <div class="hero-head">
-        <div>
-          <p class="eyebrow">{{ text('服务详情', 'Service Detail') }}</p>
-          <h1>{{ serviceName }}</h1>
-          <div class="hero-meta">
-            <span class="hero-badge">{{ text('命名空间', 'Namespace') }}: {{ namespace }}</span>
-            <span class="hero-note">
-              {{ stats.total }} {{ text('个实例', 'instances') }}
-            </span>
+          <div class="toolbar-group">
+            <div class="field-item">
+              <span class="field-label">{{ text('实例 ID', 'Instance ID') }}</span>
+              <el-input
+                v-model="searchId"
+                size="default"
+                clearable
+                :prefix-icon="Search"
+                :placeholder="text('输入 ID', 'Filter ID')"
+                class="search-input"
+              />
+            </div>
+          </div>
+
+          <div class="toolbar-group">
+            <div class="field-item">
+              <span class="field-label">{{ text('IP 地址', 'IP Address') }}</span>
+              <el-input
+                v-model="searchIp"
+                size="default"
+                clearable
+                :prefix-icon="Search"
+                :placeholder="text('输入 IP', 'Filter IP')"
+                class="search-input"
+              />
+            </div>
+          </div>
+
+          <div class="toolbar-group">
+            <button type="button" class="refresh-btn-minimal" :disabled="loading" @click="loadInstances()">
+              <el-icon :class="{ 'is-loading': loading }"><RefreshRight /></el-icon>
+            </button>
+          </div>
+
+          <div class="toolbar-group right-align">
+            <div class="pill-group">
+              <button
+                type="button"
+                :class="{ active: statusFilter === 'all' }"
+                @click="statusFilter = 'all'"
+              >
+                {{ text('全部', 'All') }}
+                <span class="pill-count">{{ stats.total }}</span>
+              </button>
+              <button
+                type="button"
+                :class="{ active: statusFilter === 'passing' }"
+                @click="statusFilter = 'passing'"
+              >
+                {{ text('健康', 'OK') }}
+                <span class="pill-count">{{ stats.passing }}</span>
+              </button>
+              <button
+                type="button"
+                :class="{ active: statusFilter === 'critical' }"
+                @click="statusFilter = 'critical'"
+              >
+                {{ text('异常', 'Err') }}
+                <span class="pill-count" :class="{ 'err-count': stats.critical > 0 }">{{ stats.critical }}</span>
+              </button>
+              <button
+                type="button"
+                :class="{ active: statusFilter === 'manual_offline' }"
+                @click="statusFilter = 'manual_offline'"
+              >
+                {{ text('下线', 'Off') }}
+                <span class="pill-count">{{ stats.manualOffline }}</span>
+              </button>
+            </div>
           </div>
         </div>
-
-        <button type="button" class="refresh-btn" :disabled="loading" @click="loadInstances()">
-          <el-icon><RefreshRight /></el-icon>
-          <span>{{ text('刷新', 'Refresh') }}</span>
-        </button>
       </div>
 
-      <div class="stat-grid">
-        <article class="stat-card">
-          <span>{{ text('总实例数', 'Total Instances') }}</span>
-          <strong>{{ stats.total }}</strong>
-        </article>
-        <article class="stat-card ok">
-          <span>{{ text('健康实例', 'Passing') }}</span>
-          <strong>{{ stats.passing }}</strong>
-        </article>
-        <article class="stat-card danger">
-          <span>{{ text('异常实例', 'Critical') }}</span>
-          <strong>{{ stats.critical }}</strong>
-        </article>
-        <article class="stat-card warn">
-          <span>{{ text('手动下线', 'Manual Offline') }}</span>
-          <strong>{{ stats.manualOffline }}</strong>
-        </article>
-      </div>
-    </section>
+      <section class="svc-content" v-loading="loading">
+        <div class="table-wrap">
+          <div v-if="!loading && filteredInstances.length === 0" class="empty-state">
+            <strong>{{ text('当前没有可展示的实例', 'No instances to display') }}</strong>
+            <p>{{ text('可以尝试切换筛选条件或返回服务列表查看其他服务。', 'Try another filter or go back to the service list.') }}</p>
+          </div>
 
-    <section class="detail-panel">
-      <div class="panel-toolbar">
-        <el-input
-          v-model="search"
-          clearable
-          :prefix-icon="Search"
-          :placeholder="text('按实例 ID 或 IP 过滤', 'Filter by instance ID or IP')"
-          class="search-box"
-        />
+          <el-table
+            v-else
+            :data="pagedInstances"
+            height="100%"
+            style="width: 100%; font-size: 14px;"
+          >
+            <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
+            <el-table-column prop="id" :label="text('实例 ID', 'Instance ID')" min-width="200" />
 
-        <el-select v-model="statusFilter" class="status-select">
-          <el-option :label="text('全部状态', 'All Status')" value="all" />
-          <el-option :label="text('健康', 'Passing')" value="passing" />
-          <el-option :label="text('异常', 'Critical')" value="critical" />
-          <el-option :label="text('手动下线', 'Manual Offline')" value="manual_offline" />
-        </el-select>
-      </div>
+            <el-table-column :label="text('地址', 'Address')" min-width="150">
+              <template #default="{ row }">
+                <span class="mono">{{ instanceAddress(row) }}</span>
+              </template>
+            </el-table-column>
 
-      <div class="table-shell" v-loading="loading">
-        <div v-if="!loading && filteredInstances.length === 0" class="empty-state">
-          <strong>{{ text('当前没有可展示的实例', 'No instances to display') }}</strong>
-          <p>{{ text('可以尝试切换筛选条件或返回服务列表查看其他服务。', 'Try another filter or go back to the service list.') }}</p>
+            <el-table-column :label="text('状态', 'Status')" width="100">
+              <template #default="{ row }">
+                <el-tag :type="instanceStateType(row)" effect="light">
+                  {{ instanceStateText(row) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="datacenter" :label="text('数据中心', 'Datacenter')" width="100" />
+
+            <el-table-column prop="weight" :label="text('权重', 'Weight')" width="100" align="center" />
+
+            <el-table-column :label="text('最近心跳', 'Last Heartbeat')" min-width="150">
+              <template #default="{ row }">
+                {{ formatTime(row.last_heartbeat || row.lastHeartbeat) }}
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="text('注册时间', 'Registered At')" min-width="150">
+              <template #default="{ row }">
+                {{ formatTime(row.registered_at || row.registeredAt) }}
+              </template>
+            </el-table-column>
+
+            <el-table-column :label="text('操作', 'Actions')" width="100" fixed="right" align="center">
+              <template #default="{ row }">
+                <el-button
+                  link
+                  style="font-weight: 500;"
+                  :type="row.manual_offline ? 'success' : 'warning'"
+                  :loading="actionTarget === row.id"
+                  @click="toggleStatus(row)"
+                >
+                  {{ actionLabel(row) }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
 
-        <el-table v-else :data="filteredInstances" stripe>
-          <el-table-column prop="id" :label="text('实例 ID', 'Instance ID')" min-width="240" />
-
-          <el-table-column :label="text('地址', 'Address')" min-width="180">
-            <template #default="{ row }">
-              <span class="mono">{{ instanceAddress(row) }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column :label="text('状态', 'Status')" width="150">
-            <template #default="{ row }">
-              <el-tag :type="instanceStateType(row)" effect="light">
-                {{ instanceStateText(row) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="datacenter" :label="text('数据中心', 'Datacenter')" width="140" />
-
-          <el-table-column prop="weight" :label="text('权重', 'Weight')" width="110" align="center" />
-
-          <el-table-column :label="text('最近心跳', 'Last Heartbeat')" min-width="180">
-            <template #default="{ row }">
-              {{ formatTime(row.last_heartbeat) }}
-            </template>
-          </el-table-column>
-
-          <el-table-column :label="text('注册时间', 'Registered At')" min-width="180">
-            <template #default="{ row }">
-              {{ formatTime(row.registered_at) }}
-            </template>
-          </el-table-column>
-
-          <el-table-column :label="text('操作', 'Actions')" width="140" fixed="right">
-            <template #default="{ row }">
-              <el-button
-                size="small"
-                :type="row.manual_offline ? 'success' : 'warning'"
-                :loading="actionTarget === row.id"
-                @click="toggleStatus(row)"
-              >
-                {{ actionLabel(row) }}
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </section>
+        <footer class="svc-footer">
+          <span class="footer-info">{{ filteredInstances.length }} {{ text('条', 'records') }}</span>
+          <el-config-provider :locale="elLocale">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[12, 20, 50]"
+              :total="filteredInstances.length"
+              layout="sizes, prev, pager, next"
+              background
+            />
+          </el-config-provider>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.detail-shell {
+.svc-shell {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  height: 100%;
   padding: 24px;
-  min-height: 100%;
-  background:
-    radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 30%),
-    radial-gradient(circle at left center, rgba(14, 165, 233, 0.12), transparent 28%),
-    linear-gradient(180deg, #f8fbff 0%, #f4f7fb 100%);
 }
 
-.detail-hero,
-.detail-panel {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
+.svc-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-card);
 }
 
-.detail-hero {
-  padding: 28px;
+.svc-toolbar {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.back-btn,
-.refresh-btn {
-  display: inline-flex;
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.toolbar-group {
+  display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 999px;
-  background: #ffffff;
-  color: #0f172a;
+  padding: 0 12px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.toolbar-group:first-child {
+  padding-left: 0;
+}
+
+.toolbar-group:last-child {
+  padding-right: 0;
+}
+
+.toolbar-group.right-align {
+  margin-left: auto;
+}
+
+.back-link-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: all 0.2s;
 }
 
-.back-btn:hover,
-.refresh-btn:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.25);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
+.back-link-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.05);
 }
 
-.back-btn {
-  padding: 10px 16px;
-  margin-bottom: 20px;
-}
-
-.refresh-btn {
-  padding: 10px 16px;
-}
-
-.refresh-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.hero-head {
+.title-wrap {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.hero-head h1 {
-  margin: 0;
-  font-size: clamp(28px, 4vw, 40px);
-  line-height: 1.05;
-  color: #0f172a;
-}
-
-.hero-meta {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-top: 14px;
 }
 
-.hero-badge,
-.hero-note {
-  display: inline-flex;
+.page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.ns-badge {
+  padding: 2px 8px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field-item {
+  display: flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 8px 12px;
+  gap: 8px;
+}
+
+.field-label {
   font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.hero-badge {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+.search-input {
+  width: 160px;
 }
 
-.hero-note {
-  background: rgba(148, 163, 184, 0.12);
-  color: #475569;
+.refresh-btn-minimal {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 22px;
+.refresh-btn-minimal:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
 }
 
-.stat-card {
+.refresh-btn-minimal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.is-loading {
+  animation: rotating 1.5s linear infinite;
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Pill Group styles aligned with services.vue */
+.pill-group {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+}
+
+.pill-group button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pill-group button:hover {
+  color: var(--text-secondary);
+}
+
+.pill-group button.active {
+  background: var(--bg-card);
+  color: var(--accent-blue);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pill-count {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.err-count {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.svc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 0;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.footer-info {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.svc-content {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 18px 20px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.96));
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.stat-card span {
-  color: #64748b;
-  font-size: 13px;
-}
-
-.stat-card strong {
-  color: #0f172a;
-  font-size: 30px;
-  line-height: 1;
-}
-
-.stat-card.ok {
-  background: linear-gradient(180deg, rgba(236, 253, 245, 1), rgba(220, 252, 231, 0.95));
-}
-
-.stat-card.ok strong {
-  color: #047857;
-}
-
-.stat-card.danger {
-  background: linear-gradient(180deg, rgba(254, 242, 242, 1), rgba(254, 226, 226, 0.95));
-}
-
-.stat-card.danger strong {
-  color: #b91c1c;
-}
-
-.stat-card.warn {
-  background: linear-gradient(180deg, rgba(255, 251, 235, 1), rgba(254, 243, 199, 0.95));
-}
-
-.stat-card.warn strong {
-  color: #b45309;
-}
-
-.detail-panel {
-  padding: 22px;
-}
-
-.panel-toolbar {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 18px;
-}
-
-.search-box {
-  flex: 1;
-}
-
-.status-select {
-  width: 200px;
-}
-
-.table-shell {
   overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: #ffffff;
+  padding: 12px 24px 12px;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 .empty-state {
-  padding: 48px 24px;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 200px;
   text-align: center;
-  color: #475569;
 }
 
 .empty-state strong {
   display: block;
-  margin-bottom: 8px;
-  color: #0f172a;
-  font-size: 16px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 .empty-state p {
-  margin: 0;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+:deep(.table-wrap .el-table) {
+  height: 100%;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.03);
+  --el-table-border-color: rgba(255, 255, 255, 0.04);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--text-muted);
+  --el-table-text-color: var(--text-primary);
+}
+
+:deep(.table-wrap .el-table__inner-wrapper::before) {
+  display: none;
+}
+
+:deep(.table-wrap .el-table th.el-table__cell) {
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+:deep(.table-wrap .el-table td.el-table__cell) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+:deep(.table-wrap .el-table tr:last-child td.el-table__cell) {
+  border-bottom: none;
+}
+
+:deep(.table-wrap .el-table tr:hover > td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+:deep(.table-wrap .el-table__fixed-right) {
+  box-shadow: none;
+}
+
+:deep(.svc-footer .el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  --el-pagination-font-size: 14px;
+}
+
+:deep(.svc-footer .el-pagination *) {
+  font-size: 14px !important;
 }
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-@media (max-width: 1080px) {
-  .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 720px) {
-  .detail-shell {
-    padding: 16px;
+@media (max-width: 1180px) {
+  .toolbar-row {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .detail-hero,
-  .detail-panel {
-    border-radius: 20px;
+  .toolbar-group {
+    padding: 0;
   }
 
-  .hero-head,
-  .panel-toolbar {
-    flex-direction: column;
-  }
-
-  .status-select {
+  .toolbar-group:first-child {
     width: 100%;
   }
 
-  .stat-grid {
-    grid-template-columns: 1fr;
+  .toolbar-group.right-align {
+    margin-left: 0;
   }
 }
+
+@media (max-width: 900px) {
+  .search-input { width: 140px; }
+  .toolbar-group.right-align { margin-left: 0; width: 100%; justify-content: flex-end; }
+}
+
+@media (max-width: 768px) {
+  .svc-toolbar {
+    padding: 10px 16px;
+  }
+
+  .svc-content {
+    padding: 12px 16px 8px;
+  }
+
+  .toolbar-group {
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    width: 100% !important;
+  }
+
+  .pill-group {
+    width: 100%;
+  }
+
+  .pill-group button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .svc-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 </style>

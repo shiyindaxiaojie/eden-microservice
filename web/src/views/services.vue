@@ -583,7 +583,7 @@ onBeforeUnmount(() => {
               <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
               <el-table-column :label="text('命名空间', 'Namespace')" min-width="80" prop="namespace" />
 
-              <el-table-column :label="text('地址', 'Address')" min-width="100">
+              <el-table-column :label="text('地址', 'Address')" min-width="110">
                 <template #default="{ row }">
                   <code class="cell-addr" style="font-family: inherit; font-size: 14px;">{{ row.instances[0] ? `${row.instances[0].host}:${row.instances[0].port}` : '-' }}</code>
                   <span v-if="row.instances.length > 1" style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">+{{ row.instances.length - 1 }}</span>
@@ -605,7 +605,7 @@ onBeforeUnmount(() => {
                 <template #default="{ row }">{{ row.instance_count }}</template>
               </el-table-column>
 
-              <el-table-column :label="text('依赖服务', 'Dependencies')" width="112" align="center">
+              <el-table-column :label="text('依赖服务', 'Dependencies')" width="140" align="center">
                 <template #default="{ row }">
                   <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.upstreamCount">
                     <template #reference>
@@ -620,7 +620,7 @@ onBeforeUnmount(() => {
                 </template>
               </el-table-column>
 
-              <el-table-column :label="text('被依赖服务', 'Dependents')" width="112" align="center">
+              <el-table-column :label="text('被依赖服务', 'Dependents')" width="130" align="center">
                 <template #default="{ row }">
                   <el-popover placement="bottom" :width="200" trigger="hover" :disabled="!row.downstreamCount">
                     <template #reference>

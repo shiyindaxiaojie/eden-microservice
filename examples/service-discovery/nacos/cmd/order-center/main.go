@@ -17,6 +17,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/nacos/internal/instanceguard"
 	nacoshelper "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/nacos/internal/nacosapi"
 )
 
@@ -62,16 +63,27 @@ func main() {
 		logger.Warn("subscribe nacos-auth-center failed: %v", err)
 	}
 
+	heartbeatStopCh, err := instanceguard.WatchSelfOffline(reg, instance.ServiceName, instance.ID)
+	if err != nil {
+		logger.Warn("watch self service failed: %v", err)
+	}
+
 	// 定时通过适配层续约实例，维持当前服务在注册中心中的可发现状态。
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			if err := reg.Heartbeat(instance); err != nil {
-				logger.Warn("heartbeat failed: %v", err)
-				continue
+		for {
+			select {
+			case <-heartbeatStopCh:
+				logger.Info("self instance marked offline, stop heartbeats")
+				return
+			case <-ticker.C:
+				if err := reg.Heartbeat(instance); err != nil {
+					logger.Warn("heartbeat failed: %v", err)
+					continue
+				}
+				logger.Info("heartbeat ok")
 			}
-			logger.Info("heartbeat ok")
 		}
 	}()
 
