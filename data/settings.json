@@ -1,7 +1,7 @@
 {
   "mode": "ap",
   "environment": "standalone",
-  "log_level": "INFO",
+  "log_level": "DEBUG",
   "event_retention_days": 30,
   "log_retention_days": 30,
   "event_types": [
@@ -15,5 +15,8 @@
   "heartbeat_max_failures": 3,
   "instance_removal_delay_seconds": 600,
   "api_key_auth_enabled": false,
-  "notify_alert_node_id": "node-1"
+  "notify_alert_node_id": "node-1",
+  "event_storage_mode": "",
+  "metrics_storage_mode": "",
+  "metrics_retention_days": 30
 }

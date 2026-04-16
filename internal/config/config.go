@@ -14,10 +14,7 @@ type Config struct {
 	NodeID      string          `mapstructure:"node_id" json:"node_id"`
 	Mode        string          `mapstructure:"mode" json:"mode"` // "standalone" or "cluster"
 	Consistency string          `mapstructure:"consistency" json:"consistency"`
-	HTTPAddr    string          `mapstructure:"http_addr" json:"http_addr"`
-	GRPCAddr    string          `mapstructure:"grpc_addr" json:"grpc_addr"`
-	QUICAddr    string          `mapstructure:"quic_addr" json:"quic_addr"`
-	RaftAddr    string          `mapstructure:"raft_addr" json:"raft_addr"`
+	Server      ServerConfig    `mapstructure:"server" json:"server"`
 	DataDir     string          `mapstructure:"data_dir" json:"data_dir"`
 	Datacenter  string          `mapstructure:"datacenter" json:"datacenter"`
 	Bootstrap   bool            `mapstructure:"bootstrap" json:"bootstrap"`
@@ -25,10 +22,10 @@ type Config struct {
 	Log         LogConfig       `mapstructure:"log" json:"log"`
 	Storage     StorageConfig   `mapstructure:"storage" json:"storage"`
 	Registry    RegistryConfig  `mapstructure:"registry" json:"registry"`
-	Transport   TransportConfig `mapstructure:"transport" json:"transport"`
 }
 
-type TransportConfig struct {
+type ServerConfig struct {
+	HTTP string `mapstructure:"http" json:"http"`
 	GRPC string `mapstructure:"grpc" json:"grpc"`
 	QUIC string `mapstructure:"quic" json:"quic"`
 	Raft string `mapstructure:"raft" json:"raft"`
@@ -41,7 +38,9 @@ type RegistryConfig struct {
 }
 
 type StorageConfig struct {
+	EventStorageMode   string   `mapstructure:"event_storage_mode" json:"event_storage_mode"` // "memory" or "persistent"
 	EventRetentionDays int      `mapstructure:"event_retention_days" json:"event_retention_days"`
+	MetricsStorageMode string   `mapstructure:"metrics_storage_mode" json:"metrics_storage_mode"` // "memory" or "persistent"
 	LogRetentionDays   int      `mapstructure:"log_retention_days" json:"log_retention_days"`
 	EventTypes         []string `mapstructure:"event_types" json:"event_types"`
 }
@@ -141,7 +140,9 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("transport.raft", "auto")
 
 	// Default Storage Configuration
+	viper.SetDefault("storage.event_storage_mode", "memory")
 	viper.SetDefault("storage.event_retention_days", 30)
+	viper.SetDefault("storage.metrics_storage_mode", "memory")
 	viper.SetDefault("storage.log_retention_days", 30)
 	viper.SetDefault("storage.event_types", catalog.DefaultEventTypes())
 
@@ -221,42 +222,27 @@ func (c *Config) normalizeRuntime() {
 	} else {
 		c.Consistency = normalizeConsistency(rawConsistency)
 	}
-	c.Transport.GRPC = normalizeTransportSetting(c.Transport.GRPC)
-	c.Transport.QUIC = normalizeTransportSetting(c.Transport.QUIC)
-	c.Transport.Raft = normalizeTransportSetting(c.Transport.Raft)
 }
 
 func (c *Config) GRPCEnabled(mode string) bool {
-	switch normalizeTransportSetting(c.Transport.GRPC) {
-	case "on":
-		return true
-	case "off":
-		return false
-	default:
-		return true
-	}
+	val := strings.ToLower(strings.TrimSpace(c.Server.GRPC))
+	return val != "off"
 }
 
 func (c *Config) QUICEnabled(mode string) bool {
-	switch normalizeTransportSetting(c.Transport.QUIC) {
-	case "on":
-		return true
-	case "off":
-		return false
-	default:
-		return strings.TrimSpace(c.QUICAddr) != ""
-	}
+	val := strings.ToLower(strings.TrimSpace(c.Server.QUIC))
+	return val != "off" && val != ""
 }
 
 func (c *Config) RaftEnabled(mode, consistency string) bool {
-	switch normalizeTransportSetting(c.Transport.Raft) {
-	case "on":
-		return true
-	case "off":
+	val := strings.ToLower(strings.TrimSpace(c.Server.Raft))
+	if val == "off" {
 		return false
-	default:
-		return normalizeMode(mode) == "cluster" && normalizeConsistency(consistency) == "cp"
 	}
+	if val != "auto" && val != "" {
+		return true
+	}
+	return normalizeMode(mode) == "cluster" && normalizeConsistency(consistency) == "cp"
 }
 
 func ToLoggerConfiguration(lc LogConfig) logger.Configuration {

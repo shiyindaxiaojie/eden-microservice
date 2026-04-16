@@ -26,6 +26,7 @@ type State struct {
 	Events             *EventLog
 	Namespaces         *NamespaceRegistry
 	Topology           *TopologyIndex
+	Metrics            *MetricsStore
 	eventTypesProvider func() []string
 	onEventCallback    func(*Event)
 }
@@ -36,6 +37,7 @@ func NewState(dataPath string) *State {
 		Events:     NewEventLog(1000, dataPath),
 		Namespaces: NewNamespaceRegistry(dataPath),
 		Topology:   NewTopologyIndex(dataPath),
+		Metrics:    NewMetricsStore(dataPath, nil), // Retention days will be set via provider
 	}
 }
 

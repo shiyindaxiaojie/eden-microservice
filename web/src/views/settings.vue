@@ -432,13 +432,16 @@ function createDefaultSettings(): SystemSettings {
     mode: 'standalone',
     consistency: 'ap',
     log_level: 'INFO',
+    event_storage_mode: 'memory',
     event_retention_days: 30,
+    metrics_storage_mode: 'memory',
     log_retention_days: 30,
     event_types: EVENT_OPTIONS.value.map((item) => item.value),
     heartbeat_max_failures: 3,
     instance_removal_delay_seconds: 600,
     api_key_auth_enabled: false,
     notify_alert_node_id: '',
+    metrics_retention_days: 30,
   }
 }
 
@@ -475,7 +478,10 @@ function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettin
     mode,
     consistency: mode === 'cluster' && input?.consistency === 'cp' ? 'cp' : 'ap',
     log_level: normalizeLogLevel(input?.log_level ?? defaults.log_level),
+    event_storage_mode: input?.event_storage_mode === 'persistent' ? 'persistent' : defaults.event_storage_mode,
     event_retention_days: Math.max(1, input?.event_retention_days ?? defaults.event_retention_days),
+    metrics_storage_mode: input?.metrics_storage_mode === 'persistent' ? 'persistent' : defaults.metrics_storage_mode,
+    metrics_retention_days: Math.max(1, input?.metrics_retention_days ?? (defaults.metrics_retention_days || 30)),
     log_retention_days: Math.max(1, input?.log_retention_days ?? defaults.log_retention_days),
     event_types: normalizeEventTypes(input?.event_types ?? defaults.event_types),
     heartbeat_max_failures: Math.max(1, input?.heartbeat_max_failures ?? defaults.heartbeat_max_failures),
@@ -1046,26 +1052,10 @@ onMounted(() => {
                               </div>
                             </div>
                           </div>
+                          <div class="mode-desc-v7" style="margin-top: 8px;" v-if="previewEnvironment === 'cluster'">{{ previewMode === 'ap' ? t.settings.apDesc : t.settings.cpDesc }}</div>
                           <div class="mode-desc-v7" v-else>{{ t.settings.modeDescCluster }}</div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="technical-footer-v7">
-                  <div class="info-bubble-v7" :class="[previewEnvironment === 'standalone' ? 'standalone' : previewMode]">
-                    <el-icon><InfoFilled /></el-icon>
-                    <div class="bubble-content">
-                      <template v-if="previewEnvironment === 'standalone'">
-                        <span class="bubble-copy"><strong>{{ t.settings.singleTitle }}:</strong><span>{{ t.settings.modeDescStandalone }}</span></span>
-                      </template>
-                      <template v-else-if="previewMode === 'ap'">
-                        <span class="bubble-copy"><strong>{{ t.settings.apModeShort }} (Gossip):</strong><span>{{ t.settings.apDesc }}</span></span>
-                      </template>
-                      <template v-else>
-                        <span class="bubble-copy"><strong>{{ t.settings.cpModeShort }} (Raft):</strong><span>{{ t.settings.cpDesc }}</span></span>
-                      </template>
                     </div>
                   </div>
                 </div>
@@ -1142,6 +1132,30 @@ onMounted(() => {
                   </div>
                 </el-form>
               </section>
+
+              <section class="settings-section glass-card side-section">
+                <div class="section-header">
+                  <el-icon><RefreshRight /></el-icon>
+                  <h4>{{ locale === 'zh' ? '指标配置' : 'Metrics Config' }}</h4>
+                </div>
+                <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
+                  <el-form-item :label="locale === 'zh' ? '存储方式' : 'Storage Mode'">
+                    <el-segmented
+                      v-model="draftSettings.metrics_storage_mode"
+                      :options="[
+                        { label: locale === 'zh' ? '内存' : 'Memory', value: 'memory' },
+                        { label: locale === 'zh' ? '持久化' : 'Persistent', value: 'persistent' }
+                      ]"
+                    />
+                  </el-form-item>
+                  <el-form-item :label="t.settings.metricsRetention" v-if="draftSettings.metrics_storage_mode === 'persistent'">
+                    <div class="slider-row">
+                      <el-slider v-model="draftSettings.metrics_retention_days" :min="1" :max="365" style="flex: 1" />
+                      <span class="val-text">{{ draftSettings.metrics_retention_days }}</span>
+                    </div>
+                  </el-form-item>
+                </el-form>
+              </section>
             </div>
 
             <div class="settings-column">
@@ -1152,7 +1166,17 @@ onMounted(() => {
                 </div>
 
                 <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item :label="t.settings.retention">
+                  <el-form-item :label="locale === 'zh' ? '事件存储方式' : 'Storage Mode'">
+                    <el-segmented
+                      v-model="draftSettings.event_storage_mode"
+                      :options="[
+                        { label: locale === 'zh' ? '内存' : 'Memory', value: 'memory' },
+                        { label: locale === 'zh' ? '持久化' : 'Persistent', value: 'persistent' }
+                      ]"
+                    />
+                  </el-form-item>
+
+                  <el-form-item :label="t.settings.retention" v-if="draftSettings.event_storage_mode === 'persistent'">
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.event_retention_days" :min="1" :max="365" style="flex: 1" />
                       <span class="val-text">{{ draftSettings.event_retention_days }}</span>
@@ -1184,18 +1208,10 @@ onMounted(() => {
 
                 <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
                   <el-form-item :label="t.settings.logLevel">
-                    <div class="log-level-options" role="radiogroup" :aria-label="t.settings.logLevel">
-                      <button
-                        v-for="level in LOG_LEVEL_OPTIONS"
-                        :key="level"
-                        type="button"
-                        :class="['log-level-option', `log-level-${level.toLowerCase()}`, { active: draftSettings.log_level === level }]"
-                        :aria-checked="draftSettings.log_level === level"
-                        @click="draftSettings.log_level = level"
-                      >
-                        {{ level }}
-                      </button>
-                    </div>
+                    <el-segmented
+                      v-model="draftSettings.log_level"
+                      :options="LOG_LEVEL_OPTIONS.map(l => ({ label: l, value: l }))"
+                    />
                   </el-form-item>
 
                   <el-form-item :label="t.settings.logRetention">
@@ -2146,11 +2162,12 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  align-items: stretch;
 }
 
 .mode-card-v7 {
   position: relative;
-  min-height: 136px;
+  min-height: 140px;
   overflow: hidden;
   display: flex;
   cursor: pointer;
@@ -2188,16 +2205,16 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
-  padding: 18px;
+  padding: 14px 16px;
 }
 
 .mode-icon-v7 {
-  width: 50px;
-  height: 50px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2235,20 +2252,20 @@ onMounted(() => {
   display: flex;
   gap: 4px;
   width: fit-content;
-  margin-top: 10px;
-  padding: 3px;
-  border-radius: 10px;
+  margin-top: 6px;
+  padding: 2px;
+  border-radius: 8px;
   background: rgba(0, 0, 0, 0.04);
 }
 
 .toggle-option {
   position: relative;
-  min-width: 100px;
-  padding: 7px 14px;
+  min-width: 84px;
+  padding: 4px 10px;
   overflow: hidden;
   cursor: pointer;
   text-align: center;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .toggle-bg {

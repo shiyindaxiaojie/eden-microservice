@@ -27,6 +27,9 @@ type SnapshotData struct {
 	RemovalDelay       int                                           `json:"instance_removal_delay_seconds"`
 	APIKeyAuthEnabled  bool                                          `json:"api_key_auth_enabled"`
 	NotifyAlertNodeID  string                                        `json:"notify_alert_node_id,omitempty"`
+	EventStorageMode   string                                        `json:"event_storage_mode"`
+	MetricsStorageMode string                                        `json:"metrics_storage_mode"`
+	MetricsRetentionDays int                                         `json:"metrics_retention_days"`
 }
 
 // RuntimeState composes the domain modules that participate in node runtime and cluster replication.
@@ -47,7 +50,23 @@ func NewRuntimeState(dataPath string) *RuntimeState {
 	})
 	state.Catalog.SetEventTypesProvider(state.Settings.GetEventTypes)
 	state.Catalog.Events.Cleanup(state.Settings.GetEventRetentionDays())
+	
+	state.Catalog.Metrics.SetRetentionDaysProvider(state.Settings.GetMetricsRetentionDays)
+	state.Catalog.Metrics.Cleanup()
+
 	return state
+}
+
+func (s *RuntimeState) StartMetricsRecorder() {
+	ticker := time.NewTicker(10 * time.Second)
+	go func() {
+		for range ticker.C {
+			if s.Settings.GetMetricsStorageMode() == "persistent" {
+				stats := s.Stats()
+				s.Catalog.Metrics.RecordMemory(stats.MemoryUsage)
+			}
+		}
+	}()
 }
 
 func (s *RuntimeState) Register(inst *catalog.Instance) {
@@ -234,6 +253,35 @@ func (s *RuntimeState) SetNotifyAlertNodeID(nodeID string) {
 	s.Settings.Save()
 }
 
+func (s *RuntimeState) GetEventStorageMode() string {
+	return s.Settings.GetEventStorageMode()
+}
+
+func (s *RuntimeState) SetEventStorageMode(mode string) {
+	s.Settings.SetEventStorageMode(mode)
+	s.Settings.Save()
+	s.Catalog.Events.SetStorageMode(mode)
+}
+
+func (s *RuntimeState) GetMetricsStorageMode() string {
+	return s.Settings.GetMetricsStorageMode()
+}
+
+func (s *RuntimeState) SetMetricsStorageMode(mode string) {
+	s.Settings.SetMetricsStorageMode(mode)
+	s.Settings.Save()
+	s.Catalog.Metrics.SetStorageMode(mode)
+}
+
+func (s *RuntimeState) GetMetricsRetentionDays() int {
+	return s.Settings.GetMetricsRetentionDays()
+}
+
+func (s *RuntimeState) SetMetricsRetentionDays(days int) {
+	s.Settings.SetMetricsRetentionDays(days)
+	s.Settings.Save()
+}
+
 func (s *RuntimeState) ListEvents() []*catalog.Event {
 	return s.Catalog.ListEvents()
 }
@@ -304,6 +352,9 @@ func (s *RuntimeState) Snapshot() *SnapshotData {
 		RemovalDelay:       s.Settings.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:  s.Settings.GetAPIKeyAuthEnabled(),
 		NotifyAlertNodeID:  s.Settings.GetNotifyAlertNodeID(),
+		EventStorageMode:   s.Settings.GetEventStorageMode(),
+		MetricsStorageMode: s.Settings.GetMetricsStorageMode(),
+		MetricsRetentionDays: s.Settings.GetMetricsRetentionDays(),
 	}
 }
 
@@ -340,7 +391,7 @@ func (s *RuntimeState) Restore(data *SnapshotData) {
 		s.Catalog.Topology.Restore(data.TopologyReports)
 	}
 	s.Auth.Restore(data.Users, data.APIKeys)
-	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled, data.NotifyAlertNodeID)
+	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled, data.NotifyAlertNodeID, data.EventStorageMode, data.MetricsStorageMode, data.MetricsRetentionDays)
 
 	s.Catalog.Instances.Save()
 	s.Auth.Save()

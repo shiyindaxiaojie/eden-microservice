@@ -36,7 +36,7 @@ type SettingsReader interface {
 func BuildClusterMemberViews(cfg *config.Config, settings SettingsReader, cluster Membership, nodeCache *sync.Map) ([]*ClusterMemberView, error) {
 	mode := settings.GetMode()
 	env := settings.GetEnvironment()
-	localAddr := normalizeHTTPAddr(cfg.HTTPAddr)
+	localAddr := normalizeHTTPAddr(cfg.Server.HTTP)
 	seeds := settings.GetSeeds()
 
 	raftMembersMap := make(map[string]map[string]string)
@@ -78,10 +78,10 @@ func BuildClusterMemberViews(cfg *config.Config, settings SettingsReader, cluste
 		if isLocal {
 			info.ID = cfg.NodeID
 			info.Status = "Online"
-			info.HTTPAddr = normalizeDisplayAddr(cfg.HTTPAddr)
-			info.GRPCAddr = normalizeDisplayAddr(cfg.GRPCAddr)
-			info.RaftAddr = normalizeDisplayAddr(cfg.RaftAddr)
-			info.QUICAddr = normalizeDisplayAddr(cfg.QUICAddr)
+			info.HTTPAddr = normalizeDisplayAddr(cfg.Server.HTTP)
+			info.GRPCAddr = normalizeDisplayAddr(cfg.Server.GRPC)
+			info.RaftAddr = normalizeDisplayAddr(cfg.Server.Raft)
+			info.QUICAddr = normalizeDisplayAddr(cfg.Server.QUIC)
 		} else {
 			client := http.Client{Timeout: 500 * time.Millisecond}
 			resp, err := client.Get(addr + "/v1/node/info")
@@ -91,19 +91,19 @@ func BuildClusterMemberViews(cfg *config.Config, settings SettingsReader, cluste
 				if json.NewDecoder(resp.Body).Decode(&remoteCfg) == nil {
 					info.ID = remoteCfg.NodeID
 					info.Status = "Online"
-					info.HTTPAddr = normalizeDisplayAddr(remoteCfg.HTTPAddr)
-					info.GRPCAddr = normalizeDisplayAddr(remoteCfg.GRPCAddr)
-					info.RaftAddr = normalizeDisplayAddr(remoteCfg.RaftAddr)
-					info.QUICAddr = normalizeDisplayAddr(remoteCfg.QUICAddr)
+					info.HTTPAddr = normalizeDisplayAddr(remoteCfg.Server.HTTP)
+					info.GRPCAddr = normalizeDisplayAddr(remoteCfg.Server.GRPC)
+					info.RaftAddr = normalizeDisplayAddr(remoteCfg.Server.Raft)
+					info.QUICAddr = normalizeDisplayAddr(remoteCfg.Server.QUIC)
 					nodeCache.Store(addr, remoteCfg)
 				}
 			} else if val, ok := nodeCache.Load(addr); ok {
 				if cached, ok := val.(config.Config); ok {
 					info.ID = cached.NodeID
-					info.HTTPAddr = normalizeDisplayAddr(cached.HTTPAddr)
-					info.GRPCAddr = normalizeDisplayAddr(cached.GRPCAddr)
-					info.RaftAddr = normalizeDisplayAddr(cached.RaftAddr)
-					info.QUICAddr = normalizeDisplayAddr(cached.QUICAddr)
+					info.HTTPAddr = normalizeDisplayAddr(cached.Server.HTTP)
+					info.GRPCAddr = normalizeDisplayAddr(cached.Server.GRPC)
+					info.RaftAddr = normalizeDisplayAddr(cached.Server.Raft)
+					info.QUICAddr = normalizeDisplayAddr(cached.Server.QUIC)
 				}
 			}
 
@@ -145,7 +145,7 @@ func BuildClusterMemberViews(cfg *config.Config, settings SettingsReader, cluste
 
 		hostRaft := make(map[string][]string)
 		raftAddrToID := make(map[string]string)
-		localRaftAddr := cfg.RaftAddr
+		localRaftAddr := cfg.Server.Raft
 		for id, rm := range raftMembersMap {
 			raftAddrToID[rm["address"]] = id
 			if rm["address"] == localRaftAddr {

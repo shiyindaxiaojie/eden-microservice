@@ -121,6 +121,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("/v1/cluster/members", h.listMembers)
 	h.mux.Handle("/v1/cluster/member", h.Auth(adminOnly(http.HandlerFunc(h.manageMember))))
 	h.mux.Handle("/v1/cluster/stats", h.Auth(adminOrDev(http.HandlerFunc(h.clusterStats))))
+	h.mux.Handle("/v1/cluster/stats/history", h.Auth(adminOrDev(http.HandlerFunc(h.statsHistory))))
 	h.mux.Handle("/v1/events", h.Auth(adminOrDev(http.HandlerFunc(h.listEvents))))
 	h.mux.Handle("/v1/cluster/logs", h.Auth(adminOrDev(http.HandlerFunc(h.getLogs))))
 	h.mux.Handle("/v1/cluster/log-files", h.Auth(adminOrDev(http.HandlerFunc(h.listLogFiles))))

@@ -1,80 +1,65 @@
 ############################################################
-# 核心启动配置
+# Core 
 ############################################################
 
-# 节点基本标识
+# Basic Node Identity
 node_id: "node-1"
 
-# 部署模式：standalone(单机) 或 cluster(集群)
-mode: "standalone"
+# Deployment Mode: standalone or cluster
+mode: "cluster"
 
-# 一致性模式：ap(最终一致) 或 cp(强一致)
-# 仅在 mode=cluster 时有意义
+# Consistency Mode: ap (eventual consistency) or cp (strong consistency)
+# Only effective when mode=cluster
 consistency: "ap"
 
-# 数据中心名称，用于多数据中心隔离
+# Whether to start as the first node to bootstrap the Raft cluster
+# Only meaningful when mode=cluster and consistency=cp
+bootstrap: true
+
+# Datacenter name, used for multi-datacenter isolation
 datacenter: "dc1"
 
-# 数据存储目录（各节点必须隔离）
+# Data storage directory (must be isolated for each node)
 data_dir: "./data"
 
 ############################################################
-# 网络监听配置（支持端口动态分配）
+# Network
 ############################################################
 
-# HTTP 管理API 和 控制台监听地址 (必须明确指定)
-http_addr: ":8500"
+server:
+  # HTTP Management API and Console listening address (Must be explicitly specified)
+  http: ":8500"
 
-# gRPC 监听地址 (用于客户端接入和节点间同步)
-#   - transport.grpc=auto 时默认启用
-#   - 如需纯 HTTP 模式可显式设置 transport.grpc=off
-#   - 填写 ":0" 可自动分配端口
-grpc_addr: ":0"
+  # gRPC Listening Address (Used for client access and inter-node synchronization)
+  #   - Set to "auto" to enable and assign a random port by default
+  #   - Specify a port like ":9000" to bind explicitly
+  #   - Set to "off" to explicitly disable the protocol
+  grpc: "auto"
 
-# QUIC 监听地址 (基于 UDP 的 gRPC 传输)
-#   - 配置 quic_addr 时，transport.quic=auto 会自动启用
-#   - 留空时 auto 模式不会启用 QUIC
-quic_addr: ""
+  # QUIC Listening Address (UDP-based gRPC transport)
+  #   - Set to "auto" to enable and assign a random port by default
+  #   - Specify a port like ":10000" to bind explicitly
+  #   - Set to "off" to explicitly disable the protocol
+  quic: "off"
 
-# Raft 内部通信地址
-#   - 仅 mode=cluster 且 consistency=cp 且 transport.raft=auto/on 时启用
-#   - 注意：Raft 要求必须有明确的 IP (如 127.0.0.1 或 局域网 IP)
-#   - 建议填写 "127.0.0.1:7000" 或留空自动分配 "127.0.0.1:随机端口"
-#   - 错误写法: ":7000" 或 "0.0.0.0:7000" (会报错 not advertisable)
-raft_addr: ""
-
-############################################################
-# 传输协议开关
-############################################################
-
-transport:
-  grpc: "auto" # auto | on | off
-  quic: "auto" # auto | on | off
-  raft: "auto" # auto | on | off
+  # Raft Internal Communication Address
+  #   - Only meaningful when mode=cluster and consistency=cp
+  #   - Set to "auto" to enable and assign a random port by default
+  #   - Note: If an explicit IP is configured, Raft requires a valid network interface IP (e.g., 127.0.0.1 or LAN IP)
+  #   - Suggested: "127.0.0.1:7000", or use "auto" for automatic allocation
+  #   - Set to "off" to explicitly disable the protocol
+  raft: "auto"
 
 ############################################################
-# 集群启动控制
-############################################################
-
-# 是否作为首个节点启动 Raft 集群
-# 仅 mode=cluster 且 consistency=cp 时有意义
-bootstrap: false
-
-# 节点加入与成员管理统一在控制台中完成
-
-############################################################
-# 认证配置
+# Authentication
 ############################################################
 auth:
   jwt:
     enabled: true
     secret: "eden-jwt-console-secret-key"
-  
-  # API Key 相关配置已移至 Web 控制台管理
-  # 用户管理也建议在控制台进行，系统会自动持久化到 data/users.json
 
 ############################################################
-# 日志配置
+# Logging
 ############################################################
 log:
   level: INFO # DEBUG, INFO, WARN, ERROR, FATAL
@@ -92,20 +77,6 @@ log:
     - name: Console # Standard output
       type: Console
       pattern: "%d [%p] [%T] %m%n"
-    - name: AccessLog # API Request records
-      type: RollingFile
-      level: INFO
-      file_name: "logs/access.log"
-      file_pattern: access-%i.log.gz
-      async: true
-      filter:
-        type: marker
-        marker: API
-        on_match: ACCEPT
-        on_mismatch: DENY
-      rollover:
-        max_file: 5
-        retention: 7d
     - name: InfoLog # General business logs
       type: RollingFile
       level: INFO

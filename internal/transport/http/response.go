@@ -74,7 +74,7 @@ func (h *Handler) leaderHTTPAddr() string {
 
 	leaderRaftAddr := strings.TrimSpace(h.cluster.LeaderAddr())
 	if leaderRaftAddr == "" {
-		return h.normalizeAddr(h.config.HTTPAddr)
+		return h.normalizeAddr(h.config.Server.HTTP)
 	}
 
 	members, err := clusterpkg.BuildClusterMemberViews(h.config, h.settings, h.cluster, &h.nodeCache)

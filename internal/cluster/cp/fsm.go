@@ -107,6 +107,15 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 	case replication.CmdSetNotifyAlertNodeID:
 		f.state.SetNotifyAlertNodeID(cmd.NodeID)
 		return nil
+	case replication.CmdSetEventStorageMode:
+		f.state.SetEventStorageMode(cmd.StringValue)
+		return nil
+	case replication.CmdSetMetricsStorageMode:
+		f.state.SetMetricsStorageMode(cmd.StringValue)
+		return nil
+	case replication.CmdSetMetricsRetentionDays:
+		f.state.SetMetricsRetentionDays(cmd.IntValue)
+		return nil
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
 	}

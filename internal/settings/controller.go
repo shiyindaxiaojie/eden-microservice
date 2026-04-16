@@ -56,6 +56,12 @@ type Controller interface {
 	SetAPIKeyAuthEnabled(enabled bool) error
 	SetNotifyAlertNodeID(nodeID string) error
 	GetNotifyAlertNodeID() string
+	SetEventStorageMode(mode string) error
+	GetEventStorageMode() string
+	SetMetricsStorageMode(mode string) error
+	GetMetricsStorageMode() string
+	SetMetricsRetentionDays(days int) error
+	GetMetricsRetentionDays() int
 	GetAlertConfig(namespace string) *alert.Config
 	SaveAlertConfig(namespace string, cfg *alert.Config) error
 	GetNotifyConfig(namespace string) *notify.Config
@@ -117,9 +123,7 @@ func (c *controller) ensureClusterWritable() error {
 }
 
 func applyRuntimeLogLevel(level string) {
-	if lg, ok := logger.GetLogger().(*logger.Logger); ok {
-		lg.SetLevel(logger.ParseLevel(level))
-	}
+	logger.SetLevelString(level)
 }
 
 func normalizeTopologySetting(mode string) string {
@@ -291,12 +295,14 @@ func (c *controller) SetMode(mode string) error {
 				defer resp.Body.Close()
 
 				var remoteCfg struct {
-					NodeID   string `json:"node_id"`
-					RaftAddr string `json:"raft_addr"`
+					NodeID string `json:"node_id"`
+					Server struct {
+						Raft string `json:"raft"`
+					} `json:"server"`
 				}
 				if json.NewDecoder(resp.Body).Decode(&remoteCfg) == nil {
-					if remoteCfg.NodeID != "" && remoteCfg.RaftAddr != "" {
-						_ = c.cpNode.Join(remoteCfg.NodeID, remoteCfg.RaftAddr)
+					if remoteCfg.NodeID != "" && remoteCfg.Server.Raft != "" {
+						_ = c.cpNode.Join(remoteCfg.NodeID, remoteCfg.Server.Raft)
 					}
 				}
 			}(seedAddr)
@@ -535,6 +541,9 @@ func (c *controller) GetSystemSettings() *SystemSettings {
 		InstanceRemovalDelaySeconds: c.profile.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:           c.profile.GetAPIKeyAuthEnabled(),
 		NotifyAlertNodeID:           c.profile.GetNotifyAlertNodeID(),
+		EventStorageMode:            c.profile.GetEventStorageMode(),
+		MetricsStorageMode:          c.profile.GetMetricsStorageMode(),
+		MetricsRetentionDays:        c.profile.GetMetricsRetentionDays(),
 	}
 }
 
@@ -602,6 +611,15 @@ func (c *controller) ApplySystemSettings(systemSettings *SystemSettings) (*Apply
 		return nil, err
 	}
 	if err := c.SetNotifyAlertNodeID(target.NotifyAlertNodeID); err != nil {
+		return nil, err
+	}
+	if err := c.SetEventStorageMode(target.EventStorageMode); err != nil {
+		return nil, err
+	}
+	if err := c.SetMetricsStorageMode(target.MetricsStorageMode); err != nil {
+		return nil, err
+	}
+	if err := c.SetMetricsRetentionDays(target.MetricsRetentionDays); err != nil {
 		return nil, err
 	}
 	return &ApplySystemSettingsResult{
@@ -717,6 +735,18 @@ func (c *controller) SaveSettingLocalV2(key string, value interface{}) {
 		if v, ok := value.(string); ok {
 			c.profile.SetNotifyAlertNodeID(strings.TrimSpace(v))
 		}
+	case "event_storage_mode":
+		if v, ok := value.(string); ok {
+			c.profile.SetEventStorageMode(v)
+		}
+	case "metrics_storage_mode":
+		if v, ok := value.(string); ok {
+			c.profile.SetMetricsStorageMode(v)
+		}
+	case "metrics_retention_days":
+		if v, ok := coerceInt(value); ok {
+			c.profile.SetMetricsRetentionDays(v)
+		}
 	}
 	c.profile.Save()
 }
@@ -758,6 +788,69 @@ func (c *controller) GetNotifyAlertNodeID() string {
 	return c.profile.GetNotifyAlertNodeID()
 }
 
+func (c *controller) SetEventStorageMode(mode string) error {
+	if err := c.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if c.profile.GetMode() == "cp" && c.cpNode != nil {
+		cmd := replication.Command{Type: replication.CmdSetEventStorageMode, StringValue: mode}
+		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	c.profile.SetEventStorageMode(mode)
+	c.profile.Save()
+	c.syncSettingsToPeers(map[string]interface{}{"event_storage_mode": mode})
+	return nil
+}
+
+func (c *controller) GetEventStorageMode() string {
+	return c.profile.GetEventStorageMode()
+}
+
+func (c *controller) SetMetricsStorageMode(mode string) error {
+	if err := c.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if c.profile.GetMode() == "cp" && c.cpNode != nil {
+		cmd := replication.Command{Type: replication.CmdSetMetricsStorageMode, StringValue: mode}
+		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	c.profile.SetMetricsStorageMode(mode)
+	c.profile.Save()
+	c.syncSettingsToPeers(map[string]interface{}{"metrics_storage_mode": mode})
+	return nil
+}
+
+func (c *controller) GetMetricsStorageMode() string {
+	return c.profile.GetMetricsStorageMode()
+}
+
+func (c *controller) SetMetricsRetentionDays(days int) error {
+	if err := c.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if days <= 0 {
+		return errors.New("invalid metrics retention days")
+	}
+	if c.profile.GetMode() == "cp" && c.cpNode != nil {
+		cmd := replication.Command{Type: replication.CmdSetMetricsRetentionDays, IntValue: days}
+		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	c.profile.SetMetricsRetentionDays(days)
+	c.profile.Save()
+	c.syncSettingsToPeers(map[string]interface{}{"metrics_retention_days": days})
+	return nil
+}
+
+func (c *controller) GetMetricsRetentionDays() int {
+	return c.profile.GetMetricsRetentionDays()
+}
+
 func (c *controller) GetAlertConfig(namespace string) *alert.Config {
 	return c.profile.GetAlertConfig(namespace)
 }
@@ -788,7 +881,7 @@ func (c *controller) SetSeeds(seeds []string) error {
 	}
 
 	config := c.apNode.GetConfig()
-	selfHTTPAddr := config.HTTPAddr
+	selfHTTPAddr := config.Server.HTTP
 	if strings.HasPrefix(selfHTTPAddr, ":") {
 		selfHTTPAddr = "http://127.0.0.1" + selfHTTPAddr
 	} else if !strings.HasPrefix(selfHTTPAddr, "http") {

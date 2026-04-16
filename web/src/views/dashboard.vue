@@ -7,6 +7,7 @@ import {
   getLogs,
   getNamespaces,
   getRbacUsers,
+  getStatsHistory,
   type ClusterStats,
   type RegistryEvent,
 } from '../api/registry'
@@ -81,6 +82,7 @@ const logTotal = ref(0)
 const logCurrentPage = ref(1)
 const hasMoreLogs = ref(true)
 const isFetchingMore = ref(false)
+const isMemoryExpanded = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 
 const eventLineCount = ref(100)
@@ -327,6 +329,51 @@ const memoryTrendModel = computed(() => {
   }
 })
 
+const fullChartModel = computed(() => {
+  const samples = memoryHistory.value.filter((item) => Number.isFinite(item.value))
+  const chartW = 720 // 760 - 40 margin
+  const chartH = 300
+  const paddingTop = 20
+  const paddingBottom = 40
+  const baselineY = chartH - paddingBottom
+
+  if (samples.length === 0) {
+    return { points: [], polyline: '', areaPath: '', lastPoint: null }
+  }
+
+  const values = samples.map((item) => item.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const innerH = chartH - paddingTop - paddingBottom
+  const range = Math.max(1, max - min)
+
+  const points = samples.map((sample, index) => {
+    const ratio = samples.length === 1 ? 0.5 : index / (samples.length - 1)
+    const normalized = (sample.value - min) / range
+    const x = ratio * chartW
+    const y = paddingTop + (1 - normalized) * innerH
+    return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) }
+  })
+
+  const polyline = points.map((p) => `${p.x},${p.y}`).join(' ')
+  const areaPath = points.length === 0 ? '' : `M ${points[0].x} ${points[0].y} ${points.map((p) => `L ${p.x} ${p.y}`).join(' ')} L ${points.at(-1)?.x ?? 0} ${baselineY} L ${points[0].x} ${baselineY} Z`
+
+  return {
+    points,
+    polyline,
+    areaPath,
+    lastPoint: points.at(-1) ?? null,
+  }
+})
+
+function formatTimeLabel(timestamp: number) {
+  const date = new Date(timestamp)
+  const h = date.getHours().toString().padStart(2, '0')
+  const m = date.getMinutes().toString().padStart(2, '0')
+  const s = date.getSeconds().toString().padStart(2, '0')
+  return `${h}:${m}:${s}`
+}
+
 const memoryTrendMinText = computed(() =>
   memoryTrendModel.value.min == null ? '-' : formatMemory(memoryTrendModel.value.min),
 )
@@ -512,6 +559,20 @@ async function fetchData() {
     if (statsRes.status === 'fulfilled') {
       stats.value = statsRes.value.data
       recordMemorySample(statsRes.value.data.memory_usage)
+      
+      // Bootstrap historical data from backend if this is the first load
+      if (memoryHistory.value.length <= 1) {
+        getStatsHistory().then(res => {
+          if (res.data && res.data.length > 0) {
+            const cutoff = Date.now() - MEMORY_TREND_WINDOW_MS
+            const combined = [...res.data, ...memoryHistory.value]
+            // Deduplicate and filter by window
+            const unique = Array.from(new Map(combined.map(m => [m.timestamp, m])).values())
+            unique.sort((a, b) => a.timestamp - b.timestamp)
+            memoryHistory.value = unique.filter(m => m.timestamp >= cutoff)
+          }
+        }).catch(() => {/* Ignore if not supported */})
+      }
     }
 
     if (eventsRes.status === 'fulfilled') {
@@ -774,10 +835,17 @@ onBeforeUnmount(() => {
           <div class="metric-value-row">
             <div class="metric-value">{{ stats?.node_count ?? '-' }}</div>
             <small class="metric-unit">{{ deploymentUnitText }}</small>
+            
+            <div class="metric-divider"></div>
+            
+            <div class="metric-value">{{ namespaceCount ?? '-' }}</div>
+            <small class="metric-unit">{{ namespaceUnitText }}</small>
           </div>
+          
           <div class="metric-inline-meta">
             <span>{{ deploymentModeText }}</span>
             <span>{{ localizedRoleText }}</span>
+            <span>{{ locale === 'zh' ? '自定义' : 'Custom' }} {{ customNamespaceCount }}</span>
           </div>
           <div class="metric-note" :title="leaderNoteText">{{ leaderNoteText }}</div>
         </div>
@@ -810,27 +878,7 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article class="metric-card is-green">
-        <div class="metric-card-head">
-          <div class="metric-card-title">
-            <div class="metric-icon"><el-icon><FolderOpened /></el-icon></div>
-            <h3 class="metric-heading">{{ locale === 'zh' ? '命名空间' : 'Namespaces' }}</h3>
-          </div>
-          <span class="metric-badge">{{ `${customNamespaceCount}` }}</span>
-        </div>
 
-        <div class="metric-main">
-          <div class="metric-value-row">
-            <div class="metric-value">{{ namespaceCount ?? '-' }}</div>
-            <small class="metric-unit">{{ namespaceUnitText }}</small>
-          </div>
-          <div class="metric-inline-meta">
-            <span>{{ locale === 'zh' ? '默认' : 'Default' }} {{ defaultNamespaceCount }}</span>
-            <span>{{ locale === 'zh' ? '自定义' : 'Custom' }} {{ customNamespaceCount }}</span>
-          </div>
-          <div class="metric-note" :title="namespaceLabelText">{{ namespaceLabelText }}</div>
-        </div>
-      </article>
 
       <article class="metric-card is-slate">
         <div class="metric-card-head">
@@ -838,7 +886,18 @@ onBeforeUnmount(() => {
             <div class="metric-icon"><el-icon><Monitor /></el-icon></div>
             <h3 class="metric-heading">{{ locale === 'zh' ? '系统信息' : 'System' }}</h3>
           </div>
-          <span class="metric-badge">10m</span>
+          <div class="metric-card-actions">
+            <el-button
+              type="primary"
+              link
+              size="small"
+              class="metric-zoom-btn"
+              @click="isMemoryExpanded = true"
+            >
+              <el-icon><FullScreen /></el-icon>
+            </el-button>
+            <span class="metric-badge">10m</span>
+          </div>
         </div>
 
         <div class="metric-main metric-main--system">
@@ -1119,6 +1178,91 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
+
+    <!-- 内存详情扩展弹窗 -->
+    <el-dialog
+      v-model="isMemoryExpanded"
+      :title="locale === 'zh' ? '内存使用情况（近 10 分钟）' : 'Memory Usage (Last 10m)'"
+      width="800px"
+      destroy-on-close
+      class="memory-dialog"
+    >
+      <div class="memory-expanded-content">
+        <div class="memory-expanded-stats">
+          <div class="expanded-stat-item">
+            <div class="stat-label">{{ locale === 'zh' ? '当前使用' : 'Current' }}</div>
+            <div class="stat-value">{{ formatMemory(stats?.memory_usage) }}</div>
+          </div>
+          <div class="expanded-stat-item">
+            <div class="stat-label">{{ locale === 'zh' ? '最高峰值' : 'Peak' }}</div>
+            <div class="stat-value">{{ memoryTrendMaxText }}</div>
+          </div>
+          <div class="expanded-stat-item">
+            <div class="stat-label">{{ locale === 'zh' ? '最低水位' : 'Floor' }}</div>
+            <div class="stat-value">{{ memoryTrendMinText }}</div>
+          </div>
+          <div class="expanded-stat-item">
+            <div class="stat-label">{{ locale === 'zh' ? '波动范围' : 'Volatility' }}</div>
+            <div class="stat-value">{{ memoryTrendDeltaText }}</div>
+          </div>
+        </div>
+
+        <div class="memory-full-chart">
+          <svg class="full-chart-svg" viewBox="0 0 760 300" preserveAspectRatio="none">
+            <!-- 坐标辅助线 (Y轴) -->
+            <g class="chart-grid-lines">
+              <line v-for="i in 5" :key="i" x1="40" :y1="20 + (i-1) * 65" x2="760" :y2="20 + (i-1) * 65" stroke="rgba(148, 163, 184, 0.1)" />
+            </g>
+
+            <!-- 坐标轴文字 -->
+            <g class="chart-axis-labels">
+              <!-- Y 轴 (内存大小) -->
+              <text x="35" y="25" text-anchor="end" font-size="10">{{ memoryTrendMaxText }}</text>
+              <text x="35" y="285" text-anchor="end" font-size="10">{{ memoryTrendMinText }}</text>
+              
+              <!-- X 轴 (时间) -->
+              <text x="45" y="298" font-size="10">{{ memoryTrendModel.firstSample ? formatTimeLabel(memoryTrendModel.firstSample.timestamp) : '' }}</text>
+              <text x="755" y="298" text-anchor="end" font-size="10">{{ memoryTrendModel.lastSample ? formatTimeLabel(memoryTrendModel.lastSample.timestamp) : '' }}</text>
+            </g>
+
+            <!-- 渐变填充 -->
+            <defs>
+              <linearGradient id="fullAreaGradient" x1="0" y2="1">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.2" />
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+
+            <!-- 主图表内容 -->
+            <g transform="translate(40, 0)">
+              <path
+                v-if="fullChartModel.areaPath"
+                :d="fullChartModel.areaPath"
+                fill="url(#fullAreaGradient)"
+              />
+              <polyline
+                v-if="fullChartModel.polyline"
+                :points="fullChartModel.polyline"
+                fill="none"
+                stroke="#2563eb"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle
+                v-if="fullChartModel.lastPoint"
+                :cx="fullChartModel.lastPoint.x"
+                :cy="fullChartModel.lastPoint.y"
+                r="4"
+                fill="#fff"
+                stroke="#2563eb"
+                stroke-width="2.5"
+              />
+            </g>
+          </svg>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1137,7 +1281,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   max-height: 25%;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   align-items: stretch;
 }
@@ -1301,10 +1445,93 @@ onBeforeUnmount(() => {
 }
 
 .metric-unit {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
 }
+
+.metric-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(148, 163, 184, 0.2);
+  margin: 0 4px;
+}
+
+.metric-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-zoom-btn {
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.metric-zoom-btn:hover {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent-blue);
+}
+
+.memory-expanded-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.memory-expanded-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 16px;
+  background: rgba(148, 163, 184, 0.04);
+  border-radius: 12px;
+}
+
+.expanded-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.memory-full-chart {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.02);
+  height: 340px;
+}
+
+.full-chart-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.chart-axis-labels text {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 
 .metric-badge {
   display: inline-flex;

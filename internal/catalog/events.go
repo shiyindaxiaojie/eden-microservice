@@ -30,16 +30,26 @@ type EventLog struct {
 	dataPath              string
 	db                    *bolt.DB
 	retentionDaysProvider func() int
+	storageMode           string // "memory" or "persistent"
 }
 
 func NewEventLog(maxEvents int, dataPath string) *EventLog {
 	s := &EventLog{
-		events:    make([]*Event, 0, maxEvents),
-		maxEvents: maxEvents,
-		dataPath:  dataPath,
+		events:      make([]*Event, 0, maxEvents),
+		maxEvents:   maxEvents,
+		dataPath:    dataPath,
+		storageMode: "memory", // Default to memory
 	}
-	s.init()
 	return s
+}
+
+func (s *EventLog) SetStorageMode(mode string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.storageMode = mode
+	if mode == "persistent" && s.db == nil {
+		s.init()
+	}
 }
 
 func (s *EventLog) init() {
@@ -130,11 +140,11 @@ func (s *EventLog) Append(e *Event) {
 	}
 
 	// 2. Persist to BoltDB
-	if s.db != nil {
+	if s.storageMode == "persistent" && s.db != nil {
 		s.db.Update(func(tx *bolt.Tx) error {
 			idBytes := make([]byte, 8)
 			binary.BigEndian.PutUint64(idBytes, e.ID)
-			
+
 			data, _ := json.Marshal(e)
 			tx.Bucket([]byte(bucketEvents)).Put(idBytes, data)
 

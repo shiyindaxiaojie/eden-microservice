@@ -27,6 +27,9 @@ type Profile struct {
 	apiKeyAuth    bool
 	apiKeyAuthSet bool
 	notifyAlertNodeID string
+	eventStorageMode  string
+	metricsStorageMode string
+	metricsRetDays    int
 	dataPath      string
 	alertConfigs      map[string]*alert.Config
 	notifyConfigs     map[string]*notify.Config
@@ -42,6 +45,9 @@ func NewProfile(dataPath string) *Profile {
 		eventTypes:   catalog.DefaultEventTypes(),
 		hbMaxFail:    3,
 		removalDelay: 600,
+		eventStorageMode:  "memory",
+		metricsStorageMode: "memory",
+		metricsRetDays:    30,
 		dataPath:     dataPath,
 		alertConfigs:  make(map[string]*alert.Config),
 		notifyConfigs: make(map[string]*notify.Config),
@@ -193,6 +199,45 @@ func (s *Profile) GetNotifyAlertNodeID() string {
 	return s.notifyAlertNodeID
 }
 
+func (s *Profile) GetEventStorageMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.eventStorageMode
+}
+
+func (s *Profile) SetEventStorageMode(mode string) {
+	s.mu.Lock()
+	s.eventStorageMode = mode
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetMetricsStorageMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.metricsStorageMode
+}
+
+func (s *Profile) SetMetricsStorageMode(mode string) {
+	s.mu.Lock()
+	s.metricsStorageMode = mode
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetMetricsRetentionDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.metricsRetDays
+}
+
+func (s *Profile) SetMetricsRetentionDays(days int) {
+	s.mu.Lock()
+	s.metricsRetDays = days
+	s.mu.Unlock()
+	s.Save()
+}
+
 func (s *Profile) SetNotifyAlertNodeID(nodeID string) {
 	s.mu.Lock()
 	s.notifyAlertNodeID = nodeID
@@ -201,7 +246,7 @@ func (s *Profile) SetNotifyAlertNodeID(nodeID string) {
 	s.Save()
 }
 
-func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID string) {
+func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID string, eventStorageMode string, metricsStorageMode string, metricsRetDays int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.mode = mode
@@ -226,7 +271,11 @@ func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, 
 	s.apiKeyAuth = apiKeyAuth
 	s.apiKeyAuthSet = true
 	s.notifyAlertNodeID = notifyAlertNodeID
-	s.notifyAlertNodeID = notifyAlertNodeID
+	s.eventStorageMode = eventStorageMode
+	s.metricsStorageMode = metricsStorageMode
+	if metricsRetDays > 0 {
+		s.metricsRetDays = metricsRetDays
+	}
 	s.Save()
 }
 
@@ -287,7 +336,10 @@ func (s *Profile) Load() {
 			HBMaxFail          int       `json:"heartbeat_max_failures"`
 			RemovalDelay       int       `json:"instance_removal_delay_seconds"`
 			APIKeyAuthEnabled  *bool                     `json:"api_key_auth_enabled"`
-			NotifyAlertNodeID  string                    `json:"notify_alert_node_id"`
+			NotifyAlertNodeID  string                    `json:"notify_alert_node_id,omitempty"`
+			EventStorageMode   string                    `json:"event_storage_mode"`
+			MetricsStorageMode string                    `json:"metrics_storage_mode"`
+			MetricsRetentionDays int                     `json:"metrics_retention_days"`
 			AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
 			NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
 		}
@@ -315,6 +367,11 @@ func (s *Profile) Load() {
 				s.apiKeyAuthSet = true
 			}
 			s.notifyAlertNodeID = meta.NotifyAlertNodeID
+			s.eventStorageMode = meta.EventStorageMode
+			s.metricsStorageMode = meta.MetricsStorageMode
+			if meta.MetricsRetentionDays > 0 {
+				s.metricsRetDays = meta.MetricsRetentionDays
+			}
 			if meta.AlertConfigs != nil {
 				s.alertConfigs = meta.AlertConfigs
 			}
@@ -356,6 +413,9 @@ func (s *Profile) Save() {
 		RemovalDelay       int      `json:"instance_removal_delay_seconds"`
 		APIKeyAuthEnabled  bool                      `json:"api_key_auth_enabled"`
 		NotifyAlertNodeID  string                    `json:"notify_alert_node_id,omitempty"`
+		EventStorageMode   string                    `json:"event_storage_mode"`
+		MetricsStorageMode string                    `json:"metrics_storage_mode"`
+		MetricsRetentionDays int                     `json:"metrics_retention_days"`
 		AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
 		NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
 	}{
@@ -369,6 +429,9 @@ func (s *Profile) Save() {
 		RemovalDelay:       s.removalDelay,
 		APIKeyAuthEnabled:  s.apiKeyAuth,
 		NotifyAlertNodeID:  s.notifyAlertNodeID,
+		EventStorageMode:   s.eventStorageMode,
+		MetricsStorageMode: s.metricsStorageMode,
+		MetricsRetentionDays: s.metricsRetDays,
 		AlertConfigs:       s.alertConfigs,
 		NotifyConfigs:      s.notifyConfigs,
 	}

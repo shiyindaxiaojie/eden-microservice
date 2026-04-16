@@ -36,6 +36,7 @@ type Registry interface {
 	CreateNamespace(ns *Namespace) bool
 	UpdateNamespace(ns *Namespace) bool
 	DeleteNamespace(name string) bool
+	Metrics() *MetricsStore
 }
 
 type CPNode interface {
@@ -617,6 +618,10 @@ func (s *registry) UpdateNamespace(ns *Namespace) bool {
 
 func (s *registry) DeleteNamespace(name string) bool {
 	return s.state.DeleteNamespace(name)
+}
+
+func (s *registry) Metrics() *MetricsStore {
+	return s.state.Metrics
 }
 
 func (s *registry) handleNotify(namespace, serviceName, action string, instances []*Instance) {

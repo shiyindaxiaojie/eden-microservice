@@ -61,20 +61,19 @@ func main() {
 			NodeID:      "node-1",
 			Mode:        "standalone",
 			Consistency: "ap",
-			HTTPAddr:    ":8500",
-			GRPCAddr:    ":0",
-			DataDir:     "./data",
-			Transport: config.TransportConfig{
+			Server: config.ServerConfig{
+				HTTP: ":8500",
 				GRPC: "auto",
 				QUIC: "auto",
 				Raft: "auto",
 			},
+			DataDir: "./data",
 		}
 	}
 
 	// Override with CLI flags if provided
 	if *httpAddr != "" {
-		cfg.HTTPAddr = *httpAddr
+		cfg.Server.HTTP = *httpAddr
 	}
 	if *dataDir != "" {
 		cfg.DataDir = *dataDir
@@ -89,18 +88,15 @@ func main() {
 		cfg.Consistency = strings.ToLower(strings.TrimSpace(*consistencyFlag))
 	}
 	if *grpcFlag != "" {
-		cfg.Transport.GRPC = strings.ToLower(strings.TrimSpace(*grpcFlag))
+		cfg.Server.GRPC = strings.ToLower(strings.TrimSpace(*grpcFlag))
 	}
 	if *quicFlag != "" {
-		cfg.Transport.QUIC = strings.ToLower(strings.TrimSpace(*quicFlag))
+		cfg.Server.QUIC = strings.ToLower(strings.TrimSpace(*quicFlag))
 	}
 	if *raftFlag != "" {
-		cfg.Transport.Raft = strings.ToLower(strings.TrimSpace(*raftFlag))
+		cfg.Server.Raft = strings.ToLower(strings.TrimSpace(*raftFlag))
 	}
 	cfg.Mode, cfg.Consistency = normalizeRuntimeSelection(cfg.Mode, cfg.Consistency)
-	cfg.Transport.GRPC = normalizeTransportSetting(cfg.Transport.GRPC)
-	cfg.Transport.QUIC = normalizeTransportSetting(cfg.Transport.QUIC)
-	cfg.Transport.Raft = normalizeTransportSetting(cfg.Transport.Raft)
 
 	// 2. Create runtime state
 	runtimeState := platformcluster.NewRuntimeState(cfg.DataDir)
@@ -125,6 +121,12 @@ func main() {
 		runtimeState.SetAPIKeyAuthEnabled(cfg.Auth.APIKey.Enabled)
 	}
 	cfg.Auth.APIKey.Enabled = runtimeState.GetAPIKeyAuthEnabled()
+
+	// Apply storage modes from config
+	runtimeState.SetEventStorageMode(cfg.Storage.EventStorageMode)
+	runtimeState.SetMetricsStorageMode(cfg.Storage.MetricsStorageMode)
+
+	runtimeState.StartMetricsRecorder()
 
 	// Initialize Logger from config
 	persistedLevel := runtimeState.GetLogLevel()
@@ -241,8 +243,8 @@ func main() {
 	}
 
 	isAutoPort := func(addr string) bool {
-		trimmed := strings.TrimSpace(addr)
-		if trimmed == "" || trimmed == ":0" {
+		trimmed := strings.ToLower(strings.TrimSpace(addr))
+		if trimmed == "" || trimmed == ":0" || trimmed == "auto" {
 			return true
 		}
 		_, port, err := net.SplitHostPort(trimmed)
@@ -295,10 +297,10 @@ func main() {
 	}
 
 	if raftEnabled {
-		cfg.RaftAddr = resolvePortRange(cfg.RaftAddr, 7000, 7999, "tcp")
+		cfg.Server.Raft = resolvePortRange(cfg.Server.Raft, 7000, 7999, "tcp")
 		raftCfg := cp.Config{
 			NodeID:    cfg.NodeID,
-			BindAddr:  cfg.RaftAddr,
+			BindAddr:  cfg.Server.Raft,
 			DataDir:   cfg.DataDir,
 			Bootstrap: cfg.Bootstrap,
 		}
@@ -307,24 +309,24 @@ func main() {
 			logger.Fatal("Failed to start Raft node: %v", err)
 		}
 	} else {
-		cfg.RaftAddr = ""
+		cfg.Server.Raft = ""
 	}
 
 	if grpcEnabled {
-		if isAutoPort(cfg.GRPCAddr) {
-			if companion := resolveCompanionAddr(cfg.HTTPAddr, 1000, "tcp"); companion != "" {
-				cfg.GRPCAddr = companion
+		if isAutoPort(cfg.Server.GRPC) {
+			if companion := resolveCompanionAddr(cfg.Server.HTTP, 1000, "tcp"); companion != "" {
+				cfg.Server.GRPC = companion
 			} else {
-				cfg.GRPCAddr = resolvePortRange(cfg.GRPCAddr, 9000, 9999, "tcp")
+				cfg.Server.GRPC = resolvePortRange(cfg.Server.GRPC, 9000, 9999, "tcp")
 			}
 		}
 	} else {
-		cfg.GRPCAddr = ""
+		cfg.Server.GRPC = ""
 	}
 	if quicEnabled {
-		cfg.QUICAddr = resolvePortRange(cfg.QUICAddr, 10000, 10999, "udp")
+		cfg.Server.QUIC = resolvePortRange(cfg.Server.QUIC, 10000, 10999, "udp")
 	} else {
-		cfg.QUICAddr = ""
+		cfg.Server.QUIC = ""
 	}
 
 	logger.Info("========================================")
@@ -333,10 +335,10 @@ func main() {
 	logger.Info("  Node ID   : %s", cfg.NodeID)
 	logger.Info("  Mode      : %s", strings.ToUpper(cfg.Mode))
 	logger.Info("  Consistency: %s", strings.ToUpper(cfg.Consistency))
-	logger.Info("  HTTP Addr : %s", resolveLogAddr(cfg.HTTPAddr))
-	logger.Info("  GRPC Addr : %s", resolveLogAddr(cfg.GRPCAddr))
-	logger.Info("  QUIC Addr : %s", resolveLogAddr(cfg.QUICAddr))
-	logger.Info("  Raft Addr : %s", resolveLogAddr(cfg.RaftAddr))
+	logger.Info("  HTTP Addr : %s", resolveLogAddr(cfg.Server.HTTP))
+	logger.Info("  GRPC Addr : %s", resolveLogAddr(cfg.Server.GRPC))
+	logger.Info("  QUIC Addr : %s", resolveLogAddr(cfg.Server.QUIC))
+	logger.Info("  Raft Addr : %s", resolveLogAddr(cfg.Server.Raft))
 	logger.Info("  Data Dir  : %s", cfg.DataDir)
 	logger.Info("========================================")
 
@@ -345,6 +347,7 @@ func main() {
 		apNode = ap.NewNode(cfg, runtimeState)
 		apNode.SyncSeeds()
 	}
+
 	logger.Info("  Active Topology: %s", strings.ToUpper(runtimeState.GetEnvironment()))
 	logger.Info("  Active Consistency: %s", strings.ToUpper(runtimeState.GetMode()))
 
@@ -400,7 +403,7 @@ func main() {
 
 	if grpcEnabled && grpcServer != nil {
 		go func() {
-			lis, err := net.Listen("tcp", cfg.GRPCAddr)
+			lis, err := net.Listen("tcp", cfg.Server.GRPC)
 			if err != nil {
 				logger.Fatal("Failed to listen for gRPC: %v", err)
 			}
@@ -422,7 +425,7 @@ func main() {
 				Certificates: []tls.Certificate{cert},
 				NextProtos:   []string{"h3"},
 			}
-			qlis, err := grpcapi.NewQUICListener(cfg.QUICAddr, tlsConf)
+			qlis, err := grpcapi.NewQUICListener(cfg.Server.QUIC, tlsConf)
 			if err != nil {
 				logger.Error("Failed to listen for QUIC: %v", err)
 				return
@@ -435,9 +438,9 @@ func main() {
 	}
 
 	// Start HTTP API
-	logger.Info("HTTP API server listening on %s", cfg.HTTPAddr)
+	logger.Info("HTTP API server listening on %s", cfg.Server.HTTP)
 	go func() {
-		if err := http.ListenAndServe(cfg.HTTPAddr, h); err != nil {
+		if err := http.ListenAndServe(cfg.Server.HTTP, h); err != nil {
 			logger.Fatal("HTTP server error: %v", err)
 		}
 	}()

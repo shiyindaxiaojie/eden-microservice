@@ -85,7 +85,7 @@ func (h *Handler) manageMember(w http.ResponseWriter, r *http.Request) {
 		for _, addr := range req.Addresses {
 			addr := h.normalizeAddr(addr)
 
-			// 1. Fetch node info to get RaftAddr and NodeID
+			// 1. Fetch node info to get Server.Raft and NodeID
 			client := http.Client{Timeout: 3 * time.Second}
 			resp, err := client.Get(addr + "/v1/node/info")
 			if err != nil {
@@ -101,18 +101,18 @@ func (h *Handler) manageMember(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// 2. Add to seeds (always needed for AP and frontend display)
-			if !seedsMap[addr] && addr != h.normalizeAddr(h.config.HTTPAddr) {
+			if !seedsMap[addr] && addr != h.normalizeAddr(h.config.Server.HTTP) {
 				seeds = append(seeds, addr)
 				seedsMap[addr] = true
 			}
 
 			// 3. If in CP mode, join the Raft cluster
 			if mode == "cp" && env == "cluster" {
-				if remoteCfg.NodeID == "" || remoteCfg.RaftAddr == "" {
+				if remoteCfg.NodeID == "" || remoteCfg.Server.Raft == "" {
 					lastErr = fmt.Errorf("node %s missing node_id or raft_addr", addr)
 					continue
 				}
-				if err := h.cluster.JoinCluster(remoteCfg.NodeID, remoteCfg.RaftAddr); err != nil {
+				if err := h.cluster.JoinCluster(remoteCfg.NodeID, remoteCfg.Server.Raft); err != nil {
 					lastErr = fmt.Errorf("failed to join %s to raft: %v", addr, err)
 					// Don't continue, joining one raft node might redirect us to leader
 					if err.Error() == "not leader" {
@@ -192,18 +192,18 @@ func (h *Handler) clusterStats(w http.ResponseWriter, r *http.Request) {
 
 	mode := h.settings.GetMode()
 	env := h.settings.GetEnvironment()
-	localAddr := h.normalizeAddr(h.config.HTTPAddr)
+	localAddr := h.normalizeAddr(h.config.Server.HTTP)
 	isLeader := false
 	leaderAddr := ""
 
 	role := "Peer"
 	if env == "standalone" {
 		role = "Standalone"
-		leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
+		leaderAddr = h.normalizeAddr(h.config.Server.HTTP)
 		isLeader = true
 	} else if mode == "ap" {
 		role = "Peer"
-		leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
+		leaderAddr = h.normalizeAddr(h.config.Server.HTTP)
 		isLeader = false
 	} else {
 		// CP mode
@@ -215,7 +215,7 @@ func (h *Handler) clusterStats(w http.ResponseWriter, r *http.Request) {
 			role = "Follower"
 		}
 		if leaderAddr == "" {
-			leaderAddr = h.normalizeAddr(h.config.HTTPAddr)
+			leaderAddr = h.normalizeAddr(h.config.Server.HTTP)
 		}
 	}
 
@@ -568,4 +568,29 @@ func (h *Handler) syncSettings(w http.ResponseWriter, r *http.Request) {
 		h.settings.SaveSettingLocalV2(k, v)
 	}
 	jsonOK(w, map[string]string{"status": "ok"})
+}
+func (h *Handler) statsHistory(w http.ResponseWriter, r *http.Request) {
+	// Defaults to last 10 minutes
+	now := time.Now().UTC()
+	start := now.Add(-10 * time.Minute)
+	end := now
+
+	if s := r.URL.Query().Get("start"); s != "" {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			start = t
+		}
+	}
+	if e := r.URL.Query().Get("end"); e != "" {
+		if t, err := time.Parse(time.RFC3339, e); err == nil {
+			end = t
+		}
+	}
+
+	history, err := h.catalog.Metrics().QueryMemory(start, end)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonOK(w, history)
 }

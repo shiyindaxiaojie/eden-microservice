@@ -93,17 +93,25 @@ export interface RegistryEvent {
   timestamp: string
 }
 
+export interface MemorySample {
+  timestamp: number
+  value: number
+}
+
 export interface SystemSettings {
   mode: 'standalone' | 'cluster'
   consistency: 'ap' | 'cp'
   log_level: string
+  event_storage_mode: 'memory' | 'persistent'
   event_retention_days: number
+  metrics_storage_mode: 'memory' | 'persistent'
   log_retention_days: number
   event_types: string[]
   heartbeat_max_failures: number
   instance_removal_delay_seconds: number
   api_key_auth_enabled: boolean
   notify_alert_node_id?: string
+  metrics_retention_days?: number
 }
 
 export interface ApplySystemSettingsResult {
@@ -178,6 +186,8 @@ export const deleteRbacUser = (username: string) =>
 
 export const getClusterMembers = () => api.get<ClusterMember[]>('/v1/cluster/members')
 export const getClusterStats = () => api.get<ClusterStats>('/v1/cluster/stats')
+export const getStatsHistory = (start?: string, end?: string) => 
+  api.get<MemorySample[]>('/v1/cluster/stats/history', { params: { start, end } })
 export const addClusterMember = (data: { addresses: string[] }) => api.post('/v1/cluster/member', data)
 export const removeClusterMember = (address: string, node_id?: string) => 
   api.delete(`/v1/cluster/member?address=${address}${node_id ? '&node_id=' + node_id : ''}`)
