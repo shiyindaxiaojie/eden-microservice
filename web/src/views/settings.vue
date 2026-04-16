@@ -114,9 +114,9 @@ const EVENT_OPTIONS = computed(() => [
   { value: 'service_register', label: t.value.settings.serviceRegister },
   { value: 'service_online', label: t.value.settings.serviceOnline },
   { value: 'service_offline', label: t.value.settings.serviceOffline },
-  { value: 'registry_node_sync', label: t.value.settings.nodeSync },
   { value: 'service_heartbeat', label: t.value.settings.serviceHeartbeat },
   { value: 'service_remove', label: t.value.settings.serviceRemove },
+  { value: 'registry_node_sync', label: t.value.settings.nodeSync },
 ])
 
 const LOG_LEVEL_OPTIONS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
@@ -2167,7 +2167,7 @@ onMounted(() => {
 
 .mode-card-v7 {
   position: relative;
-  min-height: 140px;
+  height: 156px;
   overflow: hidden;
   display: flex;
   cursor: pointer;
@@ -2591,7 +2591,7 @@ onMounted(() => {
 
 .event-checkbox-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px 18px;
 }
 
@@ -2612,6 +2612,7 @@ onMounted(() => {
   margin-top: auto;
   padding-top: 0;
   background: transparent;
+  min-height: 32px;
 }
 
 .save-actions {
@@ -2624,6 +2625,11 @@ onMounted(() => {
   background: transparent;
   backdrop-filter: none;
   box-shadow: none;
+  height: 32px;
+}
+
+.save-actions .el-button {
+  height: 32px;
 }
 
 .credentials-header {
