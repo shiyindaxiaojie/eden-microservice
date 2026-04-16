@@ -2167,7 +2167,7 @@ onMounted(() => {
 
 .mode-card-v7 {
   position: relative;
-  height: 156px;
+  height: 136px;
   overflow: hidden;
   display: flex;
   cursor: pointer;

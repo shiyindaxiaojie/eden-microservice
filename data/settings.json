@@ -1,7 +1,8 @@
 {
   "mode": "ap",
   "environment": "standalone",
-  "log_level": "WARN",
+  "log_level": "INFO",
+  "event_retention_days": 30,
   "log_retention_days": 30,
   "event_types": [
     "service_register",
@@ -15,8 +16,7 @@
   "instance_removal_delay_seconds": 600,
   "api_key_auth_enabled": false,
   "notify_alert_node_id": "node-1",
-  "event_storage_mode": "persistent",
-  "event_retention_days": 30,
-  "metrics_storage_mode": "persistent",
+  "event_storage_mode": "memory",
+  "metrics_storage_mode": "memory",
   "metrics_retention_days": 14
 }
