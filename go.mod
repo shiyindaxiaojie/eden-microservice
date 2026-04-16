@@ -13,7 +13,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/crypto v0.49.0
-	google.golang.org/grpc v1.79.2
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )
 
