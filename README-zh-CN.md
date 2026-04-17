@@ -2,133 +2,183 @@
 
 [English](README.md) | 中文
 
-芙卡洛斯是一个企业级服务注册控制平面，目标很明确: 在保留注册、发现、健康检查、拓扑和治理能力的前提下，替代只做注册中心时并不经济的 Nacos 和 Consul 组合。
+Focalors（芙卡洛斯）是一个面向生产环境的服务注册中心，提供服务注册、服务发现、健康检查、拓扑和治理能力。
 
-它不把配置中心、Service Mesh、KV 或更宽的网络编排能力绑定为核心前提，而是把系统边界收敛到注册中心真正需要长期稳定演进的部分:
-
-- 服务注册与发现
-- 健康检查与实例生命周期控制
-- 服务依赖拓扑
-- 运行时治理
-- `standalone`、`cluster + ap`、`cluster + cp` 三种运行模式
-- 事件存储与指标存储的持久化 / 内存切换
-
-对 Go 服务，推荐的对外接入面只有 [`pkg/sdk`](./pkg/sdk)。Nacos 和 Consul 兼容接口只用于迁移，不作为长期 API 边界。
+它用于替代 Nacos 和 Consul 在“只需要注册中心”场景下的那部分能力，去掉配置中心、Service Mesh、KV 等非核心负担，保留更稳定、更直接的服务治理能力。
 
 ## 对比
 
-### 范围对比图
+面向“注册中心”场景，下面的表格使用 `✅`、`💰`、`❌` 三种标记，直接说明各产品的能力覆盖和商业边界。
 
-```mermaid
-flowchart LR
-    A["Nacos<br/>JVM 运行时<br/>服务发现 + 配置 + 服务管理"]
-    B["Consul<br/>Service Networking<br/>服务发现 + Mesh + 流量治理"]
-    C["芙卡洛斯<br/>Go 原生注册控制平面<br/>注册 + 发现 + 治理"]
-
-    A --> C
-    B --> C
-```
-
-### 对比矩阵
-
-| 维度 | 芙卡洛斯 | Nacos | Consul |
+| 功能 | Focalors | Nacos | Consul |
 | --- | --- | --- | --- |
-| 产品定位 | 企业级注册控制平面 | 服务发现 + 配置 + 服务管理平台 | Service Networking 平台 |
-| 运行时依赖 | 原生 Go 进程 | Java 运行时 | 原生二进制 |
-| 官方部署起点 | 单进程即可启动 | 官方文档要求 Java；源码构建路径需要 Maven | 官方采用 Server / Agent 架构 |
-| 官方资源提示 | 无 JVM 基线要求 | 官方建议至少 `2 CPU / 4 GB RAM / 60 GB Disk` | 官方要求按工作集估算，并为 Server 预留 `2x-4x` 工作集内存 |
-| 核心能力边界 | 注册、发现、健康、拓扑、治理 | 注册、配置、管理一体化 | 注册、发现、Mesh、流量治理、网络自动化 |
-| 一致性运行模式 | `standalone`、`cluster + ap`、`cluster + cp` | 提供单机、集群、多集群部署模型 | 以 Raft 控制平面为核心，围绕服务网络运行 |
-| 存储切换 | 事件存储、指标存储支持持久化 / 内存切换 | 面向 Nacos 自身存储模型 | 面向 Consul Catalog / KV / Raft 存储模型 |
-| Go 接入策略 | 一个推荐 SDK: [`pkg/sdk`](./pkg/sdk) | 依赖 Nacos 客户端生态 | HTTP API、DNS、Agent、Mesh 等多入口 |
-| 迁移策略 | 原生模型为主，兼容层为辅 | 常作为迁移来源 | 常作为迁移来源 |
-| 商业边界 | 核心注册能力不依赖企业版拆分 | 取决于具体生态与部署形态 | 官方明确区分 CE 与 Enterprise |
-
-### 芙卡洛斯的优势
-
-- 如果目标只是注册中心，芙卡洛斯比 Nacos 更少平台依赖。Nacos 官方快速开始明确要求 Java，较新的快速开始还给出至少 `4 GB RAM` 的建议。
-- 如果目标只是注册中心，芙卡洛斯比 Consul 更聚焦。Consul 官方将自己定义为 service networking 方案，除了注册发现，还覆盖 Mesh、流量治理、网关和网络自动化。
-- 对 Go 团队，芙卡洛斯把长期接入边界收敛到 [`pkg/sdk`](./pkg/sdk)，不会把外部项目长期绑定在 Nacos Naming 模型或 Consul Agent / DNS / HTTP 多入口模型上。
-- 芙卡洛斯原生提供 `AP` / `CP` 切换。这意味着同一套系统可以在“优先可用性”和“优先元数据一致性”之间切换，而不是通过更换产品来切换分布式模型。
-- 芙卡洛斯把事件存储、指标存储做成可切换的运行时能力，便于在“开发环境轻量运行”和“生产环境持久化保留”之间平滑切换。
+| 服务注册 | ✅ | ✅ | ✅ |
+| 服务发现 | ✅ | ✅ | ✅ |
+| 健康检查 | ✅ | ✅ | ✅ |
+| 实例管理 | ✅ | ✅ | ✅ |
+| 服务依赖拓扑 | ✅ | ❌ | ❌ |
+| 命名空间隔离 | ✅ | ✅ | 💰 |
+| AP 一致性 | ✅ | ✅ | ❌ |
+| CP 一致性 | ✅ | ✅ | ✅ |
+| 控制台认证 | ✅ | ✅ | ✅ |
+| RBAC 权限控制 | ✅ | ✅ | ✅ |
+| 告警与通知集成 | ✅ | ❌ | ❌ |
+| 事件存储 | ✅ | ❌ | ❌ |
+| 内存占用 | 🟢低 | 🔴高 | 🟡中 |
 
 ## 核心能力
 
-- 原生服务注册与发现
-- 健康信号与实例生命周期控制
-- 依赖拓扑上报
-- HTTP API、gRPC API、QUIC 传输支持
-- `standalone`、`cluster + ap`、`cluster + cp` 运行模式
-- 事件存储与指标存储的运行时切换
-- 控制台认证、API Key、RBAC 风格管理能力
-- 告警与通知集成
-- Nacos / Consul 兼容适配，用于迁移
+- 服务注册与发现
+  管理服务实例注册、发现、心跳、健康状态和实例生命周期。
+- 命名空间与服务拓扑
+  支持命名空间隔离、服务依赖拓扑上报和拓扑查询。
+- 多模式集群运行
+  支持 `standalone`、`cluster + ap`、`cluster + cp`，可根据场景在可用性优先和一致性优先之间切换。
+- 多协议接入
+  业务服务可通过 Go SDK、HTTP、gRPC 接入，QUIC 作为弱网场景下的 gRPC 传输补充。
+- 控制台与权限体系
+  提供控制台认证、用户、API Key、RBAC 风格权限控制和系统设置管理。
+- 事件、指标与告警
+  内置事件日志、运行指标采集、告警与通知能力，支持持久化 / 内存模式切换。
+- 迁移兼容
+  提供 Nacos / Consul 兼容接口，便于从现有注册中心平滑迁移。
 
 ## 架构总览
 
 ```mermaid
-graph TB
-    Clients[业务服务]
-    Console[控制台]
-    Ops[平台运维]
+flowchart LR
+    subgraph Entry["客户端"]
+        direction TB
+        APP["Focalors 客户端"]
+        NACOS["Nacos 客户端"]
+        CONSUL["Consul 客户端"]
+        CONSOLE["Focalors 控制台"]
+    end
 
-    HTTP[HTTP 控制 API]
-    RPC[gRPC 服务 API]
-    QUIC[QUIC 传输]
+    subgraph Access["接入层"]
+        direction TB
+        GRPC["gRPC API"]
+        QUIC["QUIC"]
+        HTTP["HTTP API"]
+    end
 
-    Catalog[Catalog 领域]
-    Auth[Auth 领域]
-    Settings[Settings 领域]
-    Alerting[告警与通知]
-    Cluster[集群运行时]
+    subgraph Server["Focalors 节点"]
+        direction TB
+        REG["注册发现"]
+        TOPO["服务拓扑"]
+        AUTHSVC["认证权限"]
+        SETTING["系统设置"]
+        ALERT["告警通知"]
+        APNODE["AP 复制"]
+        CPNODE["CP Raft"]
+    end
 
-    Store[运行时状态与持久化]
-    Adapter["兼容适配层<br/>Nacos / Consul"]
+    subgraph Cluster["集群同步"]
+        direction TB
+        APPEER["其他节点<br/>gRPC 同步"]
+        CPPEER["其他节点<br/>Raft TCP 共识"]
+    end
 
-    Clients --> RPC
-    Clients --> HTTP
-    Console --> HTTP
-    Ops --> HTTP
+    subgraph Store["本地存储"]
+        direction TB
+        DISC["实例数据"]
+        NAMESPACE["命名空间"]
+        TOPOSTORE["拓扑数据"]
+        USERSTORE["用户 / API Key / 权限"]
+        CONF["运行时配置 / Seeds / 开关"]
+        EVENT["事件日志"]
+        METRIC["指标数据"]
+        RAFT["Raft Log / Snapshot"]
+    end
 
-    HTTP --> Catalog
-    HTTP --> Auth
-    HTTP --> Settings
-    HTTP --> Alerting
-    RPC --> Catalog
-    QUIC --> RPC
+    APP -->|默认| GRPC
+    APP -.->|回退| QUIC
+    APP -.->|回退| HTTP
+    NACOS -->|兼容 gRPC| GRPC
+    NACOS -.->|兼容 HTTP| HTTP
+    CONSUL -->|兼容 HTTP| HTTP
+    CONSOLE -->|HTTP| HTTP
+    QUIC -->|gRPC over QUIC| GRPC
 
-    Catalog --> Cluster
-    Settings --> Cluster
-    Cluster --> Store
-    Adapter --> Catalog
+    GRPC --> REG
+    GRPC --> TOPO
+    HTTP --> REG
+    HTTP --> TOPO
+    HTTP --> AUTHSVC
+    HTTP --> SETTING
+    HTTP --> ALERT
+
+    REG --> DISC
+    REG --> NAMESPACE
+    REG --> EVENT
+    REG --> METRIC
+    TOPO --> TOPOSTORE
+    AUTHSVC --> USERSTORE
+    SETTING --> CONF
+    ALERT --> EVENT
+
+    REG --> APNODE
+    REG --> CPNODE
+    SETTING --> APNODE
+    SETTING --> CPNODE
+    APNODE --> APPEER
+    CPNODE --> CPPEER
+    CPNODE --> RAFT
+
+    style Entry fill:#f4f8ff,stroke:#7aa7d9,stroke-width:1px,color:#15324b
+    style Access fill:#f4f8ff,stroke:#7aa7d9,stroke-width:1px,color:#15324b
+    style Server fill:#f2fbf5,stroke:#6fb286,stroke-width:1px,color:#163524
+    style Cluster fill:#f6f9f6,stroke:#79ad8b,stroke-width:1px,color:#163524
+    style Store fill:#fff8ec,stroke:#d6a14a,stroke-width:1px,color:#4a3210
+
+    style APP fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style NACOS fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style CONSUL fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style CONSOLE fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style GRPC fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style QUIC fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style HTTP fill:#eef6ff,stroke:#4f8cc9,color:#15324b,stroke-width:1px
+    style REG fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style TOPO fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style AUTHSVC fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style SETTING fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style ALERT fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style APNODE fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style CPNODE fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style APPEER fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style CPPEER fill:#eefaf2,stroke:#4b9b6b,color:#163524,stroke-width:1px
+    style DISC fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style NAMESPACE fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style TOPOSTORE fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style USERSTORE fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style CONF fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style EVENT fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style METRIC fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
+    style RAFT fill:#fff6e8,stroke:#c78a2c,color:#4a3210,stroke-width:1px
 ```
 
 ## 部署模式
 
 | 模式 | 适用场景 |
 | --- | --- |
-| `standalone + ap` | 本地开发、隔离环境、快速验证 |
+| `standalone` | 本地开发、隔离环境、快速验证 |
 | `cluster + ap` | 企业生产环境中更看重可用性和运维灵活性 |
 | `cluster + cp` | 企业生产环境中要求更强元数据一致性和 Leader 写入约束 |
 
-## 接入策略
+## 接入与迁移
 
-### 推荐路径
+- 推荐接入方式: Go 服务通过 [`pkg/sdk`](./pkg/sdk) 接入。
+- 支持的协议与接口: HTTP API、gRPC API、QUIC。
+- 兼容迁移路径: 提供 Nacos / Consul 兼容接口，用于平滑迁移现有系统。
+- 长期建议: 新系统优先使用 Focalors 原生接口，兼容接口主要用于迁移。
 
-- Go 服务通过 [`pkg/sdk`](./pkg/sdk) 接入
+相关示例:
 
-### 支持路径
-
-- 原生 HTTP API
-- 原生 gRPC API
-- Nacos 兼容适配
-- Consul 兼容适配
-
-### 战略方向
-
-- 适配层用于迁移
-- 原生 API 用于标准化
-- 不再让 Nacos / Consul 成为长期抽象边界
+- [服务发现总览](./examples/service-discovery/README.md)
+- [原生接入示例](./examples/service-discovery/native/README.md)
+- [Consul 迁移示例](./examples/service-discovery/consul/README.md)
+- [Nacos 迁移示例](./examples/service-discovery/nacos/README.md)
+- [自定义协议示例](./examples/service-discovery/custom/README.md)
 
 ## 仓库结构
 
@@ -175,14 +225,6 @@ http://127.0.0.1:8500
 ```bash
 go test ./...
 ```
-
-## 示例
-
-- [服务发现总览](./examples/service-discovery/README.md)
-- [原生接入示例](./examples/service-discovery/native/README.md)
-- [Consul 迁移示例](./examples/service-discovery/consul/README.md)
-- [Nacos 迁移示例](./examples/service-discovery/nacos/README.md)
-- [自定义协议示例](./examples/service-discovery/custom/README.md)
 
 ## 文档
 
