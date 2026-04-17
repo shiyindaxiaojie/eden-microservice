@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	pb "github.com/shiyindaxiaojie/eden-registry/api/proto/cluster/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Peer represents a remote node in the cluster.

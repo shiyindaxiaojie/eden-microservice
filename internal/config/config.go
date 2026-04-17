@@ -5,23 +5,23 @@ import (
 	"strings"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
 	"github.com/spf13/viper"
 )
 
 // Config represents the registry configuration.
 type Config struct {
-	NodeID      string          `mapstructure:"node_id" json:"node_id"`
-	Mode        string          `mapstructure:"mode" json:"mode"` // "standalone" or "cluster"
-	Consistency string          `mapstructure:"consistency" json:"consistency"`
-	Server      ServerConfig    `mapstructure:"server" json:"server"`
-	DataDir     string          `mapstructure:"data_dir" json:"data_dir"`
-	Datacenter  string          `mapstructure:"datacenter" json:"datacenter"`
-	Bootstrap   bool            `mapstructure:"bootstrap" json:"bootstrap"`
-	Auth        Auth            `mapstructure:"auth" json:"auth"`
-	Log         LogConfig       `mapstructure:"log" json:"log"`
-	Storage     StorageConfig   `mapstructure:"storage" json:"storage"`
-	Registry    RegistryConfig  `mapstructure:"registry" json:"registry"`
+	NodeID      string         `mapstructure:"node_id" json:"node_id"`
+	Mode        string         `mapstructure:"mode" json:"mode"` // "standalone" or "cluster"
+	Consistency string         `mapstructure:"consistency" json:"consistency"`
+	Server      ServerConfig   `mapstructure:"server" json:"server"`
+	DataDir     string         `mapstructure:"data_dir" json:"data_dir"`
+	Datacenter  string         `mapstructure:"datacenter" json:"datacenter"`
+	Bootstrap   bool           `mapstructure:"bootstrap" json:"bootstrap"`
+	Auth        Auth           `mapstructure:"auth" json:"auth"`
+	Log         LogConfig      `mapstructure:"log" json:"log"`
+	Storage     StorageConfig  `mapstructure:"storage" json:"storage"`
+	Registry    RegistryConfig `mapstructure:"registry" json:"registry"`
 }
 
 type ServerConfig struct {
@@ -127,9 +127,9 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("data_dir", "./data")
 	viper.SetDefault("datacenter", "dc1")
 	viper.SetDefault("auth.jwt.enabled", false)
-	viper.SetDefault("auth.jwt.secret", "eden-jwt-secret")
+	viper.SetDefault("auth.jwt.secret", "registry-jwt-secret")
 	viper.SetDefault("auth.api_key.enabled", false)
-	viper.SetDefault("auth.api_key.keys", []string{"eden-default-key"})
+	viper.SetDefault("auth.api_key.keys", []string{"registry-default-key"})
 	// Default user if none provided
 	viper.SetDefault("auth.users", []map[string]string{
 		{"username": "admin", "password": "admin", "role": "admin"},

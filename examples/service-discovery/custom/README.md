@@ -1,6 +1,6 @@
 # 自定义协议集成示例
 
-本目录是一套独立的“自定义接入”示例，不使用 `pkg/eden` SDK，而是直接按协议调用注册中心。
+本目录是一套独立的“自定义接入”示例，不使用 `pkg/sdk` SDK，而是直接按协议调用注册中心。
 
 目录内分成两套完全隔离的实现：
 
@@ -110,3 +110,4 @@ curl "http://127.0.0.1:24102/api/auth/token?user_id=1"
 curl "http://127.0.0.1:24101/api/users/1/profile"
 curl "http://127.0.0.1:24103/api/orders/demo?user_id=1"
 ```
+

@@ -17,17 +17,17 @@ type Authenticator interface {
 }
 
 type authenticator struct {
-	directory *Directory
+	store *Store
 }
 
-func NewAuthenticator(directory *Directory) Authenticator {
+func NewAuthenticator(store *Store) Authenticator {
 	return &authenticator{
-		directory: directory,
+		store: store,
 	}
 }
 
 func (a *authenticator) Login(username, password string) (string, error) {
-	user, ok := a.directory.GetUser(username)
+	user, ok := a.store.GetUser(username)
 	if !ok {
 		return "", errors.New("user not found")
 	}
@@ -41,7 +41,7 @@ func (a *authenticator) Login(username, password string) (string, error) {
 }
 
 func (a *authenticator) VerifyAPIKey(key string) (*APIKey, bool) {
-	k, ok := a.directory.GetAPIKey(key)
+	k, ok := a.store.GetAPIKey(key)
 	if !ok {
 		return nil, false
 	}
@@ -53,24 +53,24 @@ func (a *authenticator) VerifyAPIKey(key string) (*APIKey, bool) {
 }
 
 func (a *authenticator) GetUser(username string) (*User, bool) {
-	return a.directory.GetUser(username)
+	return a.store.GetUser(username)
 }
 
 func (a *authenticator) UpdateProfile(username, nickname, phone, email string) error {
-	user, ok := a.directory.GetUser(username)
+	user, ok := a.store.GetUser(username)
 	if !ok {
 		return errors.New("user not found")
 	}
 	user.Nickname = nickname
 	user.Phone = phone
 	user.Email = email
-	a.directory.AddUser(user)
-	a.directory.Save()
+	a.store.AddUser(user)
+	a.store.Save()
 	return nil
 }
 
 func (a *authenticator) UpdatePassword(username, oldPassword, newPassword string) error {
-	user, ok := a.directory.GetUser(username)
+	user, ok := a.store.GetUser(username)
 	if !ok {
 		return errors.New("user not found")
 	}
@@ -84,18 +84,18 @@ func (a *authenticator) UpdatePassword(username, oldPassword, newPassword string
 	// But let's use bcrypt for new password
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	user.Password = string(hashed)
-	a.directory.AddUser(user)
-	a.directory.Save()
+	a.store.AddUser(user)
+	a.store.Save()
 	return nil
 }
 
 func (a *authenticator) UpdateGuideStatus(username string, completed bool) error {
-	user, ok := a.directory.GetUser(username)
+	user, ok := a.store.GetUser(username)
 	if !ok {
 		return errors.New("user not found")
 	}
 	user.GuideCompleted = completed
-	a.directory.AddUser(user)
-	a.directory.Save()
+	a.store.AddUser(user)
+	a.store.Save()
 	return nil
 }

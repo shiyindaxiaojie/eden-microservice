@@ -1,59 +1,207 @@
-# Eden
+# Focalors
 
-Eden 是一个基于 Go 实现的轻量级服务注册与发现中心，支持 AP 与 CP 两种一致性模式，并同时提供 HTTP、gRPC、QUIC 与控制台管理能力。
+English | [中文](README-zh-CN.md)
 
-## 特性
+Focalors is an enterprise service registry control plane. Its goal is narrow and explicit: replace Nacos and Consul in scenarios where the real requirement is service registry, discovery, health control, topology, and governance, not a JVM-centered platform or a broader service-networking stack.
 
-- **容错与一致性**：AP 模式基于 gRPC 异步复制与反熵同步，强调高可用与分区容忍；CP 模式基于 Raft 共识，强调元数据强一致。
-- **多协议支持**：官方 SDK 默认以 gRPC 作为业务协议，并将其完全切换为 HTTP 或实验性的 QUIC。客户端既可使用官方 `pkg/eden` SDK，也支持标准的 HTTP 或 gRPC 接口自行接入。
-- **交互式 Web 控制台**：内置支持中英文双语 (i18n) 的现代化管理界面，提供服务注册节点管理、依赖拓扑可视化以及高级配置功能。
-- **动态告警与事件系统**：具备基于滑动时间窗口的事件评估器，支持设置事件触发阈值并动态匹配告警规则。
-- **多渠道系统通知**：支持跨平台告警投递，囊括飞书、钉钉、企业微信等常见 Webhook，并兼容 SMTP 邮件推送。
-- **认证及安全控制**：内置基于 JWT 的无状态登录体系与基于 API Key 的网关签权。
+It keeps the product boundary focused on the parts a registry must own for the long term:
 
-## 快速开始
+- service registration and discovery
+- health checks and lifecycle control
+- dependency topology
+- runtime governance
+- `standalone`, `cluster + ap`, and `cluster + cp` operating modes
+- persistent or in-memory switching for event and metrics storage
 
-启动服务端：
+For Go services, the only recommended public integration surface is [`pkg/sdk`](./pkg/sdk). Nacos and Consul compatibility remain migration paths, not the long-term API boundary.
 
-```bash
-go run ./cmd/server/main.go -config configs/config.yaml
+## Comparison
+
+### Scope diagram
+
+```mermaid
+flowchart LR
+    A["Nacos<br/>JVM runtime<br/>service discovery + config + service management"]
+    B["Consul<br/>service networking<br/>service discovery + mesh + traffic management"]
+    C["Focalors<br/>native Go registry control plane<br/>registry + discovery + governance"]
+
+    A --> C
+    B --> C
 ```
 
-启动前端控制台：
+### Comparison matrix
 
-```bash
-cd web
-npm install
-npm run dev
+| Dimension | Focalors | Nacos | Consul |
+| --- | --- | --- | --- |
+| Product scope | Registry control plane | Discovery, configuration, and service management platform | Service networking platform |
+| Runtime dependency | Native Go process | Java runtime | Native binary |
+| Official deployment starting point | Single process | Official quick start requires Java; source build path requires Maven | Official architecture centers on Server / Agent deployment |
+| Official resource guidance | No JVM baseline requirement | Official docs recommend at least `2 CPU / 4 GB RAM / 60 GB Disk` | Official server sizing recommends `2x-4x` working set memory |
+| Core capability boundary | Registry, discovery, health, topology, governance | Registry plus config and service management | Registry plus mesh, traffic management, gateways, automation |
+| Consistency model | `standalone`, `cluster + ap`, `cluster + cp` | Standalone, cluster, multi-cluster deployment models | Raft-based control plane in a broader networking system |
+| Storage strategy | Event and metrics storage can switch between persistence and memory | Built around Nacos storage model | Built around Catalog, KV, and Raft persistence |
+| Go integration strategy | One recommended SDK: [`pkg/sdk`](./pkg/sdk) | Depends on Nacos client ecosystem | Multiple entry points such as HTTP API, DNS, agent, and mesh |
+| Migration role | Native target, compatibility on the side | Common migration source | Common migration source |
+| Commercial boundary | Core registry capability stays in the main product path | Depends on deployment and ecosystem choices | Official CE / Enterprise split |
+
+### Why Focalors
+
+- If the requirement is only a registry, Focalors removes the JVM baseline that Nacos still documents in its official quick start and deployment guidance.
+- If the requirement is only a registry, Focalors stays narrower than Consul. Consul officially positions itself as a service networking solution, not only a registry.
+- For Go teams, Focalors keeps the long-term integration boundary on one SDK, [`pkg/sdk`](./pkg/sdk), instead of leaving teams on Nacos naming semantics or Consul's broader agent, DNS, and HTTP surface.
+- Focalors exposes native `AP` / `CP` switching. That lets one product serve both availability-first and consistency-first registry scenarios.
+- Focalors exposes runtime switching for event and metrics storage, so local validation can stay light while production can keep persistence enabled.
+
+## Core Capabilities
+
+- Native service registration and discovery
+- Health signaling and lifecycle control
+- Dependency topology reporting
+- HTTP API, gRPC API, and QUIC transport support
+- `standalone`, `cluster + ap`, and `cluster + cp` runtime modes
+- Runtime-switchable event and metrics storage modes
+- Console authentication, API keys, RBAC-oriented management APIs
+- Alerting and notification integration
+- Nacos and Consul compatibility adapters for migration
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    Clients[Business Services]
+    Console[Web Console]
+    Ops[Platform Operators]
+
+    HTTP[HTTP Control API]
+    RPC[gRPC Service API]
+    QUIC[QUIC Transport]
+
+    Catalog[Catalog Domain]
+    Auth[Auth Domain]
+    Settings[Settings Domain]
+    Alerting[Alerting and Notification]
+    Cluster[Cluster Runtime]
+
+    Store[Runtime State and Persistence]
+    Adapter["Compatibility Adapters<br/>Nacos / Consul"]
+
+    Clients --> RPC
+    Clients --> HTTP
+    Console --> HTTP
+    Ops --> HTTP
+
+    HTTP --> Catalog
+    HTTP --> Auth
+    HTTP --> Settings
+    HTTP --> Alerting
+    RPC --> Catalog
+    QUIC --> RPC
+
+    Catalog --> Cluster
+    Settings --> Cluster
+    Cluster --> Store
+    Adapter --> Catalog
 ```
 
-默认开发地址：
+## Deployment Modes
 
-- 后端 API：`http://127.0.0.1:8500`
-- 前端控制台：`http://127.0.0.1:2019`
+| Mode | Best fit |
+| --- | --- |
+| `standalone + ap` | local development, isolated environments, fast validation |
+| `cluster + ap` | enterprise environments that prioritize availability and operational flexibility |
+| `cluster + cp` | enterprise environments that require stronger metadata consistency and explicit leader-based writes |
 
-## 目录结构
+## Integration Strategy
 
-- `api/proto`：gRPC 协议定义
-- `cmd/server`：服务端入口
-- `internal/alert`：告警规则管理与事件评估中心
-- `internal/catalog`：注册应用状态机与服务元信息管理
-- `internal/cluster`：集群核心实现（AP / CP）
-- `internal/notify`：系统通知渠道与发送引擎
-- `internal/service`：业务服务层
-- `internal/settings`：系统全局配置中心
-- `internal/store`：存储与持久化实现
-- `internal/transport`：网络传输层 (HTTP / gRPC)
-- `pkg`：客户端 SDK 
-- `web`：前端现代交互式控制台
+### Recommended
 
-## 文档
+- Go services integrate through [`pkg/sdk`](./pkg/sdk)
 
-`docs` 目录仅保留两份主文档：
+### Supported
 
-- [架构文档](./docs/architecture_zh.md)
-- [用户手册](./docs/user_guide_zh.md)
+- native HTTP API
+- native gRPC API
+- Nacos compatibility adapter
+- Consul compatibility adapter
 
-## License
+### Strategic direction
 
-MIT
+- use adapters to migrate
+- use Focalors native APIs to standardize
+- avoid making Nacos or Consul the long-term abstraction boundary
+
+## Repository Layout
+
+| Path | Responsibility |
+| --- | --- |
+| `cmd/server` | server bootstrap and runtime composition |
+| `internal/catalog` | registration, discovery, lifecycle, topology |
+| `internal/cluster` | AP / CP runtime and cluster behavior |
+| `internal/transport/http` | native HTTP control APIs |
+| `internal/transport/rpc` | gRPC service endpoints |
+| `internal/transport/quic` | QUIC listener for RPC transport |
+| `internal/adapter` | compatibility adapters, including Nacos and Consul |
+| `internal/auth` | console auth, users, API keys |
+| `internal/settings` | runtime settings and system controls |
+| `internal/alert` | event evaluation and alert policy |
+| `internal/notify` | notification delivery |
+| `pkg/sdk` | the public Go SDK |
+| `api/proto` | protobuf contracts |
+| `examples` | integration and migration examples |
+| `docs` | architecture, deployment, and integration documentation |
+
+## Quick Start
+
+Run the server:
+
+```bash
+go run ./cmd/server/main.go
+```
+
+Run with explicit config:
+
+```bash
+go run ./cmd/server/main.go -config configs/config.yaml.example
+```
+
+Default API address:
+
+```text
+http://127.0.0.1:8500
+```
+
+Run backend tests:
+
+```bash
+go test ./...
+```
+
+## Examples
+
+- [Service discovery overview](./examples/service-discovery/README.md)
+- [Native integration examples](./examples/service-discovery/native/README.md)
+- [Consul migration examples](./examples/service-discovery/consul/README.md)
+- [Nacos migration examples](./examples/service-discovery/nacos/README.md)
+- [Custom protocol examples](./examples/service-discovery/custom/README.md)
+
+## Documentation
+
+- [Documentation index](./docs/README.md)
+- [Architecture](./docs/architecture.md)
+- [Deployment](./docs/deployment.md)
+- [Integration](./docs/integration.md)
+- [Simplified Chinese README](./README-zh-CN.md)
+
+## External References
+
+The comparison above is grounded in official product documentation plus the current repository boundary:
+
+- Nacos quick start documents a Java runtime requirement and resource baseline: https://nacos.io/en/docs/next/quickstart/quick-start/
+- Nacos deployment guidance recommends `2 CPU / 4 GB RAM` and above: https://nacos.io/en-us/docs/deployment.html
+- Consul positions itself as service networking with discovery, mesh, traffic management, and automation: https://developer.hashicorp.com/consul/docs/intro
+- Consul server resource guidance sizes memory at `2x-4x` working set: https://developer.hashicorp.com/consul/docs/reference/architecture/server
+- Consul Community Edition vs Enterprise feature split: https://developer.hashicorp.com/consul/docs/fundamentals/editions
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

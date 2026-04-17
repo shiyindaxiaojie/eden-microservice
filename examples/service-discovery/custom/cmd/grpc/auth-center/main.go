@@ -14,9 +14,9 @@ import (
 	"time"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	grpcclient "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/grpc"
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/instanceguard"
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/registry"
+	grpcclient "github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/grpc"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/instanceguard"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/registry"
 )
 
 func main() {

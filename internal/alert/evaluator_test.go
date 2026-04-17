@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
 )
 
 type stubRuleLoader struct {
@@ -170,7 +170,7 @@ func TestEvaluatorUsesDefaultTemplates(t *testing.T) {
 	if len(notifier.sent) != 1 {
 		t.Fatalf("expected notification, got %d", len(notifier.sent))
 	}
-	if notifier.sent[0].msg.Title != "Registry Alarm - Service Offline" {
+	if notifier.sent[0].msg.Title != "Focalors Alert - Service Offline" {
 		t.Fatalf("unexpected default title: %q", notifier.sent[0].msg.Title)
 	}
 	if notifier.sent[0].msg.Body == "" {

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	consulcompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	consulcompat "github.com/shiyindaxiaojie/eden-registry/internal/adapter/consul/compat"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
 )
 
 // ---------- Catalog Handlers (Service Registration & Discovery) ----------

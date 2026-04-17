@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-registry/internal/alert"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	clusterpkg "github.com/shiyindaxiaojie/eden-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
+	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -366,7 +366,7 @@ func (h *Handler) proxyRequest(w http.ResponseWriter, r *http.Request, targetBas
 	}
 
 	req.Header = r.Header.Clone()
-	req.Header.Set("X-Eden-Proxied-By", h.config.NodeID)
+	req.Header.Set("X-Registry-Proxied-By", h.config.NodeID)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -470,4 +470,3 @@ func (h *Handler) testChannelNotification(w http.ResponseWriter, r *http.Request
 
 	jsonOK(w, map[string]string{"status": "ok", "message": "测试通知已成功发送"})
 }
-

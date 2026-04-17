@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/clients/naming_client"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/common/constant"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/vo"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/clients/naming_client"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/common/constant"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/model"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/vo"
+	"github.com/shiyindaxiaojie/eden-registry/pkg/sdk"
 )
 
 type nacosRegistry struct {
@@ -17,7 +17,7 @@ type nacosRegistry struct {
 }
 
 // NewRegistry creates a new Nacos-based registry implementation.
-func NewRegistry(cfg *registry.Config) (registry.Registry, error) {
+func NewRegistry(cfg *sdk.Config) (sdk.Registry, error) {
 	// Map registry.Config to Nacos ServerConfig
 	serverConfigs := make([]constant.ServerConfig, 0, len(cfg.Addresses))
 	for _, addr := range cfg.Addresses {
@@ -64,7 +64,7 @@ func NewRegistry(cfg *registry.Config) (registry.Registry, error) {
 	return &nacosRegistry{client: client}, nil
 }
 
-func (r *nacosRegistry) Register(inst *registry.ServiceInstance) error {
+func (r *nacosRegistry) Register(inst *sdk.ServiceInstance) error {
 	_, err := r.client.RegisterInstance(vo.RegisterInstanceParam{
 		Ip:          inst.Host,
 		Port:        uint64(inst.Port),
@@ -75,7 +75,7 @@ func (r *nacosRegistry) Register(inst *registry.ServiceInstance) error {
 	return err
 }
 
-func (r *nacosRegistry) Deregister(inst *registry.ServiceInstance) error {
+func (r *nacosRegistry) Deregister(inst *sdk.ServiceInstance) error {
 	_, err := r.client.DeregisterInstance(vo.DeregisterInstanceParam{
 		Ip:          inst.Host,
 		Port:        uint64(inst.Port),
@@ -84,7 +84,7 @@ func (r *nacosRegistry) Deregister(inst *registry.ServiceInstance) error {
 	return err
 }
 
-func (r *nacosRegistry) Discovery(serviceName string) ([]*registry.ServiceInstance, error) {
+func (r *nacosRegistry) Discovery(serviceName string) ([]*sdk.ServiceInstance, error) {
 	hosts, err := r.client.SelectInstances(vo.SelectInstancesParam{
 		ServiceName: serviceName,
 		HealthyOnly: true,
@@ -93,9 +93,9 @@ func (r *nacosRegistry) Discovery(serviceName string) ([]*registry.ServiceInstan
 		return nil, err
 	}
 
-	instances := make([]*registry.ServiceInstance, 0, len(hosts))
+	instances := make([]*sdk.ServiceInstance, 0, len(hosts))
 	for _, h := range hosts {
-		instances = append(instances, &registry.ServiceInstance{
+		instances = append(instances, &sdk.ServiceInstance{
 			ID:          h.InstanceId,
 			ServiceName: h.ServiceName,
 			Host:        h.Ip,
@@ -108,14 +108,14 @@ func (r *nacosRegistry) Discovery(serviceName string) ([]*registry.ServiceInstan
 	return instances, nil
 }
 
-func (r *nacosRegistry) Subscribe(serviceName string, callback func([]*registry.ServiceInstance)) error {
+func (r *nacosRegistry) Subscribe(serviceName string, callback func([]*sdk.ServiceInstance)) error {
 	return r.client.Subscribe(&vo.SubscribeParam{
 		ServiceName: serviceName,
 		SubscribeCallback: func(services []model.Instance, err error) {
 			if err == nil {
-				instances := make([]*registry.ServiceInstance, 0, len(services))
+				instances := make([]*sdk.ServiceInstance, 0, len(services))
 				for _, h := range services {
-					instances = append(instances, &registry.ServiceInstance{
+					instances = append(instances, &sdk.ServiceInstance{
 						ID:          h.InstanceId,
 						ServiceName: h.ServiceName,
 						Host:        h.Ip,
@@ -131,10 +131,10 @@ func (r *nacosRegistry) Subscribe(serviceName string, callback func([]*registry.
 	})
 }
 
-func (r *nacosRegistry) Heartbeat(inst *registry.ServiceInstance) error {
+func (r *nacosRegistry) Heartbeat(inst *sdk.ServiceInstance) error {
 	// Nacos v1 SDK uses client-side heartbeats automatically;
-	// our compat layer might need manual calls if it points to Eden.
-	// But Eden's Register/Heartbeat are distinct.
+	// our compat layer might need manual calls if it points to the local registry.
+	// But the local registry keeps Register and Heartbeat separate.
 	// For compat, we just re-register or use the same heartbeat logic.
 	return r.Register(inst)
 }

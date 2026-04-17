@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	grpc_registry "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	grpc_registry "github.com/shiyindaxiaojie/eden-registry/api/proto/registry/v1"
+	"github.com/shiyindaxiaojie/eden-registry/internal/cluster/replication"
 	"google.golang.org/grpc"
 )
 

@@ -19,14 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RegistryService_Register_FullMethodName          = "/eden.registry.v1.RegistryService/Register"
-	RegistryService_Deregister_FullMethodName        = "/eden.registry.v1.RegistryService/Deregister"
-	RegistryService_SetInstanceStatus_FullMethodName = "/eden.registry.v1.RegistryService/SetInstanceStatus"
-	RegistryService_Heartbeat_FullMethodName         = "/eden.registry.v1.RegistryService/Heartbeat"
-	RegistryService_Discover_FullMethodName          = "/eden.registry.v1.RegistryService/Discover"
-	RegistryService_Watch_FullMethodName             = "/eden.registry.v1.RegistryService/Watch"
-	RegistryService_GetMembers_FullMethodName        = "/eden.registry.v1.RegistryService/GetMembers"
-	RegistryService_ReportTopology_FullMethodName    = "/eden.registry.v1.RegistryService/ReportTopology"
+	RegistryService_Register_FullMethodName          = "/sdk.registry.v1.RegistryService/Register"
+	RegistryService_Deregister_FullMethodName        = "/sdk.registry.v1.RegistryService/Deregister"
+	RegistryService_SetInstanceStatus_FullMethodName = "/sdk.registry.v1.RegistryService/SetInstanceStatus"
+	RegistryService_Heartbeat_FullMethodName         = "/sdk.registry.v1.RegistryService/Heartbeat"
+	RegistryService_Discover_FullMethodName          = "/sdk.registry.v1.RegistryService/Discover"
+	RegistryService_Watch_FullMethodName             = "/sdk.registry.v1.RegistryService/Watch"
+	RegistryService_GetMembers_FullMethodName        = "/sdk.registry.v1.RegistryService/GetMembers"
+	RegistryService_ReportTopology_FullMethodName    = "/sdk.registry.v1.RegistryService/ReportTopology"
 )
 
 // RegistryServiceClient is the client API for RegistryService service.
@@ -368,7 +368,7 @@ func _RegistryService_ReportTopology_Handler(srv interface{}, ctx context.Contex
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RegistryService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "eden.registry.v1.RegistryService",
+	ServiceName: "sdk.registry.v1.RegistryService",
 	HandlerType: (*RegistryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

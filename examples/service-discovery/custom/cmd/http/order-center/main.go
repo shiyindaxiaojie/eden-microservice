@@ -14,9 +14,9 @@ import (
 	"time"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	httpclient "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/http"
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/instanceguard"
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/registry"
+	httpclient "github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/http"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/instanceguard"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/registry"
 )
 
 func main() {

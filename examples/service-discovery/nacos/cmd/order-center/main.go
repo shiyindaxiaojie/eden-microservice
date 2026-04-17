@@ -17,8 +17,8 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/nacos/internal/instanceguard"
-	nacoshelper "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/nacos/internal/nacosapi"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/nacos/internal/instanceguard"
+	nacoshelper "github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/nacos/internal/nacosapi"
 )
 
 func main() {

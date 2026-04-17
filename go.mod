@@ -1,4 +1,4 @@
-module github.com/shiyindaxiaojie/eden-go-registry
+module github.com/shiyindaxiaojie/eden-registry
 
 go 1.25.8
 

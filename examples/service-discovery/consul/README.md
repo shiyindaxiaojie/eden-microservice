@@ -6,7 +6,7 @@ The point of the demo is:
 
 - keep normal Consul client code
 - only change `CONSUL_ADDR`
-- switch from real Consul to Eden without changing business logic
+- switch from real Consul to the registry without changing business logic
 
 ## Layout
 
@@ -63,3 +63,4 @@ curl "http://127.0.0.1:22001/api/users/1/profile"
 curl "http://127.0.0.1:22003/api/orders/create?user_id=1"
 curl "http://127.0.0.1:22003/api/orders/demo?user_id=1"
 ```
+

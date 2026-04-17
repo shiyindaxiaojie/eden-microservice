@@ -3,7 +3,7 @@ package instanceguard
 import (
 	"sync"
 
-	nacoshelper "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/nacos/internal/nacosapi"
+	nacoshelper "github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/nacos/internal/nacosapi"
 )
 
 // WatchSelfOffline closes the returned channel when the instance becomes unhealthy

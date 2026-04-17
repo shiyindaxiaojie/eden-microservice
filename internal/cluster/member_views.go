@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 )
 
 // ClusterMemberView is the normalized member payload shared by HTTP and gRPC endpoints.

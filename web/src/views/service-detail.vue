@@ -8,8 +8,7 @@ import { useI18n } from '../utils/i18n'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
 
-type HealthFilter = 'all' | 'passing' | 'critical'
-type LifecycleFilter = 'all' | 'online' | 'offline'
+type StatusFilter = 'all' | 'passing' | 'critical' | 'manual_offline'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,8 +23,7 @@ const loading = ref(false)
 const actionTarget = ref('')
 const searchId = ref('')
 const searchIp = ref('')
-const healthFilter = ref<HealthFilter>('all')
-const lifecycleFilter = ref<LifecycleFilter>('all')
+const statusFilter = ref<StatusFilter>('all')
 const currentPage = ref(1)
 const pageSize = ref(12)
 
@@ -67,14 +65,13 @@ const filteredInstances = computed(() => {
     const matchesIp = !ipQuery || addr.includes(ipQuery)
     const matchesSearch = matchesId && matchesIp
 
-    const matchesHealth =
-      healthFilter.value === 'all' ||
-      (healthFilter.value === 'passing' ? item.status === 'passing' : item.status === 'critical')
-    const matchesLifecycle =
-      lifecycleFilter.value === 'all' ||
-      (lifecycleFilter.value === 'online' ? !item.manual_offline : !!item.manual_offline)
+    const matchesStatus =
+      statusFilter.value === 'all' ||
+      (statusFilter.value === 'passing' && item.status === 'passing' && !item.manual_offline) ||
+      (statusFilter.value === 'critical' && item.status === 'critical' && !item.manual_offline) ||
+      (statusFilter.value === 'manual_offline' && !!item.manual_offline)
 
-    return matchesSearch && matchesHealth && matchesLifecycle
+    return matchesSearch && matchesStatus
   })
 })
 
@@ -100,21 +97,11 @@ function isManuallyOffline(instance: Instance) {
   return !!instance.manual_offline
 }
 
-function healthStateText(instance: Instance) {
-  if (isManuallyOffline(instance)) return text('手动下线', 'Manual Offline')
-  return instance.status === 'passing' ? text('健康', 'Passing') : text('异常', 'Critical')
-}
-
-function healthStateType(instance: Instance) {
-  if (isManuallyOffline(instance)) return 'warning'
-  return instance.status === 'passing' ? 'success' : 'danger'
-}
-
-function lifecycleStateText(instance: Instance) {
+function instanceStateText(instance: Instance) {
   return isManuallyOffline(instance) ? text('已下线', 'Offline') : text('在线', 'Online')
 }
 
-function lifecycleStateType(instance: Instance) {
+function instanceStateType(instance: Instance) {
   return isManuallyOffline(instance) ? 'warning' : 'success'
 }
 
@@ -186,7 +173,7 @@ watch(
   },
 )
 
-watch([searchId, searchIp, healthFilter, lifecycleFilter], () => {
+watch([searchId, searchIp, statusFilter], () => {
   currentPage.value = 1
 })
 

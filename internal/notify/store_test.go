@@ -2,11 +2,32 @@ package notify
 
 import "testing"
 
+type fakeConfigProvider struct {
+	configs map[string]*Config
+}
+
+func (f *fakeConfigProvider) GetNotifyConfig(namespace string) *Config {
+	if f == nil || f.configs == nil {
+		return nil
+	}
+	return f.configs[namespace]
+}
+
+func (f *fakeConfigProvider) SaveNotifyConfig(namespace string, cfg *Config) error {
+	if f.configs == nil {
+		f.configs = make(map[string]*Config)
+	}
+	cp := *cfg
+	cp.Channels = append([]Channel(nil), cfg.Channels...)
+	f.configs[namespace] = &cp
+	return nil
+}
+
 func TestStoreLoadSave(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
-	store := NewStore(dir)
+	provider := &fakeConfigProvider{}
+	store := NewStore(provider)
 
 	cfg, err := store.Load("prod")
 	if err != nil {

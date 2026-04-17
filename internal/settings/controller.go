@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-registry/internal/alert"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/cluster/replication"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
 )
 
 type Controller interface {
@@ -85,23 +85,36 @@ type EventCleaner interface {
 	Cleanup(days int)
 }
 
-type controller struct {
-	profile *Profile
-	auth    *auth.Directory
-	cpNode  CPNode
-	apNode  APNode
-	events  EventCleaner
-	startup StartupState
+type MetricsCleaner interface {
+	Cleanup()
 }
 
-func NewController(profile *Profile, directory *auth.Directory, cp CPNode, ap APNode, events EventCleaner, startup StartupState) Controller {
+type RuntimeStorage interface {
+	SetEventStorageMode(mode string)
+	SetMetricsStorageMode(mode string)
+}
+
+type controller struct {
+	profile        *Profile
+	auth           *auth.Store
+	cpNode         CPNode
+	apNode         APNode
+	events         EventCleaner
+	metrics        MetricsCleaner
+	runtimeStorage RuntimeStorage
+	startup        StartupState
+}
+
+func NewController(profile *Profile, store *auth.Store, cp CPNode, ap APNode, events EventCleaner, metrics MetricsCleaner, runtimeStorage RuntimeStorage, startup StartupState) Controller {
 	return &controller{
-		profile: profile,
-		auth:    directory,
-		cpNode:  cp,
-		apNode:  ap,
-		events:  events,
-		startup: startup,
+		profile:        profile,
+		auth:           store,
+		cpNode:         cp,
+		apNode:         ap,
+		events:         events,
+		metrics:        metrics,
+		runtimeStorage: runtimeStorage,
+		startup:        startup,
 	}
 }
 
@@ -738,14 +751,23 @@ func (c *controller) SaveSettingLocalV2(key string, value interface{}) {
 	case "event_storage_mode":
 		if v, ok := value.(string); ok {
 			c.profile.SetEventStorageMode(v)
+			if c.runtimeStorage != nil {
+				c.runtimeStorage.SetEventStorageMode(v)
+			}
 		}
 	case "metrics_storage_mode":
 		if v, ok := value.(string); ok {
 			c.profile.SetMetricsStorageMode(v)
+			if c.runtimeStorage != nil {
+				c.runtimeStorage.SetMetricsStorageMode(v)
+			}
 		}
 	case "metrics_retention_days":
 		if v, ok := coerceInt(value); ok {
 			c.profile.SetMetricsRetentionDays(v)
+			if c.metrics != nil {
+				c.metrics.Cleanup()
+			}
 		}
 	}
 	c.profile.Save()
@@ -800,6 +822,9 @@ func (c *controller) SetEventStorageMode(mode string) error {
 	}
 	c.profile.SetEventStorageMode(mode)
 	c.profile.Save()
+	if c.profile.GetMode() != "cp" && c.runtimeStorage != nil {
+		c.runtimeStorage.SetEventStorageMode(mode)
+	}
 	c.syncSettingsToPeers(map[string]interface{}{"event_storage_mode": mode})
 	return nil
 }
@@ -820,6 +845,9 @@ func (c *controller) SetMetricsStorageMode(mode string) error {
 	}
 	c.profile.SetMetricsStorageMode(mode)
 	c.profile.Save()
+	if c.profile.GetMode() != "cp" && c.runtimeStorage != nil {
+		c.runtimeStorage.SetMetricsStorageMode(mode)
+	}
 	c.syncSettingsToPeers(map[string]interface{}{"metrics_storage_mode": mode})
 	return nil
 }
@@ -843,6 +871,9 @@ func (c *controller) SetMetricsRetentionDays(days int) error {
 	}
 	c.profile.SetMetricsRetentionDays(days)
 	c.profile.Save()
+	if c.metrics != nil {
+		c.metrics.Cleanup()
+	}
 	c.syncSettingsToPeers(map[string]interface{}{"metrics_retention_days": days})
 	return nil
 }

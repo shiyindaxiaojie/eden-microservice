@@ -21,19 +21,20 @@ import (
 
 	nacosgrpc "github.com/nacos-group/nacos-sdk-go/v2/api/grpc"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	pb_cluster "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
-	pb_reg "github.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1"
-	nacosadapter "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	platformcluster "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/ap"
-	cp "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/cp"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/pkg/crypto"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
-	grpcapi "github.com/shiyindaxiaojie/eden-go-registry/internal/transport/grpc"
-	httpapi "github.com/shiyindaxiaojie/eden-go-registry/internal/transport/http"
+	pb_cluster "github.com/shiyindaxiaojie/eden-registry/api/proto/cluster/v1"
+	pb_reg "github.com/shiyindaxiaojie/eden-registry/api/proto/registry/v1"
+	nacosadapter "github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	platformcluster "github.com/shiyindaxiaojie/eden-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-registry/internal/cluster/ap"
+	cp "github.com/shiyindaxiaojie/eden-registry/internal/cluster/cp"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/pkg/crypto"
+	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
+	httpapi "github.com/shiyindaxiaojie/eden-registry/internal/transport/http"
+	quictransport "github.com/shiyindaxiaojie/eden-registry/internal/transport/quic"
+	rpcapi "github.com/shiyindaxiaojie/eden-registry/internal/transport/rpc"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -122,9 +123,17 @@ func main() {
 	}
 	cfg.Auth.APIKey.Enabled = runtimeState.GetAPIKeyAuthEnabled()
 
-	// Apply storage modes from config
-	runtimeState.SetEventStorageMode(cfg.Storage.EventStorageMode)
-	runtimeState.SetMetricsStorageMode(cfg.Storage.MetricsStorageMode)
+	// Apply storage modes from persisted runtime state when available.
+	eventStorageMode := cfg.Storage.EventStorageMode
+	if runtimeState.Settings.LoadedFromDisk() && runtimeState.GetEventStorageMode() != "" {
+		eventStorageMode = runtimeState.GetEventStorageMode()
+	}
+	metricsStorageMode := cfg.Storage.MetricsStorageMode
+	if runtimeState.Settings.LoadedFromDisk() && runtimeState.GetMetricsStorageMode() != "" {
+		metricsStorageMode = runtimeState.GetMetricsStorageMode()
+	}
+	runtimeState.SetEventStorageMode(eventStorageMode)
+	runtimeState.SetMetricsStorageMode(metricsStorageMode)
 
 	runtimeState.StartMetricsRecorder()
 
@@ -330,7 +339,7 @@ func main() {
 	}
 
 	logger.Info("========================================")
-	logger.Info("    Eden Go Registry")
+	logger.Info("    Registry Server")
 	logger.Info("========================================")
 	logger.Info("  Node ID   : %s", cfg.NodeID)
 	logger.Info("  Mode      : %s", strings.ToUpper(cfg.Mode))
@@ -362,7 +371,7 @@ func main() {
 	var settingsCPNode settings.CPNode
 	var settingsAPNode settings.APNode
 	var membershipCPNode platformcluster.ConsensusNode
-	var clusterReplicator grpcapi.Replicator
+	var clusterReplicator rpcapi.Replicator
 	if cpNode != nil {
 		catalogCPNode = cpNode
 		settingsCPNode = cpNode
@@ -376,7 +385,7 @@ func main() {
 
 	catSvc := catalog.NewRegistry(runtimeState.Catalog, runtimeState.Settings, catalogCPNode, catalogAPNode)
 	authSvc := auth.NewAuthenticator(runtimeState.Auth)
-	setSvc := settings.NewController(runtimeState.Settings, runtimeState.Auth, settingsCPNode, settingsAPNode, runtimeState.Catalog.Events, settings.StartupState{
+	setSvc := settings.NewController(runtimeState.Settings, runtimeState.Auth, settingsCPNode, settingsAPNode, runtimeState.Catalog.Events, runtimeState.Catalog.Metrics, runtimeState, settings.StartupState{
 		Mode:        cfg.Mode,
 		Consistency: cfg.Consistency,
 		GRPCEnabled: grpcEnabled,
@@ -391,8 +400,8 @@ func main() {
 	var grpcServer *grpc.Server
 	if grpcEnabled || quicEnabled {
 		grpcServer = grpc.NewServer()
-		regServer := grpcapi.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
-		clusterServer := grpcapi.NewClusterServer(runtimeState, clusterReplicator)
+		regServer := rpcapi.NewRegistryServer(cfg, catSvc, setSvc, clsSvc)
+		clusterServer := rpcapi.NewClusterServer(runtimeState, clusterReplicator)
 		nacosServer := nacosadapter.NewNacosNamingServer(cfg, catSvc)
 		pb_reg.RegisterRegistryServiceServer(grpcServer, regServer)
 		pb_cluster.RegisterClusterServiceServer(grpcServer, clusterServer)
@@ -425,7 +434,7 @@ func main() {
 				Certificates: []tls.Certificate{cert},
 				NextProtos:   []string{"h3"},
 			}
-			qlis, err := grpcapi.NewQUICListener(cfg.Server.QUIC, tlsConf)
+			qlis, err := quictransport.NewListener(cfg.Server.QUIC, tlsConf)
 			if err != nil {
 				logger.Error("Failed to listen for QUIC: %v", err)
 				return
@@ -460,7 +469,7 @@ func main() {
 			logger.Error("Raft shutdown error: %v", err)
 		}
 	}
-	logger.Info("Eden Go Registry stopped.")
+	logger.Info("Registry server stopped.")
 }
 
 func applyLogRetentionDays(logCfg *config.LogConfig, days int) {
@@ -526,7 +535,7 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			Organization: []string{"Eden Go Registry"},
+			Organization: []string{"Registry Server"},
 		},
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(time.Hour * 24 * 365),

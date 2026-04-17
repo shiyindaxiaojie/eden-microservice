@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "======================================================="
-echo " Eden Go Registry - 3 Node Cluster Startup"
+echo " Focalors - 3 Node Cluster Startup"
 echo "======================================================="
 echo ""
 
@@ -13,7 +13,7 @@ rm -rf data/node1 data/node2 data/node3
 
 # 1. Build
 echo "[2/4] Building server binary..."
-go build -o eden-server ./cmd/server/main.go
+go build -o registry-server ./cmd/server/main.go
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed!"
     exit 1
@@ -25,17 +25,17 @@ echo ""
 echo "[3/4] Starting cluster nodes..."
 
 echo "  Node 1 (HTTP: 8500)..."
-./eden-server -config examples/cluster/configs/node1.yaml > /tmp/eden-node1.log 2>&1 &
+./registry-server -config examples/cluster/configs/node1.yaml > /tmp/registry-node1.log 2>&1 &
 NODE1_PID=$!
 sleep 3
 
 echo "  Node 2 (HTTP: 8501)..."
-./eden-server -config examples/cluster/configs/node2.yaml > /tmp/eden-node2.log 2>&1 &
+./registry-server -config examples/cluster/configs/node2.yaml > /tmp/registry-node2.log 2>&1 &
 NODE2_PID=$!
 sleep 2
 
 echo "  Node 3 (HTTP: 8502)..."
-./eden-server -config examples/cluster/configs/node3.yaml > /tmp/eden-node3.log 2>&1 &
+./registry-server -config examples/cluster/configs/node3.yaml > /tmp/registry-node3.log 2>&1 &
 NODE3_PID=$!
 sleep 2
 
@@ -68,7 +68,7 @@ echo "  Node 1: http://localhost:8500 (PID: $NODE1_PID)"
 echo "  Node 2: http://localhost:8501 (PID: $NODE2_PID)"
 echo "  Node 3: http://localhost:8502 (PID: $NODE3_PID)"
 echo ""
-echo "  Logs: /tmp/eden-node{1,2,3}.log"
+echo "  Logs: /tmp/registry-node{1,2,3}.log"
 echo ""
 echo "Press Ctrl+C to stop the cluster..."
 
@@ -76,9 +76,11 @@ function cleanup() {
     echo ""
     echo "Shutting down..."
     kill $NODE1_PID $NODE2_PID $NODE3_PID 2>/dev/null
-    rm -f eden-server
+    rm -f registry-server
     echo "Done."
 }
 
 trap cleanup EXIT
 wait
+
+

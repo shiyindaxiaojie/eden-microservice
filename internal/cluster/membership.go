@@ -3,7 +3,7 @@ package cluster
 import (
 	"errors"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
 )
 
 // ClusterMember represents a node in the Raft cluster.

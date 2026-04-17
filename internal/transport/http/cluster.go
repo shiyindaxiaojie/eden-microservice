@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	clusterpkg "github.com/shiyindaxiaojie/eden-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 )
 
 // ---------- Cluster Handlers (Membership & Stats) ----------
@@ -309,7 +309,7 @@ func (h *Handler) listEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query().Get("query")
-	date := r.URL.Query().Get("date") // Expects YYYY-MM-DD
+	date := r.URL.Query().Get("date")            // Expects YYYY-MM-DD
 	startTime := r.URL.Query().Get("start_time") // Expects YYYY-MM-DDTHH:MM:SS
 	endTime := r.URL.Query().Get("end_time")     // Expects YYYY-MM-DDTHH:MM:SS
 	eventType := r.URL.Query().Get("type")
@@ -506,7 +506,7 @@ func (h *Handler) getLogs(w http.ResponseWriter, r *http.Request) {
 	if dropOffset > len(result) {
 		dropOffset = len(result)
 	}
-	
+
 	validItems := result[:len(result)-dropOffset]
 	jsonOK(w, map[string]interface{}{
 		"total": total,

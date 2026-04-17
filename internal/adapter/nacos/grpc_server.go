@@ -14,9 +14,9 @@ import (
 	rpcrequest "github.com/nacos-group/nacos-sdk-go/v2/common/remote/rpc/rpc_request"
 	rpcresponse "github.com/nacos-group/nacos-sdk-go/v2/common/remote/rpc/rpc_response"
 	nacosmodel "github.com/nacos-group/nacos-sdk-go/v2/model"
-	nacoscompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/compat"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	nacoscompat "github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/compat"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/types/known/anypb"
 )

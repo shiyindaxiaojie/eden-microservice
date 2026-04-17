@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
 )
 
 // ---------- Namespace Handlers ----------

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
 )
 
 const (
@@ -254,7 +254,7 @@ func templateVariables(rule Rule, event *catalog.Event, count, windowSec int) ma
 }
 
 func defaultTitle(rule Rule, event *catalog.Event) string {
-	return fmt.Sprintf("Registry Alarm - %s", humanizeEventName(event.Type))
+	return fmt.Sprintf("Focalors Alert - %s", humanizeEventName(event.Type))
 }
 
 func defaultBody(rule Rule, event *catalog.Event) string {
@@ -272,7 +272,7 @@ func humanizeEventName(code string) string {
 	case catalog.EventTypeServiceOffline:
 		return "Service Offline"
 	case catalog.EventTypeRegistryNodeSync:
-		return "Registry Node Sync"
+		return "Focalors Node Sync"
 	case catalog.EventTypeServiceHeartbeat:
 		return "Service Heartbeat"
 	case catalog.EventTypeServiceRemove:

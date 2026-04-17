@@ -36,7 +36,7 @@ func TestStoreLoadSave(t *testing.T) {
 		Threshold:     3,
 		WindowSec:     300,
 		ChannelIDs:    []string{"channel-email"},
-		TitleTemplate: "Eden Alert - {{ event_name }}",
+		TitleTemplate: "Focalors Alert - {{ event_name }}",
 		BodyTemplate:  "{{ event_code }} reached threshold {{ threshold }} in {{ window_sec }}s",
 		Enabled:       true,
 	})

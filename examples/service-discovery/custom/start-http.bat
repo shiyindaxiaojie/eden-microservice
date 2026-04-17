@@ -11,7 +11,7 @@ if "%CUSTOM_HTTP_ADDRS%"=="" set CUSTOM_HTTP_ADDRS=http://127.0.0.1:8500
 set WORKDIR=%~dp0..\..\..
 cd /d %WORKDIR%
 
-echo Registry HTTP addresses: %CUSTOM_HTTP_ADDRS%
+echo Focalors HTTP addresses: %CUSTOM_HTTP_ADDRS%
 echo.
 echo [1/3] Starting auth-center instances...
 start "custom-http-auth-1" cmd /c "set SERVICE_PORT=24102&& set SERVICE_ID=custom-http-auth-center-1&& go run ./examples/service-discovery/custom/cmd/http/auth-center"
@@ -48,3 +48,4 @@ taskkill /fi "windowtitle eq custom-http-order-1" /im cmd.exe /t /f >nul 2>&1
 taskkill /fi "windowtitle eq custom-http-order-2" /im cmd.exe /t /f >nul 2>&1
 
 echo Done.
+

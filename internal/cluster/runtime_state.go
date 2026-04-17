@@ -3,46 +3,46 @@ package cluster
 import (
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/settings"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
 )
 
 // SnapshotData represents the full state for Raft and anti-entropy sync.
 type SnapshotData struct {
-	Services           map[string][]*catalog.Instance                `json:"services,omitempty"`
-	ServicesByNS       map[string]map[string][]*catalog.Instance     `json:"services_by_namespace,omitempty"`
-	Namespaces         []*catalog.Namespace                          `json:"namespaces,omitempty"`
-	TopologyReports    map[string]map[string]*catalog.TopologyReport `json:"topology_reports,omitempty"`
-	APIKeys            map[string]*auth.APIKey                       `json:"api_keys"`
-	Users              map[string]*auth.User                         `json:"users"`
-	Mode               string                                        `json:"mode"`
-	Environment        string                                        `json:"environment"`
-	Seeds              []string                                      `json:"seeds"`
-	LogLevel           string                                        `json:"log_level"`
-	EventRetentionDays int                                           `json:"event_retention_days"`
-	LogRetentionDays   int                                           `json:"log_retention_days"`
-	EventTypes         []string                                      `json:"event_types"`
-	HBMaxFail          int                                           `json:"heartbeat_max_failures"`
-	RemovalDelay       int                                           `json:"instance_removal_delay_seconds"`
-	APIKeyAuthEnabled  bool                                          `json:"api_key_auth_enabled"`
-	NotifyAlertNodeID  string                                        `json:"notify_alert_node_id,omitempty"`
-	EventStorageMode   string                                        `json:"event_storage_mode"`
-	MetricsStorageMode string                                        `json:"metrics_storage_mode"`
-	MetricsRetentionDays int                                         `json:"metrics_retention_days"`
+	Services             map[string][]*catalog.Instance                `json:"services,omitempty"`
+	ServicesByNS         map[string]map[string][]*catalog.Instance     `json:"services_by_namespace,omitempty"`
+	Namespaces           []*catalog.Namespace                          `json:"namespaces,omitempty"`
+	TopologyReports      map[string]map[string]*catalog.TopologyReport `json:"topology_reports,omitempty"`
+	APIKeys              map[string]*auth.APIKey                       `json:"api_keys"`
+	Users                map[string]*auth.User                         `json:"users"`
+	Mode                 string                                        `json:"mode"`
+	Environment          string                                        `json:"environment"`
+	Seeds                []string                                      `json:"seeds"`
+	LogLevel             string                                        `json:"log_level"`
+	EventRetentionDays   int                                           `json:"event_retention_days"`
+	LogRetentionDays     int                                           `json:"log_retention_days"`
+	EventTypes           []string                                      `json:"event_types"`
+	HBMaxFail            int                                           `json:"heartbeat_max_failures"`
+	RemovalDelay         int                                           `json:"instance_removal_delay_seconds"`
+	APIKeyAuthEnabled    bool                                          `json:"api_key_auth_enabled"`
+	NotifyAlertNodeID    string                                        `json:"notify_alert_node_id,omitempty"`
+	EventStorageMode     string                                        `json:"event_storage_mode"`
+	MetricsStorageMode   string                                        `json:"metrics_storage_mode"`
+	MetricsRetentionDays int                                           `json:"metrics_retention_days"`
 }
 
 // RuntimeState composes the domain modules that participate in node runtime and cluster replication.
 type RuntimeState struct {
 	Catalog  *catalog.State
-	Auth     *auth.Directory
+	Auth     *auth.Store
 	Settings *settings.Profile
 }
 
 func NewRuntimeState(dataPath string) *RuntimeState {
 	state := &RuntimeState{
 		Catalog:  catalog.NewState(dataPath),
-		Auth:     auth.NewDirectory(dataPath),
+		Auth:     auth.NewStore(dataPath),
 		Settings: settings.NewProfile(dataPath),
 	}
 	state.Catalog.Events.SetRetentionDaysProvider(func() int {
@@ -50,7 +50,7 @@ func NewRuntimeState(dataPath string) *RuntimeState {
 	})
 	state.Catalog.SetEventTypesProvider(state.Settings.GetEventTypes)
 	state.Catalog.Events.Cleanup(state.Settings.GetEventRetentionDays())
-	
+
 	state.Catalog.Metrics.SetRetentionDaysProvider(state.Settings.GetMetricsRetentionDays)
 	state.Catalog.Metrics.Cleanup()
 
@@ -280,6 +280,11 @@ func (s *RuntimeState) GetMetricsRetentionDays() int {
 func (s *RuntimeState) SetMetricsRetentionDays(days int) {
 	s.Settings.SetMetricsRetentionDays(days)
 	s.Settings.Save()
+	s.Catalog.Metrics.Cleanup()
+}
+
+func (s *RuntimeState) CleanupMetrics() {
+	s.Catalog.Metrics.Cleanup()
 }
 
 func (s *RuntimeState) ListEvents() []*catalog.Event {
@@ -336,24 +341,24 @@ func (s *RuntimeState) Snapshot() *SnapshotData {
 	}
 
 	return &SnapshotData{
-		ServicesByNS:       servicesByNS,
-		Namespaces:         s.Catalog.Namespaces.List(),
-		TopologyReports:    s.Catalog.Topology.Snapshot(),
-		APIKeys:            s.Auth.GetAllAPIKeys(),
-		Users:              s.Auth.GetAllUsers(),
-		Mode:               s.Settings.GetMode(),
-		Environment:        s.Settings.GetEnvironment(),
-		Seeds:              s.Settings.GetSeeds(),
-		LogLevel:           s.Settings.GetLogLevel(),
-		EventRetentionDays: s.Settings.GetEventRetentionDays(),
-		LogRetentionDays:   s.Settings.GetLogRetentionDays(),
-		EventTypes:         s.Settings.GetEventTypes(),
-		HBMaxFail:          s.Settings.GetHeartbeatMaxFailures(),
-		RemovalDelay:       s.Settings.GetInstanceRemovalDelaySeconds(),
-		APIKeyAuthEnabled:  s.Settings.GetAPIKeyAuthEnabled(),
-		NotifyAlertNodeID:  s.Settings.GetNotifyAlertNodeID(),
-		EventStorageMode:   s.Settings.GetEventStorageMode(),
-		MetricsStorageMode: s.Settings.GetMetricsStorageMode(),
+		ServicesByNS:         servicesByNS,
+		Namespaces:           s.Catalog.Namespaces.List(),
+		TopologyReports:      s.Catalog.Topology.Snapshot(),
+		APIKeys:              s.Auth.GetAllAPIKeys(),
+		Users:                s.Auth.GetAllUsers(),
+		Mode:                 s.Settings.GetMode(),
+		Environment:          s.Settings.GetEnvironment(),
+		Seeds:                s.Settings.GetSeeds(),
+		LogLevel:             s.Settings.GetLogLevel(),
+		EventRetentionDays:   s.Settings.GetEventRetentionDays(),
+		LogRetentionDays:     s.Settings.GetLogRetentionDays(),
+		EventTypes:           s.Settings.GetEventTypes(),
+		HBMaxFail:            s.Settings.GetHeartbeatMaxFailures(),
+		RemovalDelay:         s.Settings.GetInstanceRemovalDelaySeconds(),
+		APIKeyAuthEnabled:    s.Settings.GetAPIKeyAuthEnabled(),
+		NotifyAlertNodeID:    s.Settings.GetNotifyAlertNodeID(),
+		EventStorageMode:     s.Settings.GetEventStorageMode(),
+		MetricsStorageMode:   s.Settings.GetMetricsStorageMode(),
 		MetricsRetentionDays: s.Settings.GetMetricsRetentionDays(),
 	}
 }
@@ -392,9 +397,12 @@ func (s *RuntimeState) Restore(data *SnapshotData) {
 	}
 	s.Auth.Restore(data.Users, data.APIKeys)
 	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled, data.NotifyAlertNodeID, data.EventStorageMode, data.MetricsStorageMode, data.MetricsRetentionDays)
+	s.Catalog.Events.SetStorageMode(s.Settings.GetEventStorageMode())
+	s.Catalog.Metrics.SetStorageMode(s.Settings.GetMetricsStorageMode())
 
 	s.Catalog.Instances.Save()
 	s.Auth.Save()
 	s.Settings.Save()
 	s.Catalog.Events.Cleanup(s.Settings.GetEventRetentionDays())
+	s.Catalog.Metrics.Cleanup()
 }

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/registry"
-	pb "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/registryv1"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/registry"
+	pb "github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/registryv1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"

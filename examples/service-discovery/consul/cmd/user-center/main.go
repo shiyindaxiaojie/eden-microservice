@@ -15,7 +15,7 @@ import (
 
 	consulapi "github.com/hashicorp/consul/api"
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
-	consulhelper "github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/consul/internal/consulapi"
+	consulhelper "github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/consul/internal/consulapi"
 )
 
 func main() {

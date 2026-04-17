@@ -385,7 +385,7 @@ func BuildError(message string) map[string]interface{} {
 	return map[string]interface{}{
 		"timestamp": time.Now().UnixMilli(),
 		"status":    500,
-		"error":     "Eden Nacos Compatibility Error",
+		"error":     "Registry Nacos Compatibility Error",
 		"message":   message,
 	}
 }

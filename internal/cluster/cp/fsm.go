@@ -6,11 +6,11 @@ import (
 	"io"
 
 	hraft "github.com/hashicorp/raft"
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster/replication"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	clusterpkg "github.com/shiyindaxiaojie/eden-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-registry/internal/cluster/replication"
 )
 
 // FSM implements hashicorp/raft.FSM backed by an in-memory Registry.

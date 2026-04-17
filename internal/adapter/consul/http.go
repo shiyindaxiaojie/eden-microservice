@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	consulapi "github.com/hashicorp/consul/api"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/consul/compat"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 )
 
 type HTTPAdapter struct {

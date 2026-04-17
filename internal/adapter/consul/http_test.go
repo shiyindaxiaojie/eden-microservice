@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 )
 
 type fakeRegistry struct {
@@ -80,6 +80,8 @@ func (f *fakeRegistry) CreateNamespace(ns *catalog.Namespace) bool { return fals
 func (f *fakeRegistry) UpdateNamespace(ns *catalog.Namespace) bool { return false }
 
 func (f *fakeRegistry) DeleteNamespace(name string) bool { return false }
+
+func (f *fakeRegistry) Metrics() *catalog.MetricsStore { return nil }
 
 func TestUpdateAgentCheckLegacyPassUsesInstanceIDRoute(t *testing.T) {
 	t.Parallel()

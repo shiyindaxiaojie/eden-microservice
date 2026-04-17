@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package eden.cluster.v1;
+package sdk.cluster.v1;
 
-option go_package = "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1;clusterv1";
+option go_package = "github.com/shiyindaxiaojie/eden-registry/api/proto/cluster/v1;clusterv1";
 
 // ClusterService defines the gRPC API for node-to-node communication.
 service ClusterService {
@@ -87,3 +87,4 @@ message ForwardResponse {
   int32  status_code = 2;
   bytes  body = 3;
 }
+

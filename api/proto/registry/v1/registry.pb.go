@@ -1065,7 +1065,7 @@ var File_api_proto_registry_v1_registry_proto protoreflect.FileDescriptor
 
 const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\n" +
-	"$api/proto/registry/v1/registry.proto\x12\x10eden.registry.v1\"\xe4\x02\n" +
+	"$api/proto/registry/v1/registry.proto\x12\x0fsdk.registry.v1\"\xe3\x02\n" +
 	"\x0fServiceInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fservice_name\x18\x02 \x01(\tR\vserviceName\x12\x12\n" +
@@ -1075,14 +1075,14 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1e\n" +
 	"\n" +
 	"datacenter\x18\a \x01(\tR\n" +
-	"datacenter\x12K\n" +
-	"\bmetadata\x18\b \x03(\v2/.eden.registry.v1.ServiceInstance.MetadataEntryR\bmetadata\x12\x1c\n" +
+	"datacenter\x12J\n" +
+	"\bmetadata\x18\b \x03(\v2..sdk.registry.v1.ServiceInstance.MetadataEntryR\bmetadata\x12\x1c\n" +
 	"\tnamespace\x18\t \x01(\tR\tnamespace\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"P\n" +
-	"\x0fRegisterRequest\x12=\n" +
-	"\binstance\x18\x01 \x01(\v2!.eden.registry.v1.ServiceInstanceR\binstance\",\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"O\n" +
+	"\x0fRegisterRequest\x12<\n" +
+	"\binstance\x18\x01 \x01(\v2 .sdk.registry.v1.ServiceInstanceR\binstance\",\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"u\n" +
 	"\x11DeregisterRequest\x12!\n" +
@@ -1113,15 +1113,15 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\n" +
 	"datacenter\x18\x03 \x01(\tR\n" +
 	"datacenter\x12\x1c\n" +
-	"\tnamespace\x18\x04 \x01(\tR\tnamespace\"S\n" +
-	"\x10DiscoverResponse\x12?\n" +
-	"\tinstances\x18\x01 \x03(\v2!.eden.registry.v1.ServiceInstanceR\tinstances\"O\n" +
+	"\tnamespace\x18\x04 \x01(\tR\tnamespace\"R\n" +
+	"\x10DiscoverResponse\x12>\n" +
+	"\tinstances\x18\x01 \x03(\v2 .sdk.registry.v1.ServiceInstanceR\tinstances\"O\n" +
 	"\fWatchRequest\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x1c\n" +
-	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"h\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"g\n" +
 	"\rWatchResponse\x12\x16\n" +
-	"\x06action\x18\x01 \x01(\tR\x06action\x12?\n" +
-	"\tinstances\x18\x02 \x03(\v2!.eden.registry.v1.ServiceInstanceR\tinstances\"\x13\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12>\n" +
+	"\tinstances\x18\x02 \x03(\v2 .sdk.registry.v1.ServiceInstanceR\tinstances\"\x13\n" +
 	"\x11GetMembersRequest\"\xf4\x01\n" +
 	"\rClusterMember\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
@@ -1132,9 +1132,9 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\thttp_addr\x18\x06 \x01(\tR\bhttpAddr\x12\x1b\n" +
 	"\tgrpc_addr\x18\a \x01(\tR\bgrpcAddr\x12\x1b\n" +
 	"\tquic_addr\x18\b \x01(\tR\bquicAddr\x12\x1b\n" +
-	"\traft_addr\x18\t \x01(\tR\braftAddr\"O\n" +
-	"\x12GetMembersResponse\x129\n" +
-	"\amembers\x18\x01 \x03(\v2\x1f.eden.registry.v1.ClusterMemberR\amembers\"\x9a\x01\n" +
+	"\traft_addr\x18\t \x01(\tR\braftAddr\"N\n" +
+	"\x12GetMembersResponse\x128\n" +
+	"\amembers\x18\x01 \x03(\v2\x1e.sdk.registry.v1.ClusterMemberR\amembers\"\x9a\x01\n" +
 	"\x15ReportTopologyRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12)\n" +
 	"\x10consumer_service\x18\x02 \x01(\tR\x0fconsumerService\x12\x1c\n" +
@@ -1142,18 +1142,18 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\bchecksum\x18\x04 \x01(\tR\bchecksum\"L\n" +
 	"\x16ReportTopologyResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\achanged\x18\x02 \x01(\bR\achanged2\xde\x05\n" +
-	"\x0fRegistryService\x12Q\n" +
-	"\bRegister\x12!.eden.registry.v1.RegisterRequest\x1a\".eden.registry.v1.RegisterResponse\x12W\n" +
+	"\achanged\x18\x02 \x01(\bR\achanged2\xce\x05\n" +
+	"\x0fRegistryService\x12O\n" +
+	"\bRegister\x12 .sdk.registry.v1.RegisterRequest\x1a!.sdk.registry.v1.RegisterResponse\x12U\n" +
 	"\n" +
-	"Deregister\x12#.eden.registry.v1.DeregisterRequest\x1a$.eden.registry.v1.DeregisterResponse\x12l\n" +
-	"\x11SetInstanceStatus\x12*.eden.registry.v1.SetInstanceStatusRequest\x1a+.eden.registry.v1.SetInstanceStatusResponse\x12T\n" +
-	"\tHeartbeat\x12\".eden.registry.v1.HeartbeatRequest\x1a#.eden.registry.v1.HeartbeatResponse\x12Q\n" +
-	"\bDiscover\x12!.eden.registry.v1.DiscoverRequest\x1a\".eden.registry.v1.DiscoverResponse\x12J\n" +
-	"\x05Watch\x12\x1e.eden.registry.v1.WatchRequest\x1a\x1f.eden.registry.v1.WatchResponse0\x01\x12W\n" +
+	"Deregister\x12\".sdk.registry.v1.DeregisterRequest\x1a#.sdk.registry.v1.DeregisterResponse\x12j\n" +
+	"\x11SetInstanceStatus\x12).sdk.registry.v1.SetInstanceStatusRequest\x1a*.sdk.registry.v1.SetInstanceStatusResponse\x12R\n" +
+	"\tHeartbeat\x12!.sdk.registry.v1.HeartbeatRequest\x1a\".sdk.registry.v1.HeartbeatResponse\x12O\n" +
+	"\bDiscover\x12 .sdk.registry.v1.DiscoverRequest\x1a!.sdk.registry.v1.DiscoverResponse\x12H\n" +
+	"\x05Watch\x12\x1d.sdk.registry.v1.WatchRequest\x1a\x1e.sdk.registry.v1.WatchResponse0\x01\x12U\n" +
 	"\n" +
-	"GetMembers\x12#.eden.registry.v1.GetMembersRequest\x1a$.eden.registry.v1.GetMembersResponse\x12c\n" +
-	"\x0eReportTopology\x12'.eden.registry.v1.ReportTopologyRequest\x1a(.eden.registry.v1.ReportTopologyResponseBNZLgithub.com/shiyindaxiaojie/eden-go-registry/api/proto/registry/v1;registryv1b\x06proto3"
+	"GetMembers\x12\".sdk.registry.v1.GetMembersRequest\x1a#.sdk.registry.v1.GetMembersResponse\x12a\n" +
+	"\x0eReportTopology\x12&.sdk.registry.v1.ReportTopologyRequest\x1a'.sdk.registry.v1.ReportTopologyResponseBKZIgithub.com/shiyindaxiaojie/eden-registry/api/proto/registry/v1;registryv1b\x06proto3"
 
 var (
 	file_api_proto_registry_v1_registry_proto_rawDescOnce sync.Once
@@ -1169,48 +1169,48 @@ func file_api_proto_registry_v1_registry_proto_rawDescGZIP() []byte {
 
 var file_api_proto_registry_v1_registry_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_api_proto_registry_v1_registry_proto_goTypes = []any{
-	(*ServiceInstance)(nil),           // 0: eden.registry.v1.ServiceInstance
-	(*RegisterRequest)(nil),           // 1: eden.registry.v1.RegisterRequest
-	(*RegisterResponse)(nil),          // 2: eden.registry.v1.RegisterResponse
-	(*DeregisterRequest)(nil),         // 3: eden.registry.v1.DeregisterRequest
-	(*DeregisterResponse)(nil),        // 4: eden.registry.v1.DeregisterResponse
-	(*SetInstanceStatusRequest)(nil),  // 5: eden.registry.v1.SetInstanceStatusRequest
-	(*SetInstanceStatusResponse)(nil), // 6: eden.registry.v1.SetInstanceStatusResponse
-	(*HeartbeatRequest)(nil),          // 7: eden.registry.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),         // 8: eden.registry.v1.HeartbeatResponse
-	(*DiscoverRequest)(nil),           // 9: eden.registry.v1.DiscoverRequest
-	(*DiscoverResponse)(nil),          // 10: eden.registry.v1.DiscoverResponse
-	(*WatchRequest)(nil),              // 11: eden.registry.v1.WatchRequest
-	(*WatchResponse)(nil),             // 12: eden.registry.v1.WatchResponse
-	(*GetMembersRequest)(nil),         // 13: eden.registry.v1.GetMembersRequest
-	(*ClusterMember)(nil),             // 14: eden.registry.v1.ClusterMember
-	(*GetMembersResponse)(nil),        // 15: eden.registry.v1.GetMembersResponse
-	(*ReportTopologyRequest)(nil),     // 16: eden.registry.v1.ReportTopologyRequest
-	(*ReportTopologyResponse)(nil),    // 17: eden.registry.v1.ReportTopologyResponse
-	nil,                               // 18: eden.registry.v1.ServiceInstance.MetadataEntry
+	(*ServiceInstance)(nil),           // 0: sdk.registry.v1.ServiceInstance
+	(*RegisterRequest)(nil),           // 1: sdk.registry.v1.RegisterRequest
+	(*RegisterResponse)(nil),          // 2: sdk.registry.v1.RegisterResponse
+	(*DeregisterRequest)(nil),         // 3: sdk.registry.v1.DeregisterRequest
+	(*DeregisterResponse)(nil),        // 4: sdk.registry.v1.DeregisterResponse
+	(*SetInstanceStatusRequest)(nil),  // 5: sdk.registry.v1.SetInstanceStatusRequest
+	(*SetInstanceStatusResponse)(nil), // 6: sdk.registry.v1.SetInstanceStatusResponse
+	(*HeartbeatRequest)(nil),          // 7: sdk.registry.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),         // 8: sdk.registry.v1.HeartbeatResponse
+	(*DiscoverRequest)(nil),           // 9: sdk.registry.v1.DiscoverRequest
+	(*DiscoverResponse)(nil),          // 10: sdk.registry.v1.DiscoverResponse
+	(*WatchRequest)(nil),              // 11: sdk.registry.v1.WatchRequest
+	(*WatchResponse)(nil),             // 12: sdk.registry.v1.WatchResponse
+	(*GetMembersRequest)(nil),         // 13: sdk.registry.v1.GetMembersRequest
+	(*ClusterMember)(nil),             // 14: sdk.registry.v1.ClusterMember
+	(*GetMembersResponse)(nil),        // 15: sdk.registry.v1.GetMembersResponse
+	(*ReportTopologyRequest)(nil),     // 16: sdk.registry.v1.ReportTopologyRequest
+	(*ReportTopologyResponse)(nil),    // 17: sdk.registry.v1.ReportTopologyResponse
+	nil,                               // 18: sdk.registry.v1.ServiceInstance.MetadataEntry
 }
 var file_api_proto_registry_v1_registry_proto_depIdxs = []int32{
-	18, // 0: eden.registry.v1.ServiceInstance.metadata:type_name -> eden.registry.v1.ServiceInstance.MetadataEntry
-	0,  // 1: eden.registry.v1.RegisterRequest.instance:type_name -> eden.registry.v1.ServiceInstance
-	0,  // 2: eden.registry.v1.DiscoverResponse.instances:type_name -> eden.registry.v1.ServiceInstance
-	0,  // 3: eden.registry.v1.WatchResponse.instances:type_name -> eden.registry.v1.ServiceInstance
-	14, // 4: eden.registry.v1.GetMembersResponse.members:type_name -> eden.registry.v1.ClusterMember
-	1,  // 5: eden.registry.v1.RegistryService.Register:input_type -> eden.registry.v1.RegisterRequest
-	3,  // 6: eden.registry.v1.RegistryService.Deregister:input_type -> eden.registry.v1.DeregisterRequest
-	5,  // 7: eden.registry.v1.RegistryService.SetInstanceStatus:input_type -> eden.registry.v1.SetInstanceStatusRequest
-	7,  // 8: eden.registry.v1.RegistryService.Heartbeat:input_type -> eden.registry.v1.HeartbeatRequest
-	9,  // 9: eden.registry.v1.RegistryService.Discover:input_type -> eden.registry.v1.DiscoverRequest
-	11, // 10: eden.registry.v1.RegistryService.Watch:input_type -> eden.registry.v1.WatchRequest
-	13, // 11: eden.registry.v1.RegistryService.GetMembers:input_type -> eden.registry.v1.GetMembersRequest
-	16, // 12: eden.registry.v1.RegistryService.ReportTopology:input_type -> eden.registry.v1.ReportTopologyRequest
-	2,  // 13: eden.registry.v1.RegistryService.Register:output_type -> eden.registry.v1.RegisterResponse
-	4,  // 14: eden.registry.v1.RegistryService.Deregister:output_type -> eden.registry.v1.DeregisterResponse
-	6,  // 15: eden.registry.v1.RegistryService.SetInstanceStatus:output_type -> eden.registry.v1.SetInstanceStatusResponse
-	8,  // 16: eden.registry.v1.RegistryService.Heartbeat:output_type -> eden.registry.v1.HeartbeatResponse
-	10, // 17: eden.registry.v1.RegistryService.Discover:output_type -> eden.registry.v1.DiscoverResponse
-	12, // 18: eden.registry.v1.RegistryService.Watch:output_type -> eden.registry.v1.WatchResponse
-	15, // 19: eden.registry.v1.RegistryService.GetMembers:output_type -> eden.registry.v1.GetMembersResponse
-	17, // 20: eden.registry.v1.RegistryService.ReportTopology:output_type -> eden.registry.v1.ReportTopologyResponse
+	18, // 0: sdk.registry.v1.ServiceInstance.metadata:type_name -> sdk.registry.v1.ServiceInstance.MetadataEntry
+	0,  // 1: sdk.registry.v1.RegisterRequest.instance:type_name -> sdk.registry.v1.ServiceInstance
+	0,  // 2: sdk.registry.v1.DiscoverResponse.instances:type_name -> sdk.registry.v1.ServiceInstance
+	0,  // 3: sdk.registry.v1.WatchResponse.instances:type_name -> sdk.registry.v1.ServiceInstance
+	14, // 4: sdk.registry.v1.GetMembersResponse.members:type_name -> sdk.registry.v1.ClusterMember
+	1,  // 5: sdk.registry.v1.RegistryService.Register:input_type -> sdk.registry.v1.RegisterRequest
+	3,  // 6: sdk.registry.v1.RegistryService.Deregister:input_type -> sdk.registry.v1.DeregisterRequest
+	5,  // 7: sdk.registry.v1.RegistryService.SetInstanceStatus:input_type -> sdk.registry.v1.SetInstanceStatusRequest
+	7,  // 8: sdk.registry.v1.RegistryService.Heartbeat:input_type -> sdk.registry.v1.HeartbeatRequest
+	9,  // 9: sdk.registry.v1.RegistryService.Discover:input_type -> sdk.registry.v1.DiscoverRequest
+	11, // 10: sdk.registry.v1.RegistryService.Watch:input_type -> sdk.registry.v1.WatchRequest
+	13, // 11: sdk.registry.v1.RegistryService.GetMembers:input_type -> sdk.registry.v1.GetMembersRequest
+	16, // 12: sdk.registry.v1.RegistryService.ReportTopology:input_type -> sdk.registry.v1.ReportTopologyRequest
+	2,  // 13: sdk.registry.v1.RegistryService.Register:output_type -> sdk.registry.v1.RegisterResponse
+	4,  // 14: sdk.registry.v1.RegistryService.Deregister:output_type -> sdk.registry.v1.DeregisterResponse
+	6,  // 15: sdk.registry.v1.RegistryService.SetInstanceStatus:output_type -> sdk.registry.v1.SetInstanceStatusResponse
+	8,  // 16: sdk.registry.v1.RegistryService.Heartbeat:output_type -> sdk.registry.v1.HeartbeatResponse
+	10, // 17: sdk.registry.v1.RegistryService.Discover:output_type -> sdk.registry.v1.DiscoverResponse
+	12, // 18: sdk.registry.v1.RegistryService.Watch:output_type -> sdk.registry.v1.WatchResponse
+	15, // 19: sdk.registry.v1.RegistryService.GetMembers:output_type -> sdk.registry.v1.GetMembersResponse
+	17, // 20: sdk.registry.v1.RegistryService.ReportTopology:output_type -> sdk.registry.v1.ReportTopologyResponse
 	13, // [13:21] is the sub-list for method output_type
 	5,  // [5:13] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name

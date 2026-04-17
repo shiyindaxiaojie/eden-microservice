@@ -19,15 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClusterService_SyncSeeds_FullMethodName       = "/eden.cluster.v1.ClusterService/SyncSeeds"
-	ClusterService_SyncUser_FullMethodName        = "/eden.cluster.v1.ClusterService/SyncUser"
-	ClusterService_DeleteUser_FullMethodName      = "/eden.cluster.v1.ClusterService/DeleteUser"
-	ClusterService_SyncAPIKey_FullMethodName      = "/eden.cluster.v1.ClusterService/SyncAPIKey"
-	ClusterService_DeleteAPIKey_FullMethodName    = "/eden.cluster.v1.ClusterService/DeleteAPIKey"
-	ClusterService_SyncSettings_FullMethodName    = "/eden.cluster.v1.ClusterService/SyncSettings"
-	ClusterService_ReplicateLog_FullMethodName    = "/eden.cluster.v1.ClusterService/ReplicateLog"
-	ClusterService_SyncDiscovery_FullMethodName   = "/eden.cluster.v1.ClusterService/SyncDiscovery"
-	ClusterService_ForwardToLeader_FullMethodName = "/eden.cluster.v1.ClusterService/ForwardToLeader"
+	ClusterService_SyncSeeds_FullMethodName       = "/sdk.cluster.v1.ClusterService/SyncSeeds"
+	ClusterService_SyncUser_FullMethodName        = "/sdk.cluster.v1.ClusterService/SyncUser"
+	ClusterService_DeleteUser_FullMethodName      = "/sdk.cluster.v1.ClusterService/DeleteUser"
+	ClusterService_SyncAPIKey_FullMethodName      = "/sdk.cluster.v1.ClusterService/SyncAPIKey"
+	ClusterService_DeleteAPIKey_FullMethodName    = "/sdk.cluster.v1.ClusterService/DeleteAPIKey"
+	ClusterService_SyncSettings_FullMethodName    = "/sdk.cluster.v1.ClusterService/SyncSettings"
+	ClusterService_ReplicateLog_FullMethodName    = "/sdk.cluster.v1.ClusterService/ReplicateLog"
+	ClusterService_SyncDiscovery_FullMethodName   = "/sdk.cluster.v1.ClusterService/SyncDiscovery"
+	ClusterService_ForwardToLeader_FullMethodName = "/sdk.cluster.v1.ClusterService/ForwardToLeader"
 )
 
 // ClusterServiceClient is the client API for ClusterService service.
@@ -402,7 +402,7 @@ func _ClusterService_ForwardToLeader_Handler(srv interface{}, ctx context.Contex
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ClusterService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "eden.cluster.v1.ClusterService",
+	ServiceName: "sdk.cluster.v1.ClusterService",
 	HandlerType: (*ClusterServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

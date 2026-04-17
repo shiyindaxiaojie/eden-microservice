@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/metrics/process"
+	"github.com/shiyindaxiaojie/eden-registry/internal/metrics/process"
 )
 
 // SubscriberInfo describes a subscription channel and its source.

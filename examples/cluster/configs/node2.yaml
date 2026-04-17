@@ -1,4 +1,4 @@
-# Eden Registry Node 2 (Ports auto-resolved)
+# Focalors Node 2 (Ports auto-resolved)
 node_id: "node-2"
 mode: "cluster"
 consistency: "cp"
@@ -11,3 +11,5 @@ transport:
   quic: "off"
   raft: "auto"
 data_dir: "./data/node2"
+
+

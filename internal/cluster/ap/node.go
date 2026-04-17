@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	pb "github.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/auth"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/config"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	pb "github.com/shiyindaxiaojie/eden-registry/api/proto/cluster/v1"
+	"github.com/shiyindaxiaojie/eden-registry/internal/auth"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/cluster"
+	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 	"google.golang.org/grpc"
 )
 

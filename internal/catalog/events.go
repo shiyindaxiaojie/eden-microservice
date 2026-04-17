@@ -52,6 +52,18 @@ func (s *EventLog) SetStorageMode(mode string) {
 	}
 }
 
+func eventTimeIndex(ts time.Time, id uint64) string {
+	return fmt.Sprintf("%s|%020d", ts.UTC().Format("2006-01-02T15:04:05.000Z"), id)
+}
+
+func eventTypeIndex(eventType string, ts time.Time, id uint64) string {
+	return fmt.Sprintf("%s|%s|%020d", eventType, ts.UTC().Format("2006-01-02T15:04:05.000Z"), id)
+}
+
+func eventServiceIndex(service string, ts time.Time, id uint64) string {
+	return fmt.Sprintf("%s|%s|%020d", service, ts.UTC().Format("2006-01-02T15:04:05.000Z"), id)
+}
+
 func (s *EventLog) init() {
 	if s.dataPath == "" {
 		return
@@ -148,19 +160,16 @@ func (s *EventLog) Append(e *Event) {
 			data, _ := json.Marshal(e)
 			tx.Bucket([]byte(bucketEvents)).Put(idBytes, data)
 
-			// Use UTC for indexing to avoid timezone confusion with frontend UTC strings
-			tsUTC := e.Timestamp.UTC().Format("2006-01-02T15:04:05.000Z")
-
 			// Index by Time: Time(UTC) | ID
-			timeKey := fmt.Sprintf("%s|%020d", tsUTC, e.ID)
+			timeKey := eventTimeIndex(e.Timestamp, e.ID)
 			tx.Bucket([]byte(bucketIdxTime)).Put([]byte(timeKey), idBytes)
 
 			// Index by Type: Type | Time(UTC) | ID
-			typeKey := fmt.Sprintf("%s|%s|%020d", e.Type, tsUTC, e.ID)
+			typeKey := eventTypeIndex(e.Type, e.Timestamp, e.ID)
 			tx.Bucket([]byte(bucketIdxType)).Put([]byte(typeKey), idBytes)
 
 			// Index by Service: Service | Time(UTC) | ID
-			serviceKey := fmt.Sprintf("%s|%s|%020d", e.Service, tsUTC, e.ID)
+			serviceKey := eventServiceIndex(e.Service, e.Timestamp, e.ID)
 			tx.Bucket([]byte(bucketIdxService)).Put([]byte(serviceKey), idBytes)
 
 			return nil
@@ -275,10 +284,6 @@ func (s *EventLog) retentionCleaner() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		if s.db == nil {
-			continue
-		}
-		
 		days := 7
 		if s.retentionDaysProvider != nil {
 			days = s.retentionDaysProvider()
@@ -288,28 +293,20 @@ func (s *EventLog) retentionCleaner() {
 		}
 
 		cutoff := time.Now().AddDate(0, 0, -days)
-		cutoffKey := cutoff.Format(time.RFC3339Nano)
-
-		s.db.Update(func(tx *bolt.Tx) error {
-			bTime := tx.Bucket([]byte(bucketIdxTime))
-			bEvents := tx.Bucket([]byte(bucketEvents))
-
-			c := bTime.Cursor()
-			for k, v := c.First(); k != nil; k, v = c.Next() {
-				if string(k) < cutoffKey {
-					bEvents.Delete(v)
-					bTime.Delete(k)
-				} else {
-					break
-				}
-			}
-			return nil
-		})
+		s.cleanupPersistent(cutoff)
+		s.pruneInMemory(cutoff)
 	}
 }
 
 func (s *EventLog) Cleanup(days int) {
-	if s.dataPath == "" || days <= 0 {
+	if days <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -days)
+	s.cleanupPersistent(cutoff)
+	s.pruneInMemory(cutoff)
+
+	if s.dataPath == "" {
 		return
 	}
 	eventDir := filepath.Join(s.dataPath, "events")
@@ -318,7 +315,6 @@ func (s *EventLog) Cleanup(days int) {
 		return
 	}
 
-	cutoff := time.Now().AddDate(0, 0, -days)
 	for _, f := range files {
 		if !strings.HasPrefix(f.Name(), "events-") {
 			continue
@@ -335,6 +331,71 @@ func (s *EventLog) Cleanup(days int) {
 			_ = os.Remove(filepath.Join(eventDir, f.Name()))
 		}
 	}
+}
+
+func (s *EventLog) cleanupPersistent(cutoff time.Time) {
+	if s.db == nil {
+		return
+	}
+
+	cutoffKey := cutoff.UTC().Format("2006-01-02T15:04:05.000Z")
+	_ = s.db.Update(func(tx *bolt.Tx) error {
+		bTime := tx.Bucket([]byte(bucketIdxTime))
+		bEvents := tx.Bucket([]byte(bucketEvents))
+		bType := tx.Bucket([]byte(bucketIdxType))
+		bService := tx.Bucket([]byte(bucketIdxService))
+		if bTime == nil || bEvents == nil || bType == nil || bService == nil {
+			return nil
+		}
+
+		var keysToDelete [][]byte
+		c := bTime.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			if string(k) >= cutoffKey {
+				break
+			}
+			keysToDelete = append(keysToDelete, append([]byte(nil), k...))
+		}
+
+		for _, timeKey := range keysToDelete {
+			idBytes := bTime.Get(timeKey)
+			if idBytes == nil {
+				_ = bTime.Delete(timeKey)
+				continue
+			}
+
+			idCopy := append([]byte(nil), idBytes...)
+			raw := bEvents.Get(idCopy)
+			if raw != nil {
+				var e Event
+				if err := json.Unmarshal(raw, &e); err == nil {
+					_ = bType.Delete([]byte(eventTypeIndex(e.Type, e.Timestamp, e.ID)))
+					_ = bService.Delete([]byte(eventServiceIndex(e.Service, e.Timestamp, e.ID)))
+				}
+			}
+			_ = bEvents.Delete(idCopy)
+			_ = bTime.Delete(timeKey)
+		}
+		return nil
+	})
+}
+
+func (s *EventLog) pruneInMemory(cutoff time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.events) == 0 {
+		return
+	}
+
+	filtered := s.events[:0]
+	for _, e := range s.events {
+		if e == nil || e.Timestamp.Before(cutoff) {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	s.events = filtered
 }
 
 func (s *EventLog) QueryEvents(count, offset int, query, date, startTime, endTime, eventType, service string) ([]*Event, int) {

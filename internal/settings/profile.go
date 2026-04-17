@@ -6,51 +6,51 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/alert"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/catalog"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/notify"
+	"github.com/shiyindaxiaojie/eden-registry/internal/alert"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
 )
 
 // Profile persists cluster mode, environment, and runtime
 type Profile struct {
-	mu            sync.RWMutex
-	mode          string
-	environment   string
-	loaded        bool
-	seeds         []string
-	logLevel      string
-	eventRetDays  int
-	logRetDays    int
-	eventTypes    []string
-	hbMaxFail     int
-	removalDelay  int
-	apiKeyAuth    bool
-	apiKeyAuthSet bool
-	notifyAlertNodeID string
-	eventStorageMode  string
+	mu                 sync.RWMutex
+	mode               string
+	environment        string
+	loaded             bool
+	seeds              []string
+	logLevel           string
+	eventRetDays       int
+	logRetDays         int
+	eventTypes         []string
+	hbMaxFail          int
+	removalDelay       int
+	apiKeyAuth         bool
+	apiKeyAuthSet      bool
+	notifyAlertNodeID  string
+	eventStorageMode   string
 	metricsStorageMode string
-	metricsRetDays    int
-	dataPath      string
-	alertConfigs      map[string]*alert.Config
-	notifyConfigs     map[string]*notify.Config
+	metricsRetDays     int
+	dataPath           string
+	alertConfigs       map[string]*alert.Config
+	notifyConfigs      map[string]*notify.Config
 }
 
 func NewProfile(dataPath string) *Profile {
 	s := &Profile{
-		mode:         "ap",
-		environment:  "standalone",
-		seeds:        []string{},
-		eventRetDays: 30,
-		logRetDays:   30,
-		eventTypes:   catalog.DefaultEventTypes(),
-		hbMaxFail:    3,
-		removalDelay: 600,
-		eventStorageMode:  "memory",
+		mode:               "ap",
+		environment:        "standalone",
+		seeds:              []string{},
+		eventRetDays:       30,
+		logRetDays:         30,
+		eventTypes:         catalog.DefaultEventTypes(),
+		hbMaxFail:          3,
+		removalDelay:       600,
+		eventStorageMode:   "memory",
 		metricsStorageMode: "memory",
-		metricsRetDays:    30,
-		dataPath:     dataPath,
-		alertConfigs:  make(map[string]*alert.Config),
-		notifyConfigs: make(map[string]*notify.Config),
+		metricsRetDays:     30,
+		dataPath:           dataPath,
+		alertConfigs:       make(map[string]*alert.Config),
+		notifyConfigs:      make(map[string]*notify.Config),
 	}
 	s.Load()
 	return s
@@ -327,21 +327,21 @@ func (s *Profile) Load() {
 	settingsFile := filepath.Join(s.dataPath, "settings.json")
 	if data, err := os.ReadFile(settingsFile); err == nil {
 		var meta struct {
-			Mode               string    `json:"mode"`
-			Environment        string    `json:"environment"`
-			LogLevel           string    `json:"log_level"`
-			EventRetentionDays int       `json:"event_retention_days"`
-			LogRetentionDays   int       `json:"log_retention_days"`
-			EventTypes         *[]string `json:"event_types"`
-			HBMaxFail          int       `json:"heartbeat_max_failures"`
-			RemovalDelay       int       `json:"instance_removal_delay_seconds"`
-			APIKeyAuthEnabled  *bool                     `json:"api_key_auth_enabled"`
-			NotifyAlertNodeID  string                    `json:"notify_alert_node_id,omitempty"`
-			EventStorageMode   string                    `json:"event_storage_mode"`
-			MetricsStorageMode string                    `json:"metrics_storage_mode"`
-			MetricsRetentionDays int                     `json:"metrics_retention_days"`
-			AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
-			NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
+			Mode                 string                    `json:"mode"`
+			Environment          string                    `json:"environment"`
+			LogLevel             string                    `json:"log_level"`
+			EventRetentionDays   int                       `json:"event_retention_days"`
+			LogRetentionDays     int                       `json:"log_retention_days"`
+			EventTypes           *[]string                 `json:"event_types"`
+			HBMaxFail            int                       `json:"heartbeat_max_failures"`
+			RemovalDelay         int                       `json:"instance_removal_delay_seconds"`
+			APIKeyAuthEnabled    *bool                     `json:"api_key_auth_enabled"`
+			NotifyAlertNodeID    string                    `json:"notify_alert_node_id,omitempty"`
+			EventStorageMode     string                    `json:"event_storage_mode"`
+			MetricsStorageMode   string                    `json:"metrics_storage_mode"`
+			MetricsRetentionDays int                       `json:"metrics_retention_days"`
+			AlertConfigs         map[string]*alert.Config  `json:"alert_configs,omitempty"`
+			NotifyConfigs        map[string]*notify.Config `json:"notify_configs,omitempty"`
 		}
 		if err := json.Unmarshal(data, &meta); err == nil {
 			s.mode = meta.Mode
@@ -403,37 +403,37 @@ func (s *Profile) Save() {
 	// Save settings
 	settingsFile := filepath.Join(s.dataPath, "settings.json")
 	meta := struct {
-		Mode               string   `json:"mode"`
-		Environment        string   `json:"environment"`
-		LogLevel           string   `json:"log_level"`
-		EventRetentionDays int      `json:"event_retention_days"`
-		LogRetentionDays   int      `json:"log_retention_days"`
-		EventTypes         []string `json:"event_types"`
-		HBMaxFail          int      `json:"heartbeat_max_failures"`
-		RemovalDelay       int      `json:"instance_removal_delay_seconds"`
-		APIKeyAuthEnabled  bool                      `json:"api_key_auth_enabled"`
-		NotifyAlertNodeID  string                    `json:"notify_alert_node_id,omitempty"`
-		EventStorageMode   string                    `json:"event_storage_mode"`
-		MetricsStorageMode string                    `json:"metrics_storage_mode"`
-		MetricsRetentionDays int                     `json:"metrics_retention_days"`
-		AlertConfigs       map[string]*alert.Config  `json:"alert_configs,omitempty"`
-		NotifyConfigs      map[string]*notify.Config `json:"notify_configs,omitempty"`
+		Mode                 string                    `json:"mode"`
+		Environment          string                    `json:"environment"`
+		LogLevel             string                    `json:"log_level"`
+		EventRetentionDays   int                       `json:"event_retention_days"`
+		LogRetentionDays     int                       `json:"log_retention_days"`
+		EventTypes           []string                  `json:"event_types"`
+		HBMaxFail            int                       `json:"heartbeat_max_failures"`
+		RemovalDelay         int                       `json:"instance_removal_delay_seconds"`
+		APIKeyAuthEnabled    bool                      `json:"api_key_auth_enabled"`
+		NotifyAlertNodeID    string                    `json:"notify_alert_node_id,omitempty"`
+		EventStorageMode     string                    `json:"event_storage_mode"`
+		MetricsStorageMode   string                    `json:"metrics_storage_mode"`
+		MetricsRetentionDays int                       `json:"metrics_retention_days"`
+		AlertConfigs         map[string]*alert.Config  `json:"alert_configs,omitempty"`
+		NotifyConfigs        map[string]*notify.Config `json:"notify_configs,omitempty"`
 	}{
-		Mode:               s.mode,
-		Environment:        s.environment,
-		LogLevel:           s.logLevel,
-		EventRetentionDays: s.eventRetDays,
-		LogRetentionDays:   s.logRetDays,
-		EventTypes:         s.eventTypes,
-		HBMaxFail:          s.hbMaxFail,
-		RemovalDelay:       s.removalDelay,
-		APIKeyAuthEnabled:  s.apiKeyAuth,
-		NotifyAlertNodeID:  s.notifyAlertNodeID,
-		EventStorageMode:   s.eventStorageMode,
-		MetricsStorageMode: s.metricsStorageMode,
+		Mode:                 s.mode,
+		Environment:          s.environment,
+		LogLevel:             s.logLevel,
+		EventRetentionDays:   s.eventRetDays,
+		LogRetentionDays:     s.logRetDays,
+		EventTypes:           s.eventTypes,
+		HBMaxFail:            s.hbMaxFail,
+		RemovalDelay:         s.removalDelay,
+		APIKeyAuthEnabled:    s.apiKeyAuth,
+		NotifyAlertNodeID:    s.notifyAlertNodeID,
+		EventStorageMode:     s.eventStorageMode,
+		MetricsStorageMode:   s.metricsStorageMode,
 		MetricsRetentionDays: s.metricsRetDays,
-		AlertConfigs:       s.alertConfigs,
-		NotifyConfigs:      s.notifyConfigs,
+		AlertConfigs:         s.alertConfigs,
+		NotifyConfigs:        s.notifyConfigs,
 	}
 	data, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(settingsFile, data, 0644)

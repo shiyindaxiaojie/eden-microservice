@@ -15,7 +15,7 @@ export const messages = {
       docs: 'Documentation',
     },
     common: {
-      title: 'Eden Registry',
+      title: 'Focalors',
       refresh: 'Refresh',
       back: 'Back',
       actions: 'Actions',
@@ -348,7 +348,7 @@ export const messages = {
       docs: '操作文档',
     },
     common: {
-      title: 'Eden Registry',
+      title: 'Focalors',
       refresh: '刷新',
       back: '返回',
       actions: '操作',
@@ -698,3 +698,6 @@ function getCookie(name: string) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
   return match ? match[2] : null
 }
+
+
+

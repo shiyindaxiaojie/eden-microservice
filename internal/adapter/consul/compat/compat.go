@@ -38,7 +38,7 @@ type Deregistration struct {
 	InstanceID  string
 }
 
-// CatalogServiceEnvelope keeps official Consul fields while preserving legacy Eden fields.
+// CatalogServiceEnvelope keeps official Consul fields while preserving legacy registry fields.
 type CatalogServiceEnvelope struct {
 	*consulapi.CatalogService
 
@@ -100,7 +100,7 @@ type legacyServiceSummary struct {
 	Name string `json:"name"`
 }
 
-// DecodeRegisterRequest accepts either the legacy Eden body or official Consul bodies.
+// DecodeRegisterRequest accepts either the legacy registry body or official Consul bodies.
 func DecodeRegisterRequest(body []byte, defaultDatacenter, defaultNamespace string) (*Instance, error) {
 	if inst, ok := decodeLegacyRegister(body, defaultDatacenter, defaultNamespace); ok {
 		return inst, nil
@@ -168,7 +168,7 @@ func DecodeServicesMap(body []byte) (map[string][]string, error) {
 	return nil, fmt.Errorf("invalid service list payload")
 }
 
-// DecodeCatalogInstances parses both legacy Eden service rows and new Consul-compatible rows.
+// DecodeCatalogInstances parses both legacy registry service rows and new Consul-compatible rows.
 func DecodeCatalogInstances(body []byte) ([]Instance, error) {
 	var rows []catalogServiceWire
 	if err := json.Unmarshal(body, &rows); err == nil {
@@ -229,7 +229,7 @@ func DecodeCatalogInstances(body []byte) ([]Instance, error) {
 	return nil, fmt.Errorf("invalid catalog service payload")
 }
 
-// BuildCatalogServiceEnvelopes returns Consul-compatible catalog rows plus legacy Eden fields.
+// BuildCatalogServiceEnvelopes returns Consul-compatible catalog rows plus legacy registry fields.
 func BuildCatalogServiceEnvelopes(instances []Instance, requiredTags []string) []CatalogServiceEnvelope {
 	result := make([]CatalogServiceEnvelope, 0, len(instances))
 	for _, raw := range instances {
@@ -356,7 +356,7 @@ func ApplyHeaders(w http.ResponseWriter, index uint64) {
 	w.Header().Set("X-Consul-Translate-Addresses", "false")
 }
 
-// PublicMetadata strips Eden-internal compatibility keys.
+// PublicMetadata strips registry-internal compatibility keys.
 func PublicMetadata(metadata map[string]string) map[string]string {
 	if len(metadata) == 0 {
 		return nil

@@ -56,7 +56,7 @@ server:
 auth:
   jwt:
     enabled: true
-    secret: "eden-jwt-console-secret-key"
+    secret: "registry-jwt-console-secret-key"
 
 ############################################################
 # Logging
@@ -102,3 +102,4 @@ log:
       rollover:
         max_file: 10
         retention: 30d
+

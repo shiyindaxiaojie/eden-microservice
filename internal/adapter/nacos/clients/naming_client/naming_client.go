@@ -1,6 +1,6 @@
 // Package naming_client is a drop-in replacement for
 // github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client.
-// It provides INamingClient interface backed by Eden Registry.
+// It provides INamingClient backed by the local registry.
 package naming_client
 
 import (
@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	consulcompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
-	nacoscompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/compat"
-	nacosmodel "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/model"
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/nacos/vo"
+	consulcompat "github.com/shiyindaxiaojie/eden-registry/internal/adapter/consul/compat"
+	nacoscompat "github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/compat"
+	nacosmodel "github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/model"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/nacos/vo"
 )
 
 // INamingClient is the Nacos naming client interface.
@@ -31,13 +31,13 @@ type INamingClient interface {
 	GetAllServicesInfo(param vo.GetAllServiceInfoParam) (nacosmodel.ServiceList, error)
 }
 
-// NamingClient implements INamingClient by calling Eden Registry HTTP API.
+// NamingClient implements INamingClient by calling the local registry HTTP API.
 type NamingClient struct {
-	edenAddr string
-	client   *http.Client
-	stopCh   chan struct{}
-	mu       sync.Mutex
-	subs     map[string]chan struct{} // service -> stop channel
+	registryAddr string
+	client       *http.Client
+	stopCh       chan struct{}
+	mu           sync.Mutex
+	subs         map[string]chan struct{} // service -> stop channel
 }
 
 // NewNamingClient creates a new naming client from Nacos params.
@@ -54,10 +54,10 @@ func NewNamingClient(param vo.NacosClientParam) (INamingClient, error) {
 	addr := fmt.Sprintf("%s://%s:%d", scheme, sc.IpAddr, sc.Port)
 
 	return &NamingClient{
-		edenAddr: addr,
-		client:   &http.Client{Timeout: 5 * time.Second},
-		stopCh:   make(chan struct{}),
-		subs:     make(map[string]chan struct{}),
+		registryAddr: addr,
+		client:       &http.Client{Timeout: 5 * time.Second},
+		stopCh:       make(chan struct{}),
+		subs:         make(map[string]chan struct{}),
 	}, nil
 }
 
@@ -224,7 +224,7 @@ func (c *NamingClient) fetchInstances(serviceName, groupName string, healthyOnly
 
 func (c *NamingClient) doPost(path string, body interface{}) error {
 	data, _ := json.Marshal(body)
-	resp, err := c.client.Post(c.edenAddr+path, "application/json", bytes.NewReader(data))
+	resp, err := c.client.Post(c.registryAddr+path, "application/json", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (c *NamingClient) doPost(path string, body interface{}) error {
 }
 
 func (c *NamingClient) doGet(path string) ([]byte, error) {
-	resp, err := c.client.Get(c.edenAddr + path)
+	resp, err := c.client.Get(c.registryAddr + path)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ======================================================
-echo  Eden Go Registry - Cluster Restarting
+echo  Focalors - Cluster Restarting
 echo ======================================================
 echo.
 
@@ -12,7 +12,7 @@ cd /d %WORKDIR%
 
 :: 0. Stop all processes
 echo [1/3] Stopping all cluster nodes...
-taskkill /fi "windowtitle eq Eden-Node*" /im cmd.exe /t /f >nul 2>&1
+taskkill /fi "windowtitle eq Focalors-Node*" /im cmd.exe /t /f >nul 2>&1
 timeout /t 2 /nobreak >nul
 
 :: 1. Optional: No data cleaning in restart by default to preserve state
@@ -23,7 +23,7 @@ timeout /t 2 /nobreak >nul
 
 :: 2. Re-building
 echo [2/3] Re-building server binary...
-go build -o eden-server.exe ./cmd/server/main.go
+go build -o registry-server.exe ./cmd/server/main.go
 if errorlevel 1 (
     echo ERROR: Build failed!
     pause
@@ -37,3 +37,5 @@ call "%SCRIPT_DIR%start.bat"
 
 echo.
 echo Restart complete.
+
+

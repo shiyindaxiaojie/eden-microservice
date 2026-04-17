@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-logger"
-	clusterpkg "github.com/shiyindaxiaojie/eden-go-registry/internal/cluster"
+	logger "github.com/shiyindaxiaojie/eden-go-logger"
+	clusterpkg "github.com/shiyindaxiaojie/eden-registry/internal/cluster"
 
 	hraft "github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"

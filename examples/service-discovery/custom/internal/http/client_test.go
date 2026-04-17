@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/examples/service-discovery/custom/internal/registry"
+	"github.com/shiyindaxiaojie/eden-registry/examples/service-discovery/custom/internal/registry"
 )
 
 func TestHeartbeatReRegistersMissingInstance(t *testing.T) {

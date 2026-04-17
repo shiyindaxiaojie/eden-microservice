@@ -1,5 +1,5 @@
 // Package api is a drop-in replacement for github.com/hashicorp/consul/api.
-// It provides the same API surface but connects to Eden Go Registry instead of Consul.
+// It provides the same API surface but connects to the local registry instead of Consul.
 //
 // Usage in existing Consul-based code:
 //
@@ -7,7 +7,7 @@
 //	// import consulapi "github.com/hashicorp/consul/api"
 //
 //	// After (only change the import):
-//	import consulapi "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/api"
+//	import consulapi "github.com/shiyindaxiaojie/eden-registry/internal/adapter/consul/api"
 //
 // No other code changes are required.
 package api
@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	consulcompat "github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/compat"
+	consulcompat "github.com/shiyindaxiaojie/eden-registry/internal/adapter/consul/compat"
 )
 
 // ---------- Config & Client ----------
@@ -41,7 +41,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Client provides a client to the Eden API (Consul-compatible surface).
+// Client provides a client to the local registry API (Consul-compatible surface).
 type Client struct {
 	config *Config
 	client *http.Client
@@ -191,7 +191,7 @@ func (a *Agent) ServiceRegister(service *AgentServiceRegistration) error {
 
 // ServiceDeregister deregisters a service with the local agent.
 func (a *Agent) ServiceDeregister(serviceID string) error {
-	// We need the service name to deregister. In Eden, we use the serviceID
+	// We need the service name to deregister. In this implementation, we use the serviceID
 	// which is the instance ID. Query services to find the service_name first.
 	data, err := a.client.doGet("/v1/catalog/services")
 	if err != nil {
@@ -218,7 +218,7 @@ func (a *Agent) ServiceDeregister(serviceID string) error {
 	return fmt.Errorf("service instance %s not found", serviceID)
 }
 
-// UpdateTTL sends a TTL check update (maps to heartbeat in Eden).
+// UpdateTTL sends a TTL check update (maps to heartbeat in the local registry).
 func (a *Agent) UpdateTTL(checkID, output, status string) error {
 	// checkID format in Consul is typically "service:<serviceID>"
 	// We need to find the service_name for this instance

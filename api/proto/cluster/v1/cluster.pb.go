@@ -673,7 +673,7 @@ var File_api_proto_cluster_v1_cluster_proto protoreflect.FileDescriptor
 
 const file_api_proto_cluster_v1_cluster_proto_rawDesc = "" +
 	"\n" +
-	"\"api/proto/cluster/v1/cluster.proto\x12\x0feden.cluster.v1\"\x16\n" +
+	"\"api/proto/cluster/v1/cluster.proto\x12\x0esdk.cluster.v1\"\x16\n" +
 	"\x14SyncDiscoveryRequest\"+\n" +
 	"\x15SyncDiscoveryResponse\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"(\n" +
@@ -715,19 +715,19 @@ const file_api_proto_cluster_v1_cluster_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\vstatus_code\x18\x02 \x01(\x05R\n" +
 	"statusCode\x12\x12\n" +
-	"\x04body\x18\x03 \x01(\fR\x04body2\x83\x06\n" +
-	"\x0eClusterService\x12M\n" +
-	"\tSyncSeeds\x12!.eden.cluster.v1.SyncSeedsRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12K\n" +
-	"\bSyncUser\x12 .eden.cluster.v1.SyncUserRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12O\n" +
+	"\x04body\x18\x03 \x01(\fR\x04body2\xf1\x05\n" +
+	"\x0eClusterService\x12K\n" +
+	"\tSyncSeeds\x12 .sdk.cluster.v1.SyncSeedsRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12I\n" +
+	"\bSyncUser\x12\x1f.sdk.cluster.v1.SyncUserRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12M\n" +
 	"\n" +
-	"DeleteUser\x12\".eden.cluster.v1.DeleteUserRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12O\n" +
+	"DeleteUser\x12!.sdk.cluster.v1.DeleteUserRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12M\n" +
 	"\n" +
-	"SyncAPIKey\x12\".eden.cluster.v1.SyncAPIKeyRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12S\n" +
-	"\fDeleteAPIKey\x12$.eden.cluster.v1.DeleteAPIKeyRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12S\n" +
-	"\fSyncSettings\x12$.eden.cluster.v1.SyncSettingsRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12S\n" +
-	"\fReplicateLog\x12$.eden.cluster.v1.ReplicateLogRequest\x1a\x1d.eden.cluster.v1.SyncResponse\x12^\n" +
-	"\rSyncDiscovery\x12%.eden.cluster.v1.SyncDiscoveryRequest\x1a&.eden.cluster.v1.SyncDiscoveryResponse\x12T\n" +
-	"\x0fForwardToLeader\x12\x1f.eden.cluster.v1.ForwardRequest\x1a .eden.cluster.v1.ForwardResponseBLZJgithub.com/shiyindaxiaojie/eden-go-registry/api/proto/cluster/v1;clusterv1b\x06proto3"
+	"SyncAPIKey\x12!.sdk.cluster.v1.SyncAPIKeyRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12Q\n" +
+	"\fDeleteAPIKey\x12#.sdk.cluster.v1.DeleteAPIKeyRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12Q\n" +
+	"\fSyncSettings\x12#.sdk.cluster.v1.SyncSettingsRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12Q\n" +
+	"\fReplicateLog\x12#.sdk.cluster.v1.ReplicateLogRequest\x1a\x1c.sdk.cluster.v1.SyncResponse\x12\\\n" +
+	"\rSyncDiscovery\x12$.sdk.cluster.v1.SyncDiscoveryRequest\x1a%.sdk.cluster.v1.SyncDiscoveryResponse\x12R\n" +
+	"\x0fForwardToLeader\x12\x1e.sdk.cluster.v1.ForwardRequest\x1a\x1f.sdk.cluster.v1.ForwardResponseBIZGgithub.com/shiyindaxiaojie/eden-registry/api/proto/cluster/v1;clusterv1b\x06proto3"
 
 var (
 	file_api_proto_cluster_v1_cluster_proto_rawDescOnce sync.Once
@@ -743,38 +743,38 @@ func file_api_proto_cluster_v1_cluster_proto_rawDescGZIP() []byte {
 
 var file_api_proto_cluster_v1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_proto_cluster_v1_cluster_proto_goTypes = []any{
-	(*SyncDiscoveryRequest)(nil),  // 0: eden.cluster.v1.SyncDiscoveryRequest
-	(*SyncDiscoveryResponse)(nil), // 1: eden.cluster.v1.SyncDiscoveryResponse
-	(*SyncSeedsRequest)(nil),      // 2: eden.cluster.v1.SyncSeedsRequest
-	(*SyncResponse)(nil),          // 3: eden.cluster.v1.SyncResponse
-	(*SyncUserRequest)(nil),       // 4: eden.cluster.v1.SyncUserRequest
-	(*DeleteUserRequest)(nil),     // 5: eden.cluster.v1.DeleteUserRequest
-	(*SyncAPIKeyRequest)(nil),     // 6: eden.cluster.v1.SyncAPIKeyRequest
-	(*DeleteAPIKeyRequest)(nil),   // 7: eden.cluster.v1.DeleteAPIKeyRequest
-	(*SyncSettingsRequest)(nil),   // 8: eden.cluster.v1.SyncSettingsRequest
-	(*ReplicateLogRequest)(nil),   // 9: eden.cluster.v1.ReplicateLogRequest
-	(*ForwardRequest)(nil),        // 10: eden.cluster.v1.ForwardRequest
-	(*ForwardResponse)(nil),       // 11: eden.cluster.v1.ForwardResponse
+	(*SyncDiscoveryRequest)(nil),  // 0: sdk.cluster.v1.SyncDiscoveryRequest
+	(*SyncDiscoveryResponse)(nil), // 1: sdk.cluster.v1.SyncDiscoveryResponse
+	(*SyncSeedsRequest)(nil),      // 2: sdk.cluster.v1.SyncSeedsRequest
+	(*SyncResponse)(nil),          // 3: sdk.cluster.v1.SyncResponse
+	(*SyncUserRequest)(nil),       // 4: sdk.cluster.v1.SyncUserRequest
+	(*DeleteUserRequest)(nil),     // 5: sdk.cluster.v1.DeleteUserRequest
+	(*SyncAPIKeyRequest)(nil),     // 6: sdk.cluster.v1.SyncAPIKeyRequest
+	(*DeleteAPIKeyRequest)(nil),   // 7: sdk.cluster.v1.DeleteAPIKeyRequest
+	(*SyncSettingsRequest)(nil),   // 8: sdk.cluster.v1.SyncSettingsRequest
+	(*ReplicateLogRequest)(nil),   // 9: sdk.cluster.v1.ReplicateLogRequest
+	(*ForwardRequest)(nil),        // 10: sdk.cluster.v1.ForwardRequest
+	(*ForwardResponse)(nil),       // 11: sdk.cluster.v1.ForwardResponse
 }
 var file_api_proto_cluster_v1_cluster_proto_depIdxs = []int32{
-	2,  // 0: eden.cluster.v1.ClusterService.SyncSeeds:input_type -> eden.cluster.v1.SyncSeedsRequest
-	4,  // 1: eden.cluster.v1.ClusterService.SyncUser:input_type -> eden.cluster.v1.SyncUserRequest
-	5,  // 2: eden.cluster.v1.ClusterService.DeleteUser:input_type -> eden.cluster.v1.DeleteUserRequest
-	6,  // 3: eden.cluster.v1.ClusterService.SyncAPIKey:input_type -> eden.cluster.v1.SyncAPIKeyRequest
-	7,  // 4: eden.cluster.v1.ClusterService.DeleteAPIKey:input_type -> eden.cluster.v1.DeleteAPIKeyRequest
-	8,  // 5: eden.cluster.v1.ClusterService.SyncSettings:input_type -> eden.cluster.v1.SyncSettingsRequest
-	9,  // 6: eden.cluster.v1.ClusterService.ReplicateLog:input_type -> eden.cluster.v1.ReplicateLogRequest
-	0,  // 7: eden.cluster.v1.ClusterService.SyncDiscovery:input_type -> eden.cluster.v1.SyncDiscoveryRequest
-	10, // 8: eden.cluster.v1.ClusterService.ForwardToLeader:input_type -> eden.cluster.v1.ForwardRequest
-	3,  // 9: eden.cluster.v1.ClusterService.SyncSeeds:output_type -> eden.cluster.v1.SyncResponse
-	3,  // 10: eden.cluster.v1.ClusterService.SyncUser:output_type -> eden.cluster.v1.SyncResponse
-	3,  // 11: eden.cluster.v1.ClusterService.DeleteUser:output_type -> eden.cluster.v1.SyncResponse
-	3,  // 12: eden.cluster.v1.ClusterService.SyncAPIKey:output_type -> eden.cluster.v1.SyncResponse
-	3,  // 13: eden.cluster.v1.ClusterService.DeleteAPIKey:output_type -> eden.cluster.v1.SyncResponse
-	3,  // 14: eden.cluster.v1.ClusterService.SyncSettings:output_type -> eden.cluster.v1.SyncResponse
-	3,  // 15: eden.cluster.v1.ClusterService.ReplicateLog:output_type -> eden.cluster.v1.SyncResponse
-	1,  // 16: eden.cluster.v1.ClusterService.SyncDiscovery:output_type -> eden.cluster.v1.SyncDiscoveryResponse
-	11, // 17: eden.cluster.v1.ClusterService.ForwardToLeader:output_type -> eden.cluster.v1.ForwardResponse
+	2,  // 0: sdk.cluster.v1.ClusterService.SyncSeeds:input_type -> sdk.cluster.v1.SyncSeedsRequest
+	4,  // 1: sdk.cluster.v1.ClusterService.SyncUser:input_type -> sdk.cluster.v1.SyncUserRequest
+	5,  // 2: sdk.cluster.v1.ClusterService.DeleteUser:input_type -> sdk.cluster.v1.DeleteUserRequest
+	6,  // 3: sdk.cluster.v1.ClusterService.SyncAPIKey:input_type -> sdk.cluster.v1.SyncAPIKeyRequest
+	7,  // 4: sdk.cluster.v1.ClusterService.DeleteAPIKey:input_type -> sdk.cluster.v1.DeleteAPIKeyRequest
+	8,  // 5: sdk.cluster.v1.ClusterService.SyncSettings:input_type -> sdk.cluster.v1.SyncSettingsRequest
+	9,  // 6: sdk.cluster.v1.ClusterService.ReplicateLog:input_type -> sdk.cluster.v1.ReplicateLogRequest
+	0,  // 7: sdk.cluster.v1.ClusterService.SyncDiscovery:input_type -> sdk.cluster.v1.SyncDiscoveryRequest
+	10, // 8: sdk.cluster.v1.ClusterService.ForwardToLeader:input_type -> sdk.cluster.v1.ForwardRequest
+	3,  // 9: sdk.cluster.v1.ClusterService.SyncSeeds:output_type -> sdk.cluster.v1.SyncResponse
+	3,  // 10: sdk.cluster.v1.ClusterService.SyncUser:output_type -> sdk.cluster.v1.SyncResponse
+	3,  // 11: sdk.cluster.v1.ClusterService.DeleteUser:output_type -> sdk.cluster.v1.SyncResponse
+	3,  // 12: sdk.cluster.v1.ClusterService.SyncAPIKey:output_type -> sdk.cluster.v1.SyncResponse
+	3,  // 13: sdk.cluster.v1.ClusterService.DeleteAPIKey:output_type -> sdk.cluster.v1.SyncResponse
+	3,  // 14: sdk.cluster.v1.ClusterService.SyncSettings:output_type -> sdk.cluster.v1.SyncResponse
+	3,  // 15: sdk.cluster.v1.ClusterService.ReplicateLog:output_type -> sdk.cluster.v1.SyncResponse
+	1,  // 16: sdk.cluster.v1.ClusterService.SyncDiscovery:output_type -> sdk.cluster.v1.SyncDiscoveryResponse
+	11, // 17: sdk.cluster.v1.ClusterService.ForwardToLeader:output_type -> sdk.cluster.v1.ForwardResponse
 	9,  // [9:18] is the sub-list for method output_type
 	0,  // [0:9] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name

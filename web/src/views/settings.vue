@@ -164,7 +164,7 @@ const TEMPLATE_VARIABLES = computed<TemplateVariable[]>(() => [
 ])
 
 function getDynamicTitleTemplate() {
-  return locale.value === 'zh' ? '注册中心告警 - {{ event_name }}' : 'Registry Alert - {{ event_name }}'
+  return locale.value === 'zh' ? '芙卡洛斯告警 - {{ event_name }}' : 'Focalors Alert - {{ event_name }}'
 }
 
 function getDynamicBodyTemplate(eventCode: string) {
@@ -3544,5 +3544,6 @@ onMounted(() => {
   }
 }
 </style>
+
 
 

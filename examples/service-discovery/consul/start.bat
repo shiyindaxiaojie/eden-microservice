@@ -11,7 +11,7 @@ if "%CONSUL_ADDR%"=="" set CONSUL_ADDR=127.0.0.1:8500
 set WORKDIR=%~dp0..\..\..
 cd /d %WORKDIR%
 
-echo Registry address: %CONSUL_ADDR%
+echo Focalors address: %CONSUL_ADDR%
 echo.
 echo [1/3] Starting auth-center instances...
 start "consul-auth-1" cmd /c "set SERVICE_PORT=22002&& set SERVICE_ID=consul-auth-center-1&& go run ./examples/service-discovery/consul/cmd/auth-center"
@@ -48,3 +48,4 @@ taskkill /fi "windowtitle eq consul-order-1" /im cmd.exe /t /f >nul 2>&1
 taskkill /fi "windowtitle eq consul-order-2" /im cmd.exe /t /f >nul 2>&1
 
 echo Done.
+

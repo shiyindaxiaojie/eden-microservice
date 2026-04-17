@@ -35,8 +35,6 @@ interface MemorySample {
 }
 
 type DashboardPanel = 'events' | 'logs'
-type EventTimeFilter = 'all' | '1h' | '24h' | '7d'
-
 const AUTO_REFRESH_MS = 10000
 const MEMORY_TREND_WINDOW_MS = 10 * 60 * 1000
 const MEMORY_CHART_WIDTH = 320
@@ -71,17 +69,13 @@ const loading = ref(true)
 const logsLoading = ref(false)
 const activePanel = ref<DashboardPanel>('events')
 const activeEventType = ref('all')
-const activeEventTime = ref<EventTimeFilter>('all')
 const autoScrollLogs = ref(true)
 const logsScrollRef = ref<HTMLDivElement | null>(null)
 const logLineCount = ref(100)
 const logSearchText = ref('')
 const logSearchDate = ref<[Date, Date] | null>(null)
-const logOffset = ref(0)
 const logTotal = ref(0)
 const logCurrentPage = ref(1)
-const hasMoreLogs = ref(true)
-const isFetchingMore = ref(false)
 const isMemoryExpanded = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 
@@ -89,11 +83,8 @@ const eventLineCount = ref(100)
 const eventOffset = ref(0)
 const eventTotal = ref(0)
 const currentPage = ref(1)
-const hasMoreEvents = ref(true)
-const isFetchingMoreEvents = ref(false)
 const eventSearchText = ref('')
 const eventSearchDate = ref<[Date, Date] | null>(null)
-const eventsScrollRef = ref<HTMLDivElement | null>(null)
 
 const leaderNoteText = computed(() => {
   if (!stats.value) return '-'
@@ -117,25 +108,12 @@ const noLogFilesLabel = computed(() =>
 const noLogsLabel = computed(() =>
   locale.value === 'zh' ? '暂无日志内容' : 'No log content',
 )
-const noMatchedEventsLabel = computed(() =>
-  locale.value === 'zh' ? '没有符合筛选条件的事件' : 'No matching events',
-)
-const logLinesLabel = computed(() =>
-  locale.value === 'zh' ? `已加载 ${logs.value.length} 行` : `Loaded ${logs.value.length} lines`,
-)
 const logLineOptions = computed(() => [
   { value: 100, label: locale.value === 'zh' ? '100 行' : '100 Lines' },
   { value: 500, label: locale.value === 'zh' ? '500 行' : '500 Lines' },
   { value: 1000, label: locale.value === 'zh' ? '1000 行' : '1000 Lines' },
   { value: 2000, label: locale.value === 'zh' ? '2000 行' : '2000 Lines' },
   { value: 5000, label: locale.value === 'zh' ? '5000 行' : '5000 Lines' },
-])
-const eventLineOptions = computed(() => [
-  { value: 100, label: locale.value === 'zh' ? '100 条' : '100 Events' },
-  { value: 500, label: locale.value === 'zh' ? '500 条' : '500 Events' },
-  { value: 1000, label: locale.value === 'zh' ? '1000 条' : '1000 Events' },
-  { value: 2000, label: locale.value === 'zh' ? '2000 条' : '2000 Events' },
-  { value: 5000, label: locale.value === 'zh' ? '5000 条' : '5000 Events' },
 ])
 const eventTypeFilterLabel = computed(() => (locale.value === 'zh' ? '事件类型' : 'Event Type'))
 const eventTimeFilterLabel = computed(() => (locale.value === 'zh' ? '发生时间' : 'Occurred'))
@@ -200,16 +178,6 @@ const datePickerShortcuts = computed(() => [
 
 const logPickerShortcuts = computed(() => datePickerShortcuts.value)
 
-const eventTimeOptions = computed(() => [
-  { value: 'all', label: locale.value === 'zh' ? '全部' : 'All' },
-  { value: '30m', label: locale.value === 'zh' ? '近 30 分钟' : 'Last 30m' },
-  { value: '1h', label: locale.value === 'zh' ? '近 1 小时' : 'Last 1h' },
-  { value: '6h', label: locale.value === 'zh' ? '近 6 小时' : 'Last 6h' },
-  { value: '24h', label: locale.value === 'zh' ? '近 24 小时' : 'Last 24h' },
-])
-
-const activeEventQuickTime = ref('all')
-
 const localizedRoleText = computed(() => {
   const role = (stats.value?.role || '').toLowerCase()
   if (!role) return t.value.common.unknown
@@ -263,15 +231,6 @@ const serviceHealthComparisonText = computed(() => {
   return locale.value === 'zh'
     ? `健康率 ${stats.value.health_rate.toFixed(1)}%`
     : `${stats.value.health_rate.toFixed(1)}% health rate`
-})
-
-const namespaceLabelText = computed(() => {
-  if (namespaceCount.value == null) return '-'
-  if (namespaceCount.value === 0) {
-    return locale.value === 'zh' ? '暂无命名空间' : 'No namespaces yet'
-  }
-
-  return locale.value === 'zh' ? '已创建的命名空间' : 'Created namespaces'
 })
 
 const memoryTrendModel = computed(() => {
@@ -356,7 +315,15 @@ const fullChartModel = computed(() => {
   })
 
   const polyline = points.map((p) => `${p.x},${p.y}`).join(' ')
-  const areaPath = points.length === 0 ? '' : `M ${points[0].x} ${points[0].y} ${points.map((p) => `L ${p.x} ${p.y}`).join(' ')} L ${points.at(-1)?.x ?? 0} ${baselineY} L ${points[0].x} ${baselineY} Z`
+  const firstPoint = points[0]
+  const lastPoint = points[points.length - 1]
+  const linePath = points
+    .slice(1)
+    .map((p) => `L ${p.x} ${p.y}`)
+    .join(' ')
+  const areaPath = !firstPoint || !lastPoint
+    ? ''
+    : `M ${firstPoint.x} ${firstPoint.y} ${linePath} L ${lastPoint.x} ${baselineY} L ${firstPoint.x} ${baselineY} Z`
 
   return {
     points,
@@ -424,15 +391,6 @@ const eventTypeOptionsRaw = computed(() => {
   return [...new Set([...KNOWN_EVENT_TYPES, ...seenTypes])]
 })
 
-const eventSummaryText = computed(() => {
-  if (eventTotal.value === 0) return '0 条'
-  return `${eventTotal.value} 条`
-})
-
-const filteredEvents = computed(() => {
-  return [...events.value]
-})
-
 async function fetchEvents(forceOffset = -1) {
   try {
     let startTime = ''
@@ -470,10 +428,6 @@ function handleSizeChange(size: number) {
   eventLineCount.value = size
   currentPage.value = 1
   fetchEvents()
-}
-
-async function handleEventScroll(e: Event) {
-  // Infinite scroll disabled in favor of pagination
 }
 
 async function fetchLogs(file = activeLogFile.value, force = false, forceOffset = -1) {
@@ -520,7 +474,7 @@ function handleLogSizeChange(size: number) {
   fetchLogs(activeLogFile.value, true)
 }
 
-async function handleLogScroll(e: Event) {
+async function handleLogScroll(_e: Event) {
   // Infinite scroll disabled in favor of pagination
 }
 
@@ -541,7 +495,9 @@ watch([eventSearchText, eventSearchDate, activeEventType, eventLineCount], () =>
 
 async function fetchData() {
   try {
-    const dateStr = eventSearchDate.value ? new Date(eventSearchDate.value).toISOString().split('T')[0] : ''
+    const dateStr = eventSearchDate.value?.[0]
+      ? eventSearchDate.value[0].toISOString().split('T')[0]
+      : ''
     const [statsRes, eventsRes, logFilesRes, namespacesRes, usersRes] = await Promise.allSettled([
       getClusterStats(),
       getEvents(
@@ -628,14 +584,6 @@ function compactAddress(addr: string) {
   } catch {
     return addr.replace(/^https?:\/\//, '').replace(/\/$/, '')
   }
-}
-
-function formatTime(ts: string) {
-  if (!ts) return '-'
-  const date = new Date(ts)
-  return date.toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US', {
-    hour12: false,
-  })
 }
 
 function formatMemory(bytes: number | undefined) {
@@ -762,7 +710,7 @@ watch(eventLineCount, () => {
   fetchEvents()
 })
 
-watch([activeEventType, eventSearchDate, activeEventQuickTime], () => {
+watch([activeEventType, eventSearchDate], () => {
   currentPage.value = 1
   fetchEvents()
 })
@@ -1063,7 +1011,7 @@ onBeforeUnmount(() => {
       </header>
 
       <div v-if="activePanel === 'events'" class="panel-content-wrapper event-content-wrapper">
-        <div class="panel-scroll event-scroll" ref="eventsScrollRef">
+        <div class="panel-scroll event-scroll">
           <div v-if="loading" class="panel-empty">
             <el-icon><Loading /></el-icon>
             <p>{{ loadingLabel }}</p>

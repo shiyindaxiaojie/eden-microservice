@@ -3,8 +3,8 @@ package consul
 import (
 	"time"
 
-	"github.com/shiyindaxiaojie/eden-go-registry/internal/adapter/consul/api"
-	"github.com/shiyindaxiaojie/eden-go-registry/pkg/registry"
+	"github.com/shiyindaxiaojie/eden-registry/internal/adapter/consul/api"
+	"github.com/shiyindaxiaojie/eden-registry/pkg/sdk"
 )
 
 type consulRegistry struct {
@@ -12,7 +12,7 @@ type consulRegistry struct {
 }
 
 // NewRegistry creates a new Consul-based registry implementation.
-func NewRegistry(cfg *registry.Config) (registry.Registry, error) {
+func NewRegistry(cfg *sdk.Config) (sdk.Registry, error) {
 	config := api.DefaultConfig()
 	if len(cfg.Addresses) > 0 {
 		config.Address = cfg.Addresses[0]
@@ -27,7 +27,7 @@ func NewRegistry(cfg *registry.Config) (registry.Registry, error) {
 	return &consulRegistry{client: client}, nil
 }
 
-func (r *consulRegistry) Register(inst *registry.ServiceInstance) error {
+func (r *consulRegistry) Register(inst *sdk.ServiceInstance) error {
 	reg := &api.AgentServiceRegistration{
 		ID:      inst.ID,
 		Name:    inst.ServiceName,
@@ -39,19 +39,19 @@ func (r *consulRegistry) Register(inst *registry.ServiceInstance) error {
 	return r.client.Agent().ServiceRegister(reg)
 }
 
-func (r *consulRegistry) Deregister(inst *registry.ServiceInstance) error {
+func (r *consulRegistry) Deregister(inst *sdk.ServiceInstance) error {
 	return r.client.Agent().ServiceDeregister(inst.ID)
 }
 
-func (r *consulRegistry) Discovery(serviceName string) ([]*registry.ServiceInstance, error) {
+func (r *consulRegistry) Discovery(serviceName string) ([]*sdk.ServiceInstance, error) {
 	entries, _, err := r.client.Health().Service(serviceName, "", true, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	instances := make([]*registry.ServiceInstance, 0, len(entries))
+	instances := make([]*sdk.ServiceInstance, 0, len(entries))
 	for _, entry := range entries {
-		instances = append(instances, &registry.ServiceInstance{
+		instances = append(instances, &sdk.ServiceInstance{
 			ID:          entry.Service.ID,
 			ServiceName: entry.Service.Service,
 			Host:        entry.Service.Address,
@@ -64,10 +64,10 @@ func (r *consulRegistry) Discovery(serviceName string) ([]*registry.ServiceInsta
 	return instances, nil
 }
 
-func (r *consulRegistry) Subscribe(serviceName string, callback func([]*registry.ServiceInstance)) error {
+func (r *consulRegistry) Subscribe(serviceName string, callback func([]*sdk.ServiceInstance)) error {
 	// Simple polling for now
 	go func() {
-		lastInstances := []*registry.ServiceInstance{}
+		lastInstances := []*sdk.ServiceInstance{}
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 
@@ -87,7 +87,7 @@ func (r *consulRegistry) Subscribe(serviceName string, callback func([]*registry
 	return nil
 }
 
-func (r *consulRegistry) Heartbeat(inst *registry.ServiceInstance) error {
+func (r *consulRegistry) Heartbeat(inst *sdk.ServiceInstance) error {
 	return r.client.Agent().PassTTL("service:"+inst.ID, "heartbeat")
 }
 

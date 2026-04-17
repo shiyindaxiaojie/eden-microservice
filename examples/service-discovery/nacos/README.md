@@ -1,14 +1,14 @@
 # 官方 Nacos SDK 集成示例
 
-本目录演示如何直接使用官方 `github.com/nacos-group/nacos-sdk-go/v2` 接入 Eden。
+本目录演示如何直接使用官方 `github.com/nacos-group/nacos-sdk-go/v2` 接入当前注册中心。
 
 目标效果是：
 
 - 保持正常的 Nacos SDK 调用方式
 - 只修改 `NACOS_ADDR`
-- 从真实 Nacos 切换到 Eden 时不需要改业务代码
+- 从真实 Nacos 切换到当前注册中心时不需要改业务代码
 
-Eden 对外提供了 Nacos 兼容的 HTTP / gRPC 接口，示例里的三个服务直接使用官方 Naming Client 完成注册、发现和订阅。
+注册中心对外提供了 Nacos 兼容的 HTTP / gRPC 接口，示例里的三个服务直接使用官方 Naming Client 完成注册、发现和订阅。
 
 ## 目录结构
 
@@ -71,3 +71,4 @@ curl "http://127.0.0.1:23001/api/users/1/profile"
 curl "http://127.0.0.1:23003/api/orders/create?user_id=1"
 curl "http://127.0.0.1:23003/api/orders/demo?user_id=1"
 ```
+
