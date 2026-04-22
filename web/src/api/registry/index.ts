@@ -102,6 +102,8 @@ export interface SystemSettings {
   mode: 'standalone' | 'cluster'
   consistency: 'ap' | 'cp'
   log_level: string
+  registry_flush_mode: 'sync' | 'async'
+  registry_flush_interval_ms: number
   event_storage_mode: 'memory' | 'persistent'
   event_retention_days: number
   metrics_storage_mode: 'memory' | 'persistent'

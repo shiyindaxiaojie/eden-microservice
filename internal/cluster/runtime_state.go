@@ -27,6 +27,8 @@ type SnapshotData struct {
 	RemovalDelay         int                                           `json:"instance_removal_delay_seconds"`
 	APIKeyAuthEnabled    bool                                          `json:"api_key_auth_enabled"`
 	NotifyAlertNodeID    string                                        `json:"notify_alert_node_id,omitempty"`
+	RegistryFlushMode    string                                        `json:"registry_flush_mode"`
+	RegistryFlushMS      int                                           `json:"registry_flush_interval_ms"`
 	EventStorageMode     string                                        `json:"event_storage_mode"`
 	MetricsStorageMode   string                                        `json:"metrics_storage_mode"`
 	MetricsRetentionDays int                                           `json:"metrics_retention_days"`
@@ -50,6 +52,8 @@ func NewRuntimeState(dataPath string) *RuntimeState {
 	})
 	state.Catalog.SetEventTypesProvider(state.Settings.GetEventTypes)
 	state.Catalog.Events.Cleanup(state.Settings.GetEventRetentionDays())
+	state.Catalog.Instances.SetFlushMode(state.Settings.GetRegistryFlushMode())
+	state.Catalog.Instances.SetFlushInterval(time.Duration(state.Settings.GetRegistryFlushIntervalMS()) * time.Millisecond)
 
 	state.Catalog.Metrics.SetRetentionDaysProvider(state.Settings.GetMetricsRetentionDays)
 	state.Catalog.Metrics.Cleanup()
@@ -253,6 +257,26 @@ func (s *RuntimeState) SetNotifyAlertNodeID(nodeID string) {
 	s.Settings.Save()
 }
 
+func (s *RuntimeState) GetRegistryFlushMode() string {
+	return s.Settings.GetRegistryFlushMode()
+}
+
+func (s *RuntimeState) SetRegistryFlushMode(mode string) {
+	s.Settings.SetRegistryFlushMode(mode)
+	s.Settings.Save()
+	s.Catalog.Instances.SetFlushMode(mode)
+}
+
+func (s *RuntimeState) GetRegistryFlushIntervalMS() int {
+	return s.Settings.GetRegistryFlushIntervalMS()
+}
+
+func (s *RuntimeState) SetRegistryFlushIntervalMS(ms int) {
+	s.Settings.SetRegistryFlushIntervalMS(ms)
+	s.Settings.Save()
+	s.Catalog.Instances.SetFlushInterval(time.Duration(ms) * time.Millisecond)
+}
+
 func (s *RuntimeState) GetEventStorageMode() string {
 	return s.Settings.GetEventStorageMode()
 }
@@ -357,6 +381,8 @@ func (s *RuntimeState) Snapshot() *SnapshotData {
 		RemovalDelay:         s.Settings.GetInstanceRemovalDelaySeconds(),
 		APIKeyAuthEnabled:    s.Settings.GetAPIKeyAuthEnabled(),
 		NotifyAlertNodeID:    s.Settings.GetNotifyAlertNodeID(),
+		RegistryFlushMode:    s.Settings.GetRegistryFlushMode(),
+		RegistryFlushMS:      s.Settings.GetRegistryFlushIntervalMS(),
 		EventStorageMode:     s.Settings.GetEventStorageMode(),
 		MetricsStorageMode:   s.Settings.GetMetricsStorageMode(),
 		MetricsRetentionDays: s.Settings.GetMetricsRetentionDays(),
@@ -396,7 +422,9 @@ func (s *RuntimeState) Restore(data *SnapshotData) {
 		s.Catalog.Topology.Restore(data.TopologyReports)
 	}
 	s.Auth.Restore(data.Users, data.APIKeys)
-	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled, data.NotifyAlertNodeID, data.EventStorageMode, data.MetricsStorageMode, data.MetricsRetentionDays)
+	s.Settings.Restore(data.Mode, data.Environment, data.LogLevel, data.Seeds, data.EventRetentionDays, data.LogRetentionDays, data.EventTypes, data.HBMaxFail, data.RemovalDelay, data.APIKeyAuthEnabled, data.NotifyAlertNodeID, data.RegistryFlushMode, data.RegistryFlushMS, data.EventStorageMode, data.MetricsStorageMode, data.MetricsRetentionDays)
+	s.Catalog.Instances.SetFlushMode(s.Settings.GetRegistryFlushMode())
+	s.Catalog.Instances.SetFlushInterval(time.Duration(s.Settings.GetRegistryFlushIntervalMS()) * time.Millisecond)
 	s.Catalog.Events.SetStorageMode(s.Settings.GetEventStorageMode())
 	s.Catalog.Metrics.SetStorageMode(s.Settings.GetMetricsStorageMode())
 

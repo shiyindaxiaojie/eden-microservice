@@ -107,6 +107,12 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 	case replication.CmdSetNotifyAlertNodeID:
 		f.state.SetNotifyAlertNodeID(cmd.NodeID)
 		return nil
+	case replication.CmdSetRegistryFlushMode:
+		f.state.SetRegistryFlushMode(cmd.StringValue)
+		return nil
+	case replication.CmdSetRegistryFlushIntervalMS:
+		f.state.SetRegistryFlushIntervalMS(cmd.IntValue)
+		return nil
 	case replication.CmdSetEventStorageMode:
 		f.state.SetEventStorageMode(cmd.StringValue)
 		return nil

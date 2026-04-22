@@ -38,11 +38,13 @@ type RegistryConfig struct {
 }
 
 type StorageConfig struct {
-	EventStorageMode   string   `mapstructure:"event_storage_mode" json:"event_storage_mode"` // "memory" or "persistent"
-	EventRetentionDays int      `mapstructure:"event_retention_days" json:"event_retention_days"`
-	MetricsStorageMode string   `mapstructure:"metrics_storage_mode" json:"metrics_storage_mode"` // "memory" or "persistent"
-	LogRetentionDays   int      `mapstructure:"log_retention_days" json:"log_retention_days"`
-	EventTypes         []string `mapstructure:"event_types" json:"event_types"`
+	RegistryFlushMode       string   `mapstructure:"registry_flush_mode" json:"registry_flush_mode"` // "sync" or "async"
+	RegistryFlushIntervalMS int      `mapstructure:"registry_flush_interval_ms" json:"registry_flush_interval_ms"`
+	EventStorageMode        string   `mapstructure:"event_storage_mode" json:"event_storage_mode"` // "memory" or "persistent"
+	EventRetentionDays      int      `mapstructure:"event_retention_days" json:"event_retention_days"`
+	MetricsStorageMode      string   `mapstructure:"metrics_storage_mode" json:"metrics_storage_mode"` // "memory" or "persistent"
+	LogRetentionDays        int      `mapstructure:"log_retention_days" json:"log_retention_days"`
+	EventTypes              []string `mapstructure:"event_types" json:"event_types"`
 }
 
 type LogConfig struct {
@@ -140,6 +142,8 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("transport.raft", "auto")
 
 	// Default Storage Configuration
+	viper.SetDefault("storage.registry_flush_mode", "async")
+	viper.SetDefault("storage.registry_flush_interval_ms", 1000)
 	viper.SetDefault("storage.event_storage_mode", "memory")
 	viper.SetDefault("storage.event_retention_days", 30)
 	viper.SetDefault("storage.metrics_storage_mode", "memory")

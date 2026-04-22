@@ -56,6 +56,10 @@ type Controller interface {
 	SetAPIKeyAuthEnabled(enabled bool) error
 	SetNotifyAlertNodeID(nodeID string) error
 	GetNotifyAlertNodeID() string
+	SetRegistryFlushMode(mode string) error
+	GetRegistryFlushMode() string
+	SetRegistryFlushIntervalMS(ms int) error
+	GetRegistryFlushIntervalMS() int
 	SetEventStorageMode(mode string) error
 	GetEventStorageMode() string
 	SetMetricsStorageMode(mode string) error
@@ -92,6 +96,8 @@ type MetricsCleaner interface {
 type RuntimeStorage interface {
 	SetEventStorageMode(mode string)
 	SetMetricsStorageMode(mode string)
+	SetRegistryFlushMode(mode string)
+	SetRegistryFlushIntervalMS(ms int)
 }
 
 type controller struct {
@@ -151,6 +157,13 @@ func normalizeConsistencySetting(mode string) string {
 		return "cp"
 	}
 	return "ap"
+}
+
+func normalizeRegistryFlushMode(mode string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), "sync") {
+		return "sync"
+	}
+	return "async"
 }
 
 func normalizeRuntimeSelection(topology, consistency string) (string, string) {
@@ -547,6 +560,8 @@ func (c *controller) GetSystemSettings() *SystemSettings {
 		Mode:                        topology,
 		Consistency:                 consistency,
 		LogLevel:                    c.profile.GetLogLevel(),
+		RegistryFlushMode:           c.profile.GetRegistryFlushMode(),
+		RegistryFlushIntervalMS:     c.profile.GetRegistryFlushIntervalMS(),
 		EventRetentionDays:          c.profile.GetEventRetentionDays(),
 		LogRetentionDays:            c.profile.GetLogRetentionDays(),
 		EventTypes:                  c.profile.GetEventTypes(),
@@ -574,6 +589,16 @@ func (c *controller) ApplySystemSettings(systemSettings *SystemSettings) (*Apply
 	}
 	target.Mode, target.Consistency = normalizeRuntimeSelection(target.Mode, target.Consistency)
 	target.LogLevel = NormalizeLogLevel(target.LogLevel)
+	if target.RegistryFlushMode == "" {
+		target.RegistryFlushMode = c.profile.GetRegistryFlushMode()
+	}
+	target.RegistryFlushMode = normalizeRegistryFlushMode(target.RegistryFlushMode)
+	if target.RegistryFlushIntervalMS <= 0 {
+		target.RegistryFlushIntervalMS = c.profile.GetRegistryFlushIntervalMS()
+	}
+	if target.RegistryFlushIntervalMS <= 0 {
+		target.RegistryFlushIntervalMS = 1000
+	}
 	if target.EventRetentionDays <= 0 {
 		target.EventRetentionDays = c.profile.GetEventRetentionDays()
 	}
@@ -624,6 +649,12 @@ func (c *controller) ApplySystemSettings(systemSettings *SystemSettings) (*Apply
 		return nil, err
 	}
 	if err := c.SetNotifyAlertNodeID(target.NotifyAlertNodeID); err != nil {
+		return nil, err
+	}
+	if err := c.SetRegistryFlushMode(target.RegistryFlushMode); err != nil {
+		return nil, err
+	}
+	if err := c.SetRegistryFlushIntervalMS(target.RegistryFlushIntervalMS); err != nil {
 		return nil, err
 	}
 	if err := c.SetEventStorageMode(target.EventStorageMode); err != nil {
@@ -748,6 +779,24 @@ func (c *controller) SaveSettingLocalV2(key string, value interface{}) {
 		if v, ok := value.(string); ok {
 			c.profile.SetNotifyAlertNodeID(strings.TrimSpace(v))
 		}
+	case "registry_flush_mode":
+		if v, ok := value.(string); ok {
+			v = normalizeRegistryFlushMode(v)
+			c.profile.SetRegistryFlushMode(v)
+			if c.runtimeStorage != nil {
+				c.runtimeStorage.SetRegistryFlushMode(v)
+			}
+		}
+	case "registry_flush_interval_ms":
+		if v, ok := coerceInt(value); ok {
+			if v <= 0 {
+				v = 1000
+			}
+			c.profile.SetRegistryFlushIntervalMS(v)
+			if c.runtimeStorage != nil {
+				c.runtimeStorage.SetRegistryFlushIntervalMS(v)
+			}
+		}
 	case "event_storage_mode":
 		if v, ok := value.(string); ok {
 			c.profile.SetEventStorageMode(v)
@@ -808,6 +857,56 @@ func (c *controller) SetNotifyAlertNodeID(nodeID string) error {
 
 func (c *controller) GetNotifyAlertNodeID() string {
 	return c.profile.GetNotifyAlertNodeID()
+}
+
+func (c *controller) SetRegistryFlushMode(mode string) error {
+	if err := c.ensureClusterWritable(); err != nil {
+		return err
+	}
+	mode = normalizeRegistryFlushMode(mode)
+	if c.profile.GetMode() == "cp" && c.cpNode != nil {
+		cmd := replication.Command{Type: replication.CmdSetRegistryFlushMode, StringValue: mode}
+		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	c.profile.SetRegistryFlushMode(mode)
+	c.profile.Save()
+	if c.profile.GetMode() != "cp" && c.runtimeStorage != nil {
+		c.runtimeStorage.SetRegistryFlushMode(mode)
+	}
+	c.syncSettingsToPeers(map[string]interface{}{"registry_flush_mode": mode})
+	return nil
+}
+
+func (c *controller) GetRegistryFlushMode() string {
+	return c.profile.GetRegistryFlushMode()
+}
+
+func (c *controller) SetRegistryFlushIntervalMS(ms int) error {
+	if err := c.ensureClusterWritable(); err != nil {
+		return err
+	}
+	if ms <= 0 {
+		return errors.New("invalid registry flush interval")
+	}
+	if c.profile.GetMode() == "cp" && c.cpNode != nil {
+		cmd := replication.Command{Type: replication.CmdSetRegistryFlushIntervalMS, IntValue: ms}
+		if err := c.cpNode.Apply(cmd, 5*time.Second); err != nil {
+			return err
+		}
+	}
+	c.profile.SetRegistryFlushIntervalMS(ms)
+	c.profile.Save()
+	if c.profile.GetMode() != "cp" && c.runtimeStorage != nil {
+		c.runtimeStorage.SetRegistryFlushIntervalMS(ms)
+	}
+	c.syncSettingsToPeers(map[string]interface{}{"registry_flush_interval_ms": ms})
+	return nil
+}
+
+func (c *controller) GetRegistryFlushIntervalMS() int {
+	return c.profile.GetRegistryFlushIntervalMS()
 }
 
 func (c *controller) SetEventStorageMode(mode string) error {

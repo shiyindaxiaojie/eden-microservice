@@ -23,8 +23,8 @@
 logs/
 
 # 配置文件（排除示例配置）
-config.yaml
-!config.example.yaml
+config/config.yaml
+!config/config.yaml.example
 
 # 环境变量文件
 .env
@@ -87,8 +87,9 @@ web/*.tsbuildinfo
 
 # Backend
 .env.*
-config.yaml
-config.*.yaml
+config/config.yaml
+config/config.*.yaml
+!config/config.yaml.example
 *.log
 logs/
 

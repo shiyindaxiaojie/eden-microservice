@@ -27,6 +27,8 @@ type Profile struct {
 	apiKeyAuth         bool
 	apiKeyAuthSet      bool
 	notifyAlertNodeID  string
+	registryFlushMode  string
+	registryFlushMS    int
 	eventStorageMode   string
 	metricsStorageMode string
 	metricsRetDays     int
@@ -45,6 +47,8 @@ func NewProfile(dataPath string) *Profile {
 		eventTypes:         catalog.DefaultEventTypes(),
 		hbMaxFail:          3,
 		removalDelay:       600,
+		registryFlushMode:  "async",
+		registryFlushMS:    1000,
 		eventStorageMode:   "memory",
 		metricsStorageMode: "memory",
 		metricsRetDays:     30,
@@ -199,6 +203,32 @@ func (s *Profile) GetNotifyAlertNodeID() string {
 	return s.notifyAlertNodeID
 }
 
+func (s *Profile) GetRegistryFlushMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.registryFlushMode
+}
+
+func (s *Profile) SetRegistryFlushMode(mode string) {
+	s.mu.Lock()
+	s.registryFlushMode = mode
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetRegistryFlushIntervalMS() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.registryFlushMS
+}
+
+func (s *Profile) SetRegistryFlushIntervalMS(ms int) {
+	s.mu.Lock()
+	s.registryFlushMS = ms
+	s.mu.Unlock()
+	s.Save()
+}
+
 func (s *Profile) GetEventStorageMode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -246,7 +276,7 @@ func (s *Profile) SetNotifyAlertNodeID(nodeID string) {
 	s.Save()
 }
 
-func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID string, eventStorageMode string, metricsStorageMode string, metricsRetDays int) {
+func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID, registryFlushMode string, registryFlushMS int, eventStorageMode string, metricsStorageMode string, metricsRetDays int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.mode = mode
@@ -271,6 +301,10 @@ func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, 
 	s.apiKeyAuth = apiKeyAuth
 	s.apiKeyAuthSet = true
 	s.notifyAlertNodeID = notifyAlertNodeID
+	s.registryFlushMode = registryFlushMode
+	if registryFlushMS > 0 {
+		s.registryFlushMS = registryFlushMS
+	}
 	s.eventStorageMode = eventStorageMode
 	s.metricsStorageMode = metricsStorageMode
 	if metricsRetDays > 0 {
@@ -337,6 +371,8 @@ func (s *Profile) Load() {
 			RemovalDelay         int                       `json:"instance_removal_delay_seconds"`
 			APIKeyAuthEnabled    *bool                     `json:"api_key_auth_enabled"`
 			NotifyAlertNodeID    string                    `json:"notify_alert_node_id,omitempty"`
+			RegistryFlushMode    string                    `json:"registry_flush_mode"`
+			RegistryFlushMS      int                       `json:"registry_flush_interval_ms"`
 			EventStorageMode     string                    `json:"event_storage_mode"`
 			MetricsStorageMode   string                    `json:"metrics_storage_mode"`
 			MetricsRetentionDays int                       `json:"metrics_retention_days"`
@@ -367,6 +403,12 @@ func (s *Profile) Load() {
 				s.apiKeyAuthSet = true
 			}
 			s.notifyAlertNodeID = meta.NotifyAlertNodeID
+			if meta.RegistryFlushMode != "" {
+				s.registryFlushMode = meta.RegistryFlushMode
+			}
+			if meta.RegistryFlushMS > 0 {
+				s.registryFlushMS = meta.RegistryFlushMS
+			}
 			s.eventStorageMode = meta.EventStorageMode
 			s.metricsStorageMode = meta.MetricsStorageMode
 			if meta.MetricsRetentionDays > 0 {
@@ -413,6 +455,8 @@ func (s *Profile) Save() {
 		RemovalDelay         int                       `json:"instance_removal_delay_seconds"`
 		APIKeyAuthEnabled    bool                      `json:"api_key_auth_enabled"`
 		NotifyAlertNodeID    string                    `json:"notify_alert_node_id,omitempty"`
+		RegistryFlushMode    string                    `json:"registry_flush_mode"`
+		RegistryFlushMS      int                       `json:"registry_flush_interval_ms"`
 		EventStorageMode     string                    `json:"event_storage_mode"`
 		MetricsStorageMode   string                    `json:"metrics_storage_mode"`
 		MetricsRetentionDays int                       `json:"metrics_retention_days"`
@@ -429,6 +473,8 @@ func (s *Profile) Save() {
 		RemovalDelay:         s.removalDelay,
 		APIKeyAuthEnabled:    s.apiKeyAuth,
 		NotifyAlertNodeID:    s.notifyAlertNodeID,
+		RegistryFlushMode:    s.registryFlushMode,
+		RegistryFlushMS:      s.registryFlushMS,
 		EventStorageMode:     s.eventStorageMode,
 		MetricsStorageMode:   s.metricsStorageMode,
 		MetricsRetentionDays: s.metricsRetDays,

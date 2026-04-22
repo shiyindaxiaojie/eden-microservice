@@ -111,7 +111,7 @@ const serverStart: CodeSample = {
   lang: 'bash',
   code: `go run ./cmd/server/main.go
 
-go run ./cmd/server/main.go -config configs/config.yaml.example`,
+go run ./cmd/server/main.go -config config/config.yaml.example`,
 }
 
 const consoleStart: CodeSample = {

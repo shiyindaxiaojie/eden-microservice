@@ -12,8 +12,10 @@ import (
 )
 
 type handlerRuntimeStorage struct {
-	eventMode   string
-	metricsMode string
+	eventMode        string
+	metricsMode      string
+	registryMode     string
+	registryInterval int
 }
 
 func (h *handlerRuntimeStorage) SetEventStorageMode(mode string) {
@@ -22,6 +24,14 @@ func (h *handlerRuntimeStorage) SetEventStorageMode(mode string) {
 
 func (h *handlerRuntimeStorage) SetMetricsStorageMode(mode string) {
 	h.metricsMode = mode
+}
+
+func (h *handlerRuntimeStorage) SetRegistryFlushMode(mode string) {
+	h.registryMode = mode
+}
+
+func (h *handlerRuntimeStorage) SetRegistryFlushIntervalMS(ms int) {
+	h.registryInterval = ms
 }
 
 type handlerEventCleaner struct{}
@@ -86,6 +96,8 @@ func TestSystemSettingsPostAppliesValues(t *testing.T) {
 		Mode:                        "standalone",
 		Consistency:                 "ap",
 		LogLevel:                    "debug",
+		RegistryFlushMode:           "sync",
+		RegistryFlushIntervalMS:     250,
 		EventStorageMode:            "persistent",
 		EventRetentionDays:          7,
 		MetricsStorageMode:          "persistent",
@@ -113,8 +125,14 @@ func TestSystemSettingsPostAppliesValues(t *testing.T) {
 	if ctrl.GetEventStorageMode() != "persistent" || ctrl.GetMetricsStorageMode() != "persistent" {
 		t.Fatalf("storage modes = (%q,%q), want persistent/persistent", ctrl.GetEventStorageMode(), ctrl.GetMetricsStorageMode())
 	}
+	if ctrl.GetRegistryFlushMode() != "sync" || ctrl.GetRegistryFlushIntervalMS() != 250 {
+		t.Fatalf("registry flush = (%q,%d), want sync/250", ctrl.GetRegistryFlushMode(), ctrl.GetRegistryFlushIntervalMS())
+	}
 	if runtimeStorage.eventMode != "persistent" || runtimeStorage.metricsMode != "persistent" {
 		t.Fatalf("runtime storage modes = (%q,%q), want persistent/persistent", runtimeStorage.eventMode, runtimeStorage.metricsMode)
+	}
+	if runtimeStorage.registryMode != "sync" || runtimeStorage.registryInterval != 250 {
+		t.Fatalf("runtime registry flush = (%q,%d), want sync/250", runtimeStorage.registryMode, runtimeStorage.registryInterval)
 	}
 }
 

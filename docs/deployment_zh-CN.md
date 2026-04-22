@@ -24,7 +24,7 @@ go run ./cmd/server/main.go
 显式指定配置文件：
 
 ```bash
-go run ./cmd/server/main.go -config configs/config.yaml
+go run ./cmd/server/main.go -config config/config.yaml
 ```
 
 常用命令行参数：
@@ -46,8 +46,8 @@ go run ./cmd/server/main.go -config configs/config.yaml
 
 配置文件见：
 
-- [`configs/config.yaml`](../configs/config.yaml)
-- [`configs/config.yaml.example`](../configs/config.yaml.example)
+- [`config/config.yaml`](../config/config.yaml)
+- [`config/config.yaml.example`](../config/config.yaml.example)
 
 关键配置项分为四类：
 

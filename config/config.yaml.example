@@ -103,3 +103,18 @@ log:
         max_file: 10
         retention: 30d
 
+############################################################
+# Storage
+############################################################
+storage:
+  # Registry flush strategy:
+  #   - async: batch registry changes and flush to services.json by interval
+  #   - sync: flush to services.json immediately after each registry mutation
+  registry_flush_mode: "async"
+  registry_flush_interval_ms: 1000
+
+  event_storage_mode: "memory"
+  event_retention_days: 30
+  metrics_storage_mode: "memory"
+  log_retention_days: 30
+

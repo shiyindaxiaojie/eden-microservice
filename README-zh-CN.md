@@ -153,7 +153,7 @@ http://127.0.0.1:8500
 显式指定配置：
 
 ```bash
-go run ./cmd/server/main.go -config configs/config.yaml.example
+go run ./cmd/server/main.go -config config/config.yaml.example
 ```
 
 运行测试：
@@ -266,7 +266,7 @@ eden-registry
 
 ```bash
 go run ./cmd/server/main.go
-go run ./cmd/server/main.go -config configs/config.yaml.example
+go run ./cmd/server/main.go -config config/config.yaml.example
 go test ./...
 ```
 

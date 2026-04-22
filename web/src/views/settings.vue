@@ -432,6 +432,8 @@ function createDefaultSettings(): SystemSettings {
     mode: 'standalone',
     consistency: 'ap',
     log_level: 'INFO',
+    registry_flush_mode: 'async',
+    registry_flush_interval_ms: 1000,
     event_storage_mode: 'memory',
     event_retention_days: 30,
     metrics_storage_mode: 'memory',
@@ -478,6 +480,8 @@ function normalizeSettings(input?: Partial<SystemSettings> | null): SystemSettin
     mode,
     consistency: mode === 'cluster' && input?.consistency === 'cp' ? 'cp' : 'ap',
     log_level: normalizeLogLevel(input?.log_level ?? defaults.log_level),
+    registry_flush_mode: input?.registry_flush_mode === 'sync' ? 'sync' : defaults.registry_flush_mode,
+    registry_flush_interval_ms: Math.max(50, input?.registry_flush_interval_ms ?? defaults.registry_flush_interval_ms),
     event_storage_mode: input?.event_storage_mode === 'persistent' ? 'persistent' : defaults.event_storage_mode,
     event_retention_days: Math.max(1, input?.event_retention_days ?? defaults.event_retention_days),
     metrics_storage_mode: input?.metrics_storage_mode === 'persistent' ? 'persistent' : defaults.metrics_storage_mode,
@@ -1129,11 +1133,48 @@ onMounted(() => {
                         style="width: 100%"
                       />
                     </el-form-item>
+
+                    <el-form-item>
+                      <template #label>
+                        <span class="label-with-tip">
+                          {{ t.settings.registrySync }}
+                          <el-tooltip :content="t.settings.registrySyncTip" placement="top">
+                            <el-icon class="help-icon"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </span>
+                      </template>
+                      <el-segmented
+                        v-model="draftSettings.registry_flush_mode"
+                        :options="[
+                          { label: t.settings.asyncFlush, value: 'async' },
+                          { label: t.settings.syncFlush, value: 'sync' }
+                        ]"
+                      />
+                    </el-form-item>
+
+                    <el-form-item v-if="draftSettings.registry_flush_mode === 'async'">
+                      <template #label>
+                        <span class="label-with-tip">
+                          {{ t.settings.flushIntervalMs }}
+                          <el-tooltip :content="t.settings.flushIntervalMsTip" placement="top">
+                            <el-icon class="help-icon"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </span>
+                      </template>
+                      <el-input-number
+                        v-model="draftSettings.registry_flush_interval_ms"
+                        :min="50"
+                        :max="10000"
+                        :step="50"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
                   </div>
                 </el-form>
               </section>
 
-              <section class="settings-section glass-card side-section">
+              <section class="settings-section glass-card side-section metrics-section">
                 <div class="section-header">
                   <el-icon><RefreshRight /></el-icon>
                   <h4>{{ locale === 'zh' ? '指标配置' : 'Metrics Config' }}</h4>
@@ -1159,7 +1200,7 @@ onMounted(() => {
             </div>
 
             <div class="settings-column">
-              <section class="settings-section glass-card side-section">
+              <section class="settings-section glass-card side-section event-section">
                 <div class="section-header">
                   <el-icon><Bell /></el-icon>
                   <h4>{{ t.settings.eventSettings }}</h4>
@@ -1193,7 +1234,7 @@ onMounted(() => {
                 </el-form>
               </section>
 
-              <section class="settings-section glass-card side-section">
+              <section class="settings-section glass-card side-section log-section">
                 <div class="section-header">
                   <el-icon><Document /></el-icon>
                   <div class="section-title-with-tip">
@@ -1766,6 +1807,37 @@ onMounted(() => {
   gap: 12px;
 }
 
+@media (min-width: 1321px) {
+  .basic-grid > .settings-column {
+    display: contents;
+  }
+
+  .mode-section {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .registry-section {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .event-section {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .log-section {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .metrics-section {
+    grid-column: 2;
+    grid-row: 3;
+  }
+}
+
 .channels-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2007,11 +2079,19 @@ onMounted(() => {
   padding: 16px;
 }
 
+.registry-section,
+.metrics-section,
+.event-section,
+.log-section {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .section-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .section-header h4 {
@@ -2439,6 +2519,14 @@ onMounted(() => {
   padding-top: 4px;
 }
 
+.side-inline-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.registry-form :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
 .ops-form-grid-3col {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2494,6 +2582,7 @@ onMounted(() => {
 
 .registry-form-grid {
   grid-template-columns: minmax(220px, 0.92fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 14px;
 }
 
 .switch-form-item :deep(.el-form-item__content) {
@@ -2592,18 +2681,20 @@ onMounted(() => {
 .event-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 18px;
+  gap: 4px 16px;
 }
 
 .event-checkbox-grid :deep(.el-checkbox) {
   display: inline-flex;
   align-items: center;
   margin-right: 0;
-  min-height: 28px;
+  min-height: 22px;
+  line-height: 1.2;
 }
 
 .event-checkbox-grid :deep(.el-checkbox__label) {
-  padding-left: 8px;
+  padding-left: 6px;
+  line-height: 1.2;
 }
 
 .save-toolbar {

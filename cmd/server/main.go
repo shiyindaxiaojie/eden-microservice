@@ -42,7 +42,7 @@ import (
 
 func main() {
 	var (
-		cfgFile         = flag.String("config", "configs/config.yaml", "Path to configuration file")
+		cfgFile         = flag.String("config", "config/config.yaml", "Path to configuration file")
 		dataDir         = flag.String("data-dir", "", "Override data directory")
 		nodeID          = flag.String("node-id", "", "Override node ID")
 		httpAddr        = flag.String("http-addr", "", "Override HTTP listen address")
@@ -132,6 +132,16 @@ func main() {
 	if runtimeState.Settings.LoadedFromDisk() && runtimeState.GetMetricsStorageMode() != "" {
 		metricsStorageMode = runtimeState.GetMetricsStorageMode()
 	}
+	registryFlushMode := cfg.Storage.RegistryFlushMode
+	if runtimeState.Settings.LoadedFromDisk() && runtimeState.GetRegistryFlushMode() != "" {
+		registryFlushMode = runtimeState.GetRegistryFlushMode()
+	}
+	registryFlushIntervalMS := cfg.Storage.RegistryFlushIntervalMS
+	if runtimeState.Settings.LoadedFromDisk() && runtimeState.GetRegistryFlushIntervalMS() > 0 {
+		registryFlushIntervalMS = runtimeState.GetRegistryFlushIntervalMS()
+	}
+	runtimeState.SetRegistryFlushMode(registryFlushMode)
+	runtimeState.SetRegistryFlushIntervalMS(registryFlushIntervalMS)
 	runtimeState.SetEventStorageMode(eventStorageMode)
 	runtimeState.SetMetricsStorageMode(metricsStorageMode)
 

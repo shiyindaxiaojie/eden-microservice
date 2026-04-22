@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,18 +21,40 @@ type SubscriberInfo struct {
 type InstanceRegistry struct {
 	mu sync.RWMutex
 	// namespace -> serviceName -> instanceID -> Instance
-	services   map[string]map[string]map[string]*Instance
-	dataPath   string
-	NotifyFunc func(namespace, serviceName, action string, instances []*Instance)
+	services        map[string]map[string]map[string]*Instance
+	dataPath        string
+	persistenceMode string
+	flushInterval   time.Duration
+	dirty           bool
+	saveTimer       *time.Timer
+	NotifyFunc      func(namespace, serviceName, action string, instances []*Instance)
 }
+
+const defaultRegistryFlushInterval = time.Second
 
 func NewInstanceRegistry(dataPath string) *InstanceRegistry {
 	s := &InstanceRegistry{
-		services: make(map[string]map[string]map[string]*Instance),
-		dataPath: dataPath,
+		services:        make(map[string]map[string]map[string]*Instance),
+		dataPath:        dataPath,
+		persistenceMode: "async",
+		flushInterval:   defaultRegistryFlushInterval,
 	}
 	s.Load()
 	return s
+}
+
+func normalizeRegistryFlushMode(mode string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), "sync") {
+		return "sync"
+	}
+	return "async"
+}
+
+func normalizeRegistryFlushInterval(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		return defaultRegistryFlushInterval
+	}
+	return interval
 }
 
 // effectiveNS returns the effective namespace, defaulting to "default".
@@ -67,6 +90,7 @@ func (s *InstanceRegistry) Register(inst *Instance) {
 
 	s.services[ns][inst.ServiceName][inst.ID] = inst
 
+	s.schedulePersistNoLock()
 	s.notifyNoLock(ns, inst.ServiceName, "online")
 }
 
@@ -99,6 +123,7 @@ func (s *InstanceRegistry) DeregisterNS(namespace, serviceName, instanceID strin
 		delete(s.services, ns)
 	}
 
+	s.schedulePersistNoLock()
 	s.notifyNoLock(ns, resolvedService, "offline")
 
 	return inst, true
@@ -128,6 +153,7 @@ func (s *InstanceRegistry) SetInstanceStatus(namespace, serviceName, instanceID 
 	} else if status == HealthCritical {
 		action = "offline"
 	}
+	s.schedulePersistNoLock()
 	s.notifyNoLock(ns, resolvedService, action)
 
 	return inst, true
@@ -156,6 +182,7 @@ func (s *InstanceRegistry) HeartbeatNS(namespace, serviceName, instanceID string
 	}
 
 	if recovered {
+		s.schedulePersistNoLock()
 		s.notifyNoLock(ns, resolvedService, "online")
 	}
 
@@ -338,6 +365,7 @@ func (s *InstanceRegistry) MarkCritical(ttl time.Duration, maxFailures int, remo
 			}
 
 			if changed {
+				s.schedulePersistNoLock()
 				s.notifyNoLock(ns, svcName, "offline")
 			}
 		}
@@ -425,7 +453,7 @@ func (s *InstanceRegistry) Merge(remote map[string]map[string]*Instance) {
 	}
 
 	if changed {
-		s.saveNoLock()
+		s.schedulePersistNoLock()
 	}
 }
 
@@ -459,7 +487,7 @@ func (s *InstanceRegistry) MergeNS(remote map[string]map[string]map[string]*Inst
 	}
 
 	if changed {
-		s.saveNoLock()
+		s.schedulePersistNoLock()
 	}
 }
 
@@ -510,9 +538,100 @@ func (s *InstanceRegistry) Load() {
 }
 
 func (s *InstanceRegistry) Save() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.saveTimer != nil {
+		s.saveTimer.Stop()
+		s.saveTimer = nil
+	}
+	s.saveNoLock()
+	s.dirty = false
+}
+
+func (s *InstanceRegistry) SetFlushMode(mode string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.persistenceMode = normalizeRegistryFlushMode(mode)
+	if s.persistenceMode == "sync" {
+		if s.saveTimer != nil {
+			s.saveTimer.Stop()
+			s.saveTimer = nil
+		}
+		if s.dirty {
+			s.saveNoLock()
+			s.dirty = false
+		}
+		return
+	}
+	if s.dirty {
+		s.scheduleAsyncFlushNoLock(true)
+	}
+}
+
+func (s *InstanceRegistry) SetFlushInterval(interval time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.flushInterval = normalizeRegistryFlushInterval(interval)
+	if s.persistenceMode == "async" && s.dirty {
+		s.scheduleAsyncFlushNoLock(true)
+	}
+}
+
+func (s *InstanceRegistry) GetFlushMode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.persistenceMode
+}
+
+func (s *InstanceRegistry) GetFlushInterval() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.flushInterval
+}
+
+func (s *InstanceRegistry) schedulePersistNoLock() {
+	if s.dataPath == "" {
+		return
+	}
+	if s.persistenceMode == "sync" {
+		if s.saveTimer != nil {
+			s.saveTimer.Stop()
+			s.saveTimer = nil
+		}
+		s.saveNoLock()
+		s.dirty = false
+		return
+	}
+	s.dirty = true
+	s.scheduleAsyncFlushNoLock(false)
+}
+
+func (s *InstanceRegistry) scheduleAsyncFlushNoLock(reset bool) {
+	if s.persistenceMode != "async" || !s.dirty {
+		return
+	}
+	if s.saveTimer != nil {
+		if !reset {
+			return
+		}
+		s.saveTimer.Stop()
+	}
+	interval := normalizeRegistryFlushInterval(s.flushInterval)
+	s.saveTimer = time.AfterFunc(interval, s.flushDirtyAsync)
+}
+
+func (s *InstanceRegistry) flushDirtyAsync() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.saveTimer = nil
+	if s.persistenceMode != "async" || !s.dirty {
+		return
+	}
 	s.saveNoLock()
+	s.dirty = false
 }
 
 // saveNoLock persists services to disk. Caller must hold s.mu (read or write).

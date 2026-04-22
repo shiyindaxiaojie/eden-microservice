@@ -25,6 +25,8 @@ const (
 	CmdSetInstanceRemovalDelaySeconds CommandType = "set_instance_removal_delay_seconds"
 	CmdSetAPIKeyAuthEnabled           CommandType = "set_api_key_auth_enabled"
 	CmdSetNotifyAlertNodeID           CommandType = "set_notify_alert_node_id"
+	CmdSetRegistryFlushMode           CommandType = "set_registry_flush_mode"
+	CmdSetRegistryFlushIntervalMS     CommandType = "set_registry_flush_interval_ms"
 	CmdSetEventStorageMode            CommandType = "set_event_storage_mode"
 	CmdSetMetricsStorageMode          CommandType = "set_metrics_storage_mode"
 	CmdSetMetricsRetentionDays        CommandType = "set_metrics_retention_days"

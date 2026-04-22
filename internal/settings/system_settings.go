@@ -5,7 +5,9 @@ type SystemSettings struct {
 	Mode                        string   `json:"mode"`
 	Consistency                 string   `json:"consistency"`
 	LogLevel                    string   `json:"log_level"`
-	EventStorageMode            string   `json:"event_storage_mode"`   // "memory" or "persistent"
+	RegistryFlushMode           string   `json:"registry_flush_mode"`
+	RegistryFlushIntervalMS     int      `json:"registry_flush_interval_ms"`
+	EventStorageMode            string   `json:"event_storage_mode"` // "memory" or "persistent"
 	EventRetentionDays          int      `json:"event_retention_days"`
 	MetricsStorageMode          string   `json:"metrics_storage_mode"` // "memory" or "persistent"
 	LogRetentionDays            int      `json:"log_retention_days"`

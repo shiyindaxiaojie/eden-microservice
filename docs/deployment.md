@@ -19,7 +19,7 @@ go run ./cmd/server/main.go
 Specify a configuration file explicitly:
 
 ```bash
-go run ./cmd/server/main.go -config configs/config.yaml
+go run ./cmd/server/main.go -config config/config.yaml
 ```
 
 Common flags:
@@ -35,8 +35,8 @@ Common flags:
 
 Relevant files:
 
-- [`configs/config.yaml`](../configs/config.yaml)
-- [`configs/config.yaml.example`](../configs/config.yaml.example)
+- [`config/config.yaml`](../config/config.yaml)
+- [`config/config.yaml.example`](../config/config.yaml.example)
 
 Key sections:
 

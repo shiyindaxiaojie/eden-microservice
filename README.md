@@ -155,7 +155,7 @@ http://127.0.0.1:8500
 Start with explicit configuration:
 
 ```bash
-go run ./cmd/server/main.go -config configs/config.yaml.example
+go run ./cmd/server/main.go -config config/config.yaml.example
 ```
 
 Run tests:
@@ -266,7 +266,7 @@ Common development commands:
 
 ```bash
 go run ./cmd/server/main.go
-go run ./cmd/server/main.go -config configs/config.yaml.example
+go run ./cmd/server/main.go -config config/config.yaml.example
 go test ./...
 ```
 
