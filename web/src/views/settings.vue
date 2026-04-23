@@ -1003,7 +1003,7 @@ onMounted(() => {
                         {{ appliedEnvironment === 'cluster' ? t.settings.clusterTitle : t.settings.singleTitle }}
                       </el-tag>
                     </div>
-                    <div class="status-indicator" v-if="appliedEnvironment === 'cluster'">
+                    <div class="status-indicator consistency-indicator" v-if="appliedEnvironment === 'cluster'">
                       <span class="dot-label">{{ t.settings.consistency }}</span>
                       <span class="consistency-mode-tag" :class="appliedMode === 'cp' ? 'tag-cp-soft' : 'tag-ap-soft'">
                         {{ appliedMode === 'cp' ? t.settings.cpTitle : t.settings.apTitle }}
@@ -1094,7 +1094,7 @@ onMounted(() => {
                       </div>
                     </el-form-item>
 
-                    <el-form-item>
+                    <el-form-item class="compact-number-item">
                       <template #label>
                         <span class="label-with-tip">
                           {{ t.settings.heartbeatTimeout }}
@@ -1114,7 +1114,7 @@ onMounted(() => {
                       />
                     </el-form-item>
 
-                    <el-form-item>
+                    <el-form-item class="compact-number-item">
                       <template #label>
                         <span class="label-with-tip">
                           {{ t.settings.instanceRetention }}
@@ -1134,7 +1134,7 @@ onMounted(() => {
                       />
                     </el-form-item>
 
-                    <el-form-item>
+                    <el-form-item class="compact-segment-item">
                       <template #label>
                         <span class="label-with-tip">
                           {{ t.settings.registrySync }}
@@ -1152,7 +1152,10 @@ onMounted(() => {
                       />
                     </el-form-item>
 
-                    <el-form-item v-if="draftSettings.registry_flush_mode === 'async'">
+                    <el-form-item
+                      v-if="draftSettings.registry_flush_mode === 'async'"
+                      class="flush-interval-item compact-number-item"
+                    >
                       <template #label>
                         <span class="label-with-tip">
                           {{ t.settings.flushIntervalMs }}
@@ -1174,40 +1177,16 @@ onMounted(() => {
                 </el-form>
               </section>
 
-              <section class="settings-section glass-card side-section metrics-section">
-                <div class="section-header">
-                  <el-icon><RefreshRight /></el-icon>
-                  <h4>{{ locale === 'zh' ? '指标配置' : 'Metrics Config' }}</h4>
-                </div>
-                <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item :label="locale === 'zh' ? '存储方式' : 'Storage Mode'">
-                    <el-segmented
-                      v-model="draftSettings.metrics_storage_mode"
-                      :options="[
-                        { label: locale === 'zh' ? '内存' : 'Memory', value: 'memory' },
-                        { label: locale === 'zh' ? '持久化' : 'Persistent', value: 'persistent' }
-                      ]"
-                    />
-                  </el-form-item>
-                  <el-form-item :label="t.settings.metricsRetention" v-if="draftSettings.metrics_storage_mode === 'persistent'">
-                    <div class="slider-row">
-                      <el-slider v-model="draftSettings.metrics_retention_days" :min="1" :max="365" style="flex: 1" />
-                      <span class="val-text">{{ draftSettings.metrics_retention_days }}</span>
-                    </div>
-                  </el-form-item>
-                </el-form>
-              </section>
             </div>
 
             <div class="settings-column">
-              <section class="settings-section glass-card side-section event-section">
+              <section class="settings-section glass-card event-section">
                 <div class="section-header">
                   <el-icon><Bell /></el-icon>
                   <h4>{{ t.settings.eventSettings }}</h4>
                 </div>
-
                 <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item :label="locale === 'zh' ? '事件存储方式' : 'Storage Mode'">
+                  <el-form-item :label="locale === 'zh' ? '事件存储方式' : 'Storage Mode'" class="compact-segment-item">
                     <el-segmented
                       v-model="draftSettings.event_storage_mode"
                       :options="[
@@ -1234,7 +1213,7 @@ onMounted(() => {
                 </el-form>
               </section>
 
-              <section class="settings-section glass-card side-section log-section">
+              <section class="settings-section glass-card log-section">
                 <div class="section-header">
                   <el-icon><Document /></el-icon>
                   <div class="section-title-with-tip">
@@ -1248,7 +1227,7 @@ onMounted(() => {
                 </div>
 
                 <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item :label="t.settings.logLevel">
+                  <el-form-item :label="t.settings.logLevel" class="log-level-item">
                     <el-segmented
                       v-model="draftSettings.log_level"
                       :options="LOG_LEVEL_OPTIONS.map(l => ({ label: l, value: l }))"
@@ -1259,6 +1238,30 @@ onMounted(() => {
                     <div class="slider-row">
                       <el-slider v-model="draftSettings.log_retention_days" :min="1" :max="365" style="flex: 1" />
                       <span class="val-text">{{ draftSettings.log_retention_days }}</span>
+                    </div>
+                  </el-form-item>
+                </el-form>
+              </section>
+
+              <section class="settings-section glass-card metrics-section">
+                <div class="section-header">
+                  <el-icon><RefreshRight /></el-icon>
+                  <h4>{{ locale === 'zh' ? '指标配置' : 'Metrics Config' }}</h4>
+                </div>
+                <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
+                  <el-form-item :label="locale === 'zh' ? '存储方式' : 'Storage Mode'" class="compact-segment-item">
+                    <el-segmented
+                      v-model="draftSettings.metrics_storage_mode"
+                      :options="[
+                        { label: locale === 'zh' ? '内存' : 'Memory', value: 'memory' },
+                        { label: locale === 'zh' ? '持久化' : 'Persistent', value: 'persistent' }
+                      ]"
+                    />
+                  </el-form-item>
+                  <el-form-item :label="t.settings.metricsRetention" v-if="draftSettings.metrics_storage_mode === 'persistent'">
+                    <div class="slider-row">
+                      <el-slider v-model="draftSettings.metrics_retention_days" :min="1" :max="365" style="flex: 1" />
+                      <span class="val-text">{{ draftSettings.metrics_retention_days }}</span>
                     </div>
                   </el-form-item>
                 </el-form>
@@ -1756,7 +1759,7 @@ onMounted(() => {
 }
 
 .settings-tabs :deep(.el-tabs__header) {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .settings-tabs :deep(.el-tabs__nav-wrap::after) {
@@ -1782,60 +1785,33 @@ onMounted(() => {
 
 .tab-content {
   animation: fadeIn 0.25s ease;
+  height: 100%;
   min-height: 0;
 }
 
 .basic-settings {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: 100%;
+  gap: 10px;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
 }
 
 .basic-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.95fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1.48fr) minmax(360px, 0.92fr);
+  gap: 10px;
   align-items: start;
 }
 
 .settings-column {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-@media (min-width: 1321px) {
-  .basic-grid > .settings-column {
-    display: contents;
-  }
-
-  .mode-section {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .registry-section {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .event-section {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .log-section {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .metrics-section {
-    grid-column: 2;
-    grid-row: 3;
-  }
+  gap: 10px;
+  min-width: 0;
 }
 
 .channels-grid {
@@ -2072,26 +2048,34 @@ onMounted(() => {
 }
 
 .settings-section {
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
 
 .mode-section {
-  padding: 16px;
+  padding: 14px;
 }
 
-.registry-section,
-.metrics-section,
+.registry-section {
+  padding: 10px 14px 8px;
+}
+
+.registry-form {
+  margin-top: 10px;
+}
+
 .event-section,
-.log-section {
-  padding-top: 12px;
-  padding-bottom: 12px;
+.log-section,
+.metrics-section {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .section-header h4 {
@@ -2169,19 +2153,21 @@ onMounted(() => {
 .status-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  margin-left: auto;
 }
 
 .status-indicator {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 34px;
   padding: 5px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  background: rgba(248, 250, 252, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .indicator-dot {
@@ -2206,6 +2192,8 @@ onMounted(() => {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
+  height: 28px;
+  padding: 0 12px;
 }
 
 .consistency-mode-tag {
@@ -2214,12 +2202,16 @@ onMounted(() => {
   justify-content: center;
   min-height: 28px;
   padding: 0 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.24);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   white-space: nowrap;
+}
+
+.consistency-indicator {
+  gap: 10px;
 }
 
 .tag-ap-soft {
@@ -2235,19 +2227,19 @@ onMounted(() => {
 }
 
 .consistency-wrapper-v7 {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .main-mode-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
   align-items: stretch;
 }
 
 .mode-card-v7 {
   position: relative;
-  height: 136px;
+  min-height: 152px;
   overflow: hidden;
   display: flex;
   cursor: pointer;
@@ -2287,7 +2279,7 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   width: 100%;
-  padding: 14px 16px;
+  padding: 18px 18px 16px;
 }
 
 .mode-icon-v7 {
@@ -2472,7 +2464,7 @@ onMounted(() => {
 }
 
 .compact-form :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .basic-inline-form :deep(.el-form-item) {
@@ -2520,11 +2512,11 @@ onMounted(() => {
 }
 
 .side-inline-form :deep(.el-form-item) {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .registry-form :deep(.el-form-item) {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .ops-form-grid-3col {
@@ -2581,27 +2573,70 @@ onMounted(() => {
 }
 
 .registry-form-grid {
-  grid-template-columns: minmax(220px, 0.92fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.switch-form-item {
+  grid-column: 1 / -1;
+}
+
+.flush-interval-item {
+  grid-column: auto;
 }
 
 .switch-form-item :deep(.el-form-item__content) {
   display: flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 28px;
 }
 
 .inline-switch-control {
   display: inline-flex;
   align-items: center;
+  min-height: 28px;
+}
+
+.compact-number-item :deep(.el-input-number) {
+  width: min(290px, 100%);
+}
+
+.compact-number-item.flush-interval-item :deep(.el-input-number) {
+  width: min(320px, 100%);
+}
+
+.compact-segment-item :deep(.el-segmented) {
+  width: auto;
+  max-width: 176px;
+  padding: 2px;
+}
+
+.compact-segment-item :deep(.el-segmented__item) {
+  min-width: 0;
   min-height: 32px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.log-level-item :deep(.el-segmented) {
+  width: auto;
+  max-width: 320px;
+  padding: 3px;
+}
+
+.log-level-item :deep(.el-segmented__item) {
+  min-width: 66px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 32px;
+  gap: 8px;
+  min-height: 28px;
   width: 100%;
   min-width: 0;
 }
@@ -2681,7 +2716,7 @@ onMounted(() => {
 .event-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px 16px;
+  gap: 2px 14px;
 }
 
 .event-checkbox-grid :deep(.el-checkbox) {
@@ -2700,9 +2735,12 @@ onMounted(() => {
 .save-toolbar {
   display: flex;
   justify-content: flex-end;
-  margin-top: auto;
-  padding-top: 0;
-  background: transparent;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 2px;
+  padding: 10px 0 4px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0), rgba(248, 250, 252, 0.9) 36%, rgba(248, 250, 252, 0.98));
   min-height: 32px;
 }
 
@@ -3214,14 +3252,6 @@ onMounted(() => {
     width: 100%;
   }
 
-}
-
-@media (max-height: 760px) {
-  .basic-settings {
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 4px;
-  }
 }
 
 /* ===== Pipeline Flow ===== */
