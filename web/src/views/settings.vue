@@ -1752,6 +1752,91 @@ onMounted(() => {
   overflow: hidden;
 }
 
+:global(html[data-theme="dark"]) .settings-container .status-indicator,
+:global(html.dark) .settings-container .status-indicator {
+  border-color: rgba(71, 85, 105, 0.9) !important;
+  background: rgba(15, 23, 42, 0.94) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .dot-label,
+:global(html.dark) .settings-container .dot-label {
+  color: #cbd5e1 !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .consistency-mode-tag.tag-ap-soft,
+:global(html.dark) .settings-container .consistency-mode-tag.tag-ap-soft {
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.26) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .consistency-mode-tag.tag-cp-soft,
+:global(html.dark) .settings-container .consistency-mode-tag.tag-cp-soft {
+  color: #fb923c !important;
+  border-color: rgba(249, 115, 22, 0.28) !important;
+  background: rgba(249, 115, 22, 0.12) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .integrated-toggle-v7,
+:global(html.dark) .settings-container .integrated-toggle-v7 {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .save-toolbar,
+:global(html.dark) .settings-container .save-toolbar {
+  background: linear-gradient(180deg, rgba(10, 14, 26, 0), rgba(10, 14, 26, 0.9) 36%, rgba(10, 14, 26, 0.98)) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .ops-empty-state,
+:global(html.dark) .settings-container .ops-empty-state {
+  border-color: rgba(71, 85, 105, 0.32) !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .empty-icon-large,
+:global(html.dark) .settings-container .empty-icon-large {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .empty-state-title,
+:global(html.dark) .settings-container .empty-state-title {
+  color: #e2e8f0 !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .empty-state-desc,
+:global(html.dark) .settings-container .empty-state-desc {
+  color: #94a3b8 !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .template-section-header,
+:global(html.dark) .settings-container .template-section-header {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .template-section div[style*="background: #f8fafc"],
+:global(html.dark) .settings-container .template-section div[style*="background: #f8fafc"] {
+  background: rgba(15, 23, 42, 0.86) !important;
+  border-left-color: rgba(71, 85, 105, 0.7) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .template-section div[style*="background: #fff; padding: 12px; border-radius: 6px;"],
+:global(html.dark) .settings-container .template-section div[style*="background: #fff; padding: 12px; border-radius: 6px;"] {
+  background: rgba(15, 23, 42, 0.96) !important;
+  box-shadow: inset 0 0 0 1px rgba(71, 85, 105, 0.35) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .template-section div[style*="background: #fff; border: 1px solid #e2e8f0"],
+:global(html.dark) .settings-container .template-section div[style*="background: #fff; border: 1px solid #e2e8f0"] {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border-color: rgba(71, 85, 105, 0.9) !important;
+}
+
+:global(html[data-theme="dark"]) .settings-container .template-section span[style*="color: #64748b"],
+:global(html.dark) .settings-container .template-section span[style*="color: #64748b"] {
+  color: #cbd5e1 !important;
+}
+
 .settings-tabs {
   height: 100%;
   display: flex;
@@ -2165,9 +2250,9 @@ onMounted(() => {
   min-height: 34px;
   padding: 5px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(203, 213, 225, 0.8);
-  background: rgba(248, 250, 252, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .indicator-dot {
@@ -2202,7 +2287,7 @@ onMounted(() => {
   justify-content: center;
   min-height: 28px;
   padding: 0 12px;
-  border: 1px solid rgba(16, 185, 129, 0.24);
+  border: none;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
@@ -2224,6 +2309,37 @@ onMounted(() => {
   color: #c2410c;
   border-color: rgba(249, 115, 22, 0.24);
   background: rgba(249, 115, 22, 0.1);
+}
+
+:global(html[data-theme="dark"]) .settings-container .status-indicator,
+:global(html.dark) .settings-container .status-indicator {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .settings-container .dot-label,
+:global(html.dark) .settings-container .dot-label {
+  color: #cbd5e1;
+}
+
+:global(html[data-theme="dark"]) .settings-container .consistency-mode-tag.tag-ap-soft,
+:global(html.dark) .settings-container .consistency-mode-tag.tag-ap-soft {
+  color: #34d399;
+  border: none;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+:global(html[data-theme="dark"]) .settings-container .consistency-mode-tag.tag-cp-soft,
+:global(html.dark) .settings-container .consistency-mode-tag.tag-cp-soft {
+  color: #fb923c;
+  border: none;
+  background: rgba(249, 115, 22, 0.12);
+}
+
+:global(html[data-theme="dark"]) .settings-container .integrated-toggle-v7,
+:global(html.dark) .settings-container .integrated-toggle-v7 {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .consistency-wrapper-v7 {
@@ -2598,16 +2714,19 @@ onMounted(() => {
 }
 
 .compact-number-item :deep(.el-input-number) {
-  width: min(290px, 100%);
+  width: min(200px, 100%);
 }
 
 .compact-number-item.flush-interval-item :deep(.el-input-number) {
-  width: min(320px, 100%);
+  width: min(220px, 100%);
 }
 
 .compact-segment-item :deep(.el-segmented) {
   width: auto;
   max-width: 176px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
   padding: 2px;
 }
 
@@ -2618,9 +2737,21 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.side-inline-form .compact-segment-item :deep(.el-segmented) {
+  max-width: none;
+}
+
+.side-inline-form .compact-segment-item :deep(.el-segmented__item) {
+  min-width: 72px;
+  padding: 0 18px;
+}
+
 .log-level-item :deep(.el-segmented) {
   width: auto;
   max-width: 320px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
   padding: 3px;
 }
 
@@ -2740,8 +2871,13 @@ onMounted(() => {
   z-index: 5;
   margin-top: 2px;
   padding: 10px 0 4px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0), rgba(248, 250, 252, 0.9) 36%, rgba(248, 250, 252, 0.98));
+  background: transparent;
   min-height: 32px;
+}
+
+:global(html[data-theme="dark"]) .settings-container .save-toolbar,
+:global(html.dark) .settings-container .save-toolbar {
+  background: transparent;
 }
 
 .save-actions {
