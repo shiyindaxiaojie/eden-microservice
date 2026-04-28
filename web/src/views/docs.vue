@@ -131,6 +131,7 @@ data_dir: "./data"
 
 server:
   http: ":8500"
+  # picks the first free port in 9000-9999, starting at :9000
   grpc: "auto"
   quic: "off"
   raft: "off"`,

@@ -4,6 +4,16 @@ English | [中文](README-zh-CN.md)
 
 Focalors is a lightweight service registry for production environments. It focuses on registration, discovery, health checks, topology, and governance, and is intended for systems that only need registry capabilities, do not want to introduce a configuration center or service mesh, or run in memory-constrained environments.
 
+## Demo Screenshots
+
+![Services](./docs/assets/images/services.png)
+
+![Topology](./docs/assets/images/topology.png)
+
+![Clusters](./docs/assets/images/clusters.png)
+
+![Settings](./docs/assets/images/settings.png)
+
 ## Product Positioning
 
 Focalors targets registry-only scenarios. It covers registration, discovery, health control, topology, governance, and AP / CP cluster coordination, while providing compatible access for Nacos and Consul APIs.
@@ -184,6 +194,8 @@ server:
   raft: "off"
 ```
 
+`grpc: "auto"` selects the first available port in the `9000-9999` range, so a local single-node startup uses `127.0.0.1:9000` unless that port is already occupied.
+
 AP cluster example:
 
 ```yaml
@@ -195,6 +207,8 @@ server:
   quic: "off"
   raft: "off"
 ```
+
+When multiple AP nodes run on the same host, `grpc: "auto"` continues through `9000-9999`, typically producing `:9000`, `:9001`, `:9002`, and so on.
 
 CP cluster example:
 

@@ -1,12 +1,9 @@
-# Focalors Node 3 (Ports auto-resolved)
+# Focalors Node 3
 node_id: "node-3"
 mode: "cluster"
 consistency: "cp"
-http_addr: ":8502"
-grpc_addr: ":0"
-quic_addr: ""
-raft_addr: ""
-transport:
+server:
+  http: ":8502"
   grpc: "auto"
   quic: "off"
   raft: "auto"

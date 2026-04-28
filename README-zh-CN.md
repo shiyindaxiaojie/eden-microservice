@@ -4,6 +4,16 @@
 
 Focalors（芙卡洛斯）是一个面向生产环境的轻量化服务注册中心，聚焦注册、发现、健康检查、拓扑和治理，主要面向只需要注册中心能力、不希望额外引入配置中心或 Service Mesh、或运行在内存受限环境中的系统。
 
+## 演示样例
+
+![服务界面](./docs/assets/images/services.png)
+
+![拓扑界面](./docs/assets/images/topology.png)
+
+![集群界面](./docs/assets/images/clusters.png)
+
+![设置界面](./docs/assets/images/settings.png)
+
 ## 产品定位
 
 Focalors 面向“只需要注册中心”的场景，覆盖注册、发现、健康控制、拓扑、治理与 AP / CP 集群协同，支持无缝接入 Nacos / Consul API。
@@ -182,6 +192,8 @@ server:
   raft: "off"
 ```
 
+`grpc: "auto"` 会从 `9000-9999` 范围内选择第一个可用端口，因此本机单节点启动时默认会使用 `127.0.0.1:9000`，除非 `9000` 已被占用。
+
 AP 集群示例：
 
 ```yaml
@@ -193,6 +205,8 @@ server:
   quic: "off"
   raft: "off"
 ```
+
+当多个 AP 节点部署在同一台机器上时，`grpc: "auto"` 会继续在 `9000-9999` 范围内顺延选择端口，通常依次为 `:9000`、`:9001`、`:9002`。
 
 CP 集群示例：
 
