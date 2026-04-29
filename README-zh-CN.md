@@ -6,13 +6,17 @@ Focalors（芙卡洛斯）是一个面向生产环境的轻量化服务注册中
 
 ## 演示样例
 
-![服务界面](./docs/assets/images/services.png)
+服务列表
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/services.png)
 
-![拓扑界面](./docs/assets/images/topology.png)
+服务拓扑
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/topology.png)
 
-![集群界面](./docs/assets/images/clusters.png)
+集群管理
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/clusters.png)
 
-![设置界面](./docs/assets/images/settings.png)
+系统设置
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/settings.png)
 
 ## 产品定位
 

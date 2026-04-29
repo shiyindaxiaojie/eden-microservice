@@ -6,13 +6,17 @@ Focalors is a lightweight service registry for production environments. It focus
 
 ## Demo Screenshots
 
-![Services](./docs/assets/images/services.png)
+Services
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/services.png)
 
-![Topology](./docs/assets/images/topology.png)
+Topology
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/topology.png)
 
-![Clusters](./docs/assets/images/clusters.png)
+Clusters
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/clusters.png)
 
-![Settings](./docs/assets/images/settings.png)
+Settings
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/cdn/eden-registry/settings.png)
 
 ## Product Positioning
 
