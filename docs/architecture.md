@@ -82,15 +82,15 @@ graph TB
 
 ### Standalone
 
-Use this for local development, isolated validation, and small demos.
+Applicable to local development, isolated validation, and small-scale demonstrations.
 
 ### Cluster + AP
 
-Use this when availability and operational flexibility matter more than strict metadata consistency.
+Applicable to environments where availability and operational flexibility take precedence over strict metadata consistency.
 
 ### Cluster + CP
 
-Use this when registry metadata must follow leader-based writes and stronger consistency rules.
+Applicable to environments where registry metadata must follow leader-based writes and stronger consistency constraints.
 
 ## Protocol Responsibilities
 
@@ -105,7 +105,7 @@ Key decisions:
 
 - QUIC is not a separate business protocol.
 - HTTP remains the widest access surface, but not the preferred data plane for Go services.
-- The recommended public programming boundary is `pkg/sdk`.
+- The primary public programming boundary is `pkg/sdk`.
 
 ## Data Flow
 
@@ -130,7 +130,7 @@ Key decisions:
 
 ## Public API Strategy
 
-Focalors keeps one recommended Go entry point:
+Focalors defines one primary Go entry point:
 
 - `pkg/sdk`
 

@@ -49,7 +49,7 @@ Key sections:
 
 ### Local Development
 
-Recommended baseline:
+Baseline configuration:
 
 ```yaml
 mode: "standalone"
@@ -63,7 +63,7 @@ server:
 
 ### AP Cluster
 
-Recommended baseline:
+Baseline configuration:
 
 ```yaml
 mode: "cluster"

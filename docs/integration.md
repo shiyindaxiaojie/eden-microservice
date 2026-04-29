@@ -2,7 +2,7 @@
 
 ## Integration Policy
 
-For Go services, the recommended entry point is:
+For Go services, the primary entry point is:
 
 - [`pkg/sdk`](../pkg/sdk)
 
@@ -13,11 +13,11 @@ Other supported paths remain available for specific constraints:
 - Consul-compatible access
 - Nacos-compatible access
 
-For new projects, start with `pkg/sdk` instead of the compatibility adapters.
+For new projects, `pkg/sdk` is the primary integration path. Compatibility adapters remain available for migration scenarios.
 
 ## Go SDK
 
-### Recommended Mode: gRPC
+### Primary Mode: gRPC
 
 ```go
 client, err := sdk.NewWithConfig(&sdk.Config{
@@ -44,7 +44,7 @@ client, err := sdk.NewWithConfig(&sdk.Config{
 })
 ```
 
-Use this when the environment cannot use gRPC and only basic registry operations are required.
+Applicable when the environment cannot use gRPC and only basic registry operations are required.
 
 ### QUIC Mode
 
@@ -58,7 +58,7 @@ client, err := sdk.NewWithConfig(&sdk.Config{
 })
 ```
 
-Use this when gRPC semantics are still desired but the network path benefits from QUIC transport.
+Applicable when gRPC semantics remain required but the network path benefits from QUIC transport.
 
 ## Native HTTP API
 
@@ -88,7 +88,7 @@ Core RPCs:
 
 ### Consul Compatibility
 
-Use this when existing services already depend on `github.com/hashicorp/consul/api` and the short-term goal is to switch the registry backend with minimal code changes.
+Applicable when existing services already depend on `github.com/hashicorp/consul/api` and the registry backend must be replaced with minimal code changes.
 
 Constraints:
 
@@ -102,7 +102,7 @@ References:
 
 ### Nacos Compatibility
 
-Use this when existing services already depend on `github.com/nacos-group/nacos-sdk-go/v2` naming APIs and only the registry backend should change.
+Applicable when existing services already depend on `github.com/nacos-group/nacos-sdk-go/v2` naming APIs and only the registry backend should change.
 
 Constraints:
 
@@ -116,9 +116,9 @@ References:
 
 ### Custom Protocol Access
 
-Use this when an external project integrates only through the published HTTP or gRPC contracts.
+Applicable when an external project integrates only through the published HTTP or gRPC contracts.
 
-Recommended reading order:
+Reading order:
 
 1. [Service discovery examples](../examples/service-discovery/README.md)
 2. [Custom protocol example](../examples/service-discovery/custom/README.md)
@@ -126,7 +126,7 @@ Recommended reading order:
 
 ## Selection Guidance
 
-| Scenario | Recommended path |
+| Scenario | Primary path |
 | --- | --- |
 | new Go services | `pkg/sdk + grpc` |
 | Go services with network constraints | `pkg/sdk + http` or `pkg/sdk + quic` |

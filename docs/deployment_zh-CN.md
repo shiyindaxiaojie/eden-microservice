@@ -1,6 +1,6 @@
 # 芙卡洛斯部署与运行指南
 
-## 1. 运行目标
+## 运行目标
 
 芙卡洛斯支持三种常见运行方式：
 
@@ -13,7 +13,7 @@
 
 如果没有明确要求，优先使用 `standalone + ap` 作为默认开发模式。
 
-## 2. 启动命令
+## 启动命令
 
 使用默认配置启动：
 
@@ -42,7 +42,7 @@ go run ./cmd/server/main.go -config config/config.yaml
 - `-consistency`
   覆盖一致性模式：`ap` 或 `cp`。
 
-## 3. 配置基线
+## 配置基线
 
 配置文件见：
 
@@ -51,35 +51,35 @@ go run ./cmd/server/main.go -config config/config.yaml
 
 关键配置项分为四类：
 
-### 3.1 节点身份
+### 节点身份
 
 - `node_id`
 - `datacenter`
 - `data_dir`
 
-### 3.2 运行模式
+### 运行模式
 
 - `mode`
 - `consistency`
 - `bootstrap`
 
-### 3.3 网络端口
+### 网络端口
 
 - `server.http`
 - `server.grpc`
 - `server.quic`
 - `server.raft`
 
-### 3.4 安全与日志
+### 安全与日志
 
 - `auth.jwt`
 - `log`
 
-## 4. 模式建议
+## 模式说明
 
-### 4.1 本地开发
+### 本地开发
 
-建议配置：
+基线配置：
 
 ```yaml
 mode: "standalone"
@@ -97,9 +97,9 @@ server:
 - gRPC 自动端口适合本地快速验证。
 - QUIC 和 Raft 默认关闭，避免增加复杂度。
 
-### 4.2 AP 集群
+### AP 集群
 
-建议配置：
+基线配置：
 
 ```yaml
 mode: "cluster"
@@ -116,7 +116,7 @@ server:
 - AP 模式优先保证系统可用性和节点复制效率。
 - 节点间成员信息和运行时设置通过控制面进行维护和分发。
 
-### 4.3 CP 集群
+### CP 集群
 
 Leader 节点示例：
 
@@ -148,7 +148,7 @@ server:
 - 首个节点需要 `bootstrap: true`。
 - 后续节点通过控制台或集群管理接口加入。
 
-## 5. 控制台
+## 控制台
 
 启动前端开发环境：
 
@@ -168,9 +168,9 @@ npm run dev
 - 用户名：`admin`
 - 密码：`admin`
 
-## 6. 认证
+## 认证
 
-### 6.1 控制台登录
+### 控制台登录
 
 登录接口为 `POST /v1/auth/login`。
 
@@ -181,7 +181,7 @@ npm run dev
 - 用户名：`admin`
 - 密码：`admin`
 
-### 6.2 API Key
+### API Key
 
 如果开启 API Key 校验，以下接口需要携带 `X-API-Key`：
 
@@ -189,7 +189,7 @@ npm run dev
 - `POST /v1/catalog/heartbeat`
 - `POST /v1/catalog/topology/report`
 
-## 7. 运行验证
+## 运行验证
 
 常用检查命令：
 
@@ -211,9 +211,9 @@ curl http://127.0.0.1:8500/v1/catalog/services
 curl "http://127.0.0.1:8500/v1/catalog/service/order-center?passing=true"
 ```
 
-## 8. 何时选择哪种模式
+## 何时选择哪种模式
 
-| 场景 | 建议 |
+| 场景 | 适用模式 |
 | --- | --- |
 | 本地联调 | `standalone + ap` |
 | 小规模生产环境 | `cluster + ap` |

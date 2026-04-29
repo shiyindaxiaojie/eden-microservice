@@ -22,6 +22,20 @@ Focalors（芙卡洛斯）是一个面向生产环境的轻量化服务注册中
 
 Focalors 面向“只需要注册中心”的场景，覆盖注册、发现、健康控制、拓扑、治理与 AP / CP 集群协同，支持无缝接入 Nacos / Consul API。
 
+<table align="right" width="38%">
+  <tr>
+    <td>
+
+**适用场景**
+
+- 仅需注册中心能力，不引入独立配置中心或 Service Mesh 的部署场景。
+- 同时要求 `AP` 高可用与 `CP` 一致性集群管理能力的运行环境。
+- 运行内存预算低于 `100MB` 的受限环境。
+
+    </td>
+  </tr>
+</table>
+
 | 功能点 | Focalors | Nacos | Consul |
 | --- | --- | --- | --- |
 | 服务注册与发现 | ✓ | ✓ | ✓ |
@@ -228,7 +242,7 @@ server:
 
 ## 客户端集成
 
-- Focalors SDK：面向 Go 服务，推荐作为长期标准接入。
+- Focalors SDK：面向 Go 服务，作为主要接入路径。
   对应示例：[Focalors 集成示例](./examples/service-discovery/native/README.md)
 - Nacos 兼容：面向 Nacos Naming 存量系统，尽量少改业务代码。
   对应示例：[Nacos 迁移示例](./examples/service-discovery/nacos/README.md)

@@ -22,6 +22,20 @@ Settings
 
 Focalors targets registry-only scenarios. It covers registration, discovery, health control, topology, governance, and AP / CP cluster coordination, while providing compatible access for Nacos and Consul APIs.
 
+<table align="right" width="38%">
+  <tr>
+    <td>
+
+**Applicable Scenarios**
+
+- Registry-only deployments that do not require a separate configuration center or service mesh.
+- Environments that require both `AP` high availability and `CP` consistency management within one runtime model.
+- Memory-constrained environments where the available runtime budget remains below `100MB`.
+
+    </td>
+  </tr>
+</table>
+
 | Capability | Focalors | Nacos | Consul |
 | --- | --- | --- | --- |
 | Service registration and discovery | ✓ | ✓ | ✓ |
@@ -166,7 +180,7 @@ Default API address:
 http://127.0.0.1:8500
 ```
 
-Start with explicit configuration:
+Specify a configuration file explicitly:
 
 ```bash
 go run ./cmd/server/main.go -config config/config.yaml.example
@@ -232,7 +246,7 @@ For full deployment details, see [Deployment Guide](./docs/deployment.md).
 
 | Integration path | Best fit | Example |
 | --- | --- | --- |
-| Focalors SDK | Go services, recommended long-term standard path | [Native integration example](./examples/service-discovery/native/README.md) |
+| Focalors SDK | Go services, primary integration path | [Native integration example](./examples/service-discovery/native/README.md) |
 | Nacos compatibility | Existing Nacos Naming systems with minimal business code changes | [Nacos migration example](./examples/service-discovery/nacos/README.md) |
 | Consul compatibility | Existing Consul HTTP / SDK systems while keeping the original call model | [Consul migration example](./examples/service-discovery/consul/README.md) |
 | Custom gRPC / HTTP | External systems that integrate directly through public protocols | [Custom protocol example](./examples/service-discovery/custom/README.md) |

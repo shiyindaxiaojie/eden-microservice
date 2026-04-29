@@ -36,7 +36,6 @@ async function handleLogin() {
     localStorage.setItem('username', form.value.username)
     localStorage.setItem('nickname', res.data.nickname || form.value.username)
     
-    ElMessage.success(t.value.common.success)
     router.push('/')
   } catch (e: any) {
     const errorMsg = e.response?.data?.error

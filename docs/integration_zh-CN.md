@@ -1,8 +1,8 @@
 # 芙卡洛斯接入与集成指南
 
-## 1. 接入策略
+## 接入策略
 
-对 Go 项目，统一推荐：
+对 Go 项目，统一入口为：
 
 - 使用 [`pkg/sdk`](../pkg/sdk) 接入
 
@@ -13,11 +13,11 @@
 - Consul 兼容接入
 - Nacos 兼容接入
 
-如果是新项目，不建议先从兼容层开始；优先使用 `pkg/sdk`。
+对于新项目，`pkg/sdk` 作为主要接入路径；兼容层保留用于迁移场景。
 
-## 2. Go SDK 接入
+## Go SDK 接入
 
-### 2.1 推荐模式：gRPC
+### 主模式：gRPC
 
 ```go
 client, err := sdk.NewWithConfig(&sdk.Config{
@@ -39,7 +39,7 @@ defer client.Close()
 - 希望使用订阅和自动成员发现
 - 希望以统一 SDK 模型屏蔽协议细节
 
-### 2.2 HTTP 模式
+### HTTP 模式
 
 ```go
 client, err := sdk.NewWithConfig(&sdk.Config{
@@ -59,7 +59,7 @@ client, err := sdk.NewWithConfig(&sdk.Config{
 
 - 订阅能力会退化为轮询
 
-### 2.3 QUIC 模式
+### QUIC 模式
 
 ```go
 client, err := sdk.NewWithConfig(&sdk.Config{
@@ -76,7 +76,7 @@ client, err := sdk.NewWithConfig(&sdk.Config{
 - 弱网环境
 - 希望沿用 gRPC 语义但替换底层传输
 
-## 3. SDK 使用模型
+## SDK 使用模型
 
 SDK 暴露的核心对象只有三类：
 
@@ -93,7 +93,7 @@ SDK 暴露的核心对象只有三类：
 5. 订阅依赖变更
 6. 进程退出时注销实例
 
-## 4. 原生 HTTP API
+## 原生 HTTP API
 
 常用端点：
 
@@ -119,7 +119,7 @@ curl -X POST http://127.0.0.1:8500/v1/catalog/register \
   }'
 ```
 
-## 5. 原生 gRPC API
+## 原生 gRPC API
 
 协议定义：
 
@@ -152,9 +152,9 @@ grpcurl -plaintext \
   eden.registry.v1.RegistryService/Discover
 ```
 
-## 6. 兼容接入
+## 兼容接入
 
-### 6.1 Consul 兼容
+### Consul 兼容
 
 适用对象：
 
@@ -171,13 +171,13 @@ grpcurl -plaintext \
 - 这里解决的是注册与发现迁移，不是完整 Consul 产品能力迁移。
 - 如果现网使用了 Consul 的 KV、Service Mesh、ACL 体系等更宽能力，需要单独评估替代方案。
 
-建议先看这些示例：
+可先参考以下示例：
 
 - [Consul 兼容示例说明](../examples/service-discovery/consul/README.md)
 - [Consul 示例启动脚本](../examples/service-discovery/consul/start.bat)
 - [服务发现示例总览](../examples/service-discovery/README.md)
 
-### 6.2 Nacos 兼容
+### Nacos 兼容
 
 适用对象：
 
@@ -194,13 +194,13 @@ grpcurl -plaintext \
 - 这里针对的是 Naming 能力迁移，不包含 Nacos 配置中心能力。
 - 如果现网同时依赖 Nacos Config，需要把注册发现迁移与配置迁移拆开处理。
 
-建议先看这些示例：
+可先参考以下示例：
 
 - [Nacos 兼容示例说明](../examples/service-discovery/nacos/README.md)
 - [Nacos 示例启动脚本](../examples/service-discovery/nacos/start.bat)
 - [服务发现示例总览](../examples/service-discovery/README.md)
 
-### 6.3 自定义协议接入
+### 自定义协议接入
 
 适用对象：
 
@@ -212,15 +212,15 @@ grpcurl -plaintext \
 - 直接调用公开 HTTP API
 - 直接调用公开 gRPC API
 
-建议按以下顺序阅读：
+阅读顺序如下：
 
 1. [服务发现示例总览](../examples/service-discovery/README.md)
 2. [自定义协议示例说明](../examples/service-discovery/custom/README.md)
 3. [`api/proto/registry/v1/registry.proto`](../api/proto/registry/v1/registry.proto)
 
-## 7. 接入选型建议
+## 接入选型
 
-| 场景 | 建议 |
+| 场景 | 主要路径 |
 | --- | --- |
 | 新 Go 服务 | `pkg/sdk + grpc` |
 | Go 服务但受限于网络环境 | `pkg/sdk + http` 或 `pkg/sdk + quic` |
