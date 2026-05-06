@@ -1,0 +1,120 @@
+############################################################
+# Core 
+############################################################
+
+# Basic Node Identity
+node_id: "node-1"
+
+# Deployment Mode: standalone or cluster
+mode: "cluster"
+
+# Consistency Mode: ap (eventual consistency) or cp (strong consistency)
+# Only effective when mode=cluster
+consistency: "ap"
+
+# Whether to start as the first node to bootstrap the Raft cluster
+# Only meaningful when mode=cluster and consistency=cp
+bootstrap: true
+
+# Datacenter name, used for multi-datacenter isolation
+datacenter: "dc1"
+
+# Data storage directory (must be isolated for each node)
+data_dir: "./data"
+
+############################################################
+# Network
+############################################################
+
+server:
+  # HTTP Management API and Console listening address (Must be explicitly specified)
+  http: ":8500"
+
+  # gRPC Listening Address (Used for client access and inter-node synchronization)
+  #   - Set to "auto" to enable and assign a random port by default
+  #   - Specify a port like ":9000" to bind explicitly
+  #   - Set to "off" to explicitly disable the protocol
+  grpc: "auto"
+
+  # QUIC Listening Address (UDP-based gRPC transport)
+  #   - Set to "auto" to enable and assign a random port by default
+  #   - Specify a port like ":10000" to bind explicitly
+  #   - Set to "off" to explicitly disable the protocol
+  quic: "off"
+
+  # Raft Internal Communication Address
+  #   - Only meaningful when mode=cluster and consistency=cp
+  #   - Set to "auto" to enable and assign a random port by default
+  #   - Note: If an explicit IP is configured, Raft requires a valid network interface IP (e.g., 127.0.0.1 or LAN IP)
+  #   - Suggested: "127.0.0.1:7000", or use "auto" for automatic allocation
+  #   - Set to "off" to explicitly disable the protocol
+  raft: "auto"
+
+############################################################
+# Authentication
+############################################################
+auth:
+  jwt:
+    enabled: true
+    secret: "registry-jwt-console-secret-key"
+
+############################################################
+# Logging
+############################################################
+log:
+  level: INFO # DEBUG, INFO, WARN, ERROR, FATAL
+  format: text # text, json
+  pattern: "%d [%p] [%T] %m%n"
+  policies:
+    cron_triggering_policy:
+      schedule: 0 0 4 * * ?
+    size_based_triggering_policy:
+      size: 20MB
+  rollover:
+    max_file: 10
+    retention: 30d
+  appenders:
+    - name: Console # Standard output
+      type: Console
+      pattern: "%d [%p] [%T] %m%n"
+    - name: InfoLog # General business logs
+      type: RollingFile
+      level: INFO
+      file_name: "logs/info.log"
+      file_pattern: info-%i.log.gz
+      async: true
+      rollover:
+        max_file: 5
+        retention: 7d
+    - name: ErrorLog # Error logs with rate limiting
+      type: RollingFile
+      level: ERROR
+      file_name: "logs/error.log"
+      file_pattern: error-%i.log.gz
+      async: true
+      filter: # Burst filter to prevent log flooding
+        type: burst
+        level: ERROR
+        rate: 10 # 10 entries per second
+        max_burst: 100 # Allow burst up to 100 entries
+        on_match: ACCEPT
+        on_mismatch: DENY
+      rollover:
+        max_file: 10
+        retention: 30d
+
+############################################################
+# Storage
+############################################################
+storage:
+  # Registry flush strategy:
+  #   - async: batch registry changes and flush to services.json by interval
+  #   - sync: flush to services.json immediately after each registry mutation
+  registry_flush_mode: "async"
+  registry_flush_interval_ms: 1000
+
+  event_storage_mode: "memory"
+  event_retention_days: 30
+  metrics_storage_mode: "memory"
+  log_retention_days: 30
+

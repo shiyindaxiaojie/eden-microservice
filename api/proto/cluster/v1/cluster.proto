@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package sdk.cluster.v1;
+
+option go_package = "github.com/shiyindaxiaojie/eden-registry/api/proto/cluster/v1;clusterv1";
+
+// ClusterService defines the gRPC API for node-to-node communication.
+service ClusterService {
+  // Sync seeds (node list) to a peer.
+  rpc SyncSeeds(SyncSeedsRequest) returns (SyncResponse);
+  // Sync a user to a peer.
+  rpc SyncUser(SyncUserRequest) returns (SyncResponse);
+  // Delete a user on a peer.
+  rpc DeleteUser(DeleteUserRequest) returns (SyncResponse);
+  // Sync an API key to a peer.
+  rpc SyncAPIKey(SyncAPIKeyRequest) returns (SyncResponse);
+  // Delete an API key on a peer.
+  rpc DeleteAPIKey(DeleteAPIKeyRequest) returns (SyncResponse);
+  // Sync settings (mode, environment) to a peer.
+  rpc SyncSettings(SyncSettingsRequest) returns (SyncResponse);
+  // Replicate a log entry (for AP mode broadcast).
+  rpc ReplicateLog(ReplicateLogRequest) returns (SyncResponse);
+  // Pull full discovery state from a peer (Anti-Entropy).
+  rpc SyncDiscovery(SyncDiscoveryRequest) returns (SyncDiscoveryResponse);
+  // Forward a write request to the leader (for CP mode).
+  rpc ForwardToLeader(ForwardRequest) returns (ForwardResponse);
+}
+
+message SyncDiscoveryRequest {}
+
+message SyncDiscoveryResponse {
+  bytes data = 1; // JSON serialized map[string]map[string]*model.Instance
+}
+
+message SyncSeedsRequest {
+  repeated string seeds = 1;
+}
+
+message SyncResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SyncUserRequest {
+  string username = 1;
+  string password = 2;
+  string nickname = 3;
+  string role = 4;
+  string remark = 5;
+  bool   is_built_in = 6;
+}
+
+message DeleteUserRequest {
+  string username = 1;
+}
+
+message SyncAPIKeyRequest {
+  string key = 1;
+  string label = 2;
+  int64  created_at = 3;
+  int64  expires_at = 4;
+}
+
+message DeleteAPIKeyRequest {
+  string key = 1;
+}
+
+message SyncSettingsRequest {
+  string mode = 1;
+  string environment = 2;
+  string log_level = 3;
+}
+
+message ReplicateLogRequest {
+  string command_type = 1;
+  bytes  data = 2;
+}
+
+message ForwardRequest {
+  string path = 1;
+  bytes  body = 2;
+  string method = 3;
+}
+
+message ForwardResponse {
+  bool   success = 1;
+  int32  status_code = 2;
+  bytes  body = 3;
+}
+

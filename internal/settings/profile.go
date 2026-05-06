@@ -1,0 +1,491 @@
+package settings
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/shiyindaxiaojie/eden-registry/internal/alert"
+	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
+	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
+)
+
+// Profile persists cluster mode, environment, and runtime
+type Profile struct {
+	mu                 sync.RWMutex
+	mode               string
+	environment        string
+	loaded             bool
+	seeds              []string
+	logLevel           string
+	eventRetDays       int
+	logRetDays         int
+	eventTypes         []string
+	hbMaxFail          int
+	removalDelay       int
+	apiKeyAuth         bool
+	apiKeyAuthSet      bool
+	notifyAlertNodeID  string
+	registryFlushMode  string
+	registryFlushMS    int
+	eventStorageMode   string
+	metricsStorageMode string
+	metricsRetDays     int
+	dataPath           string
+	alertConfigs       map[string]*alert.Config
+	notifyConfigs      map[string]*notify.Config
+}
+
+func NewProfile(dataPath string) *Profile {
+	s := &Profile{
+		mode:               "ap",
+		environment:        "standalone",
+		seeds:              []string{},
+		eventRetDays:       30,
+		logRetDays:         30,
+		eventTypes:         catalog.DefaultEventTypes(),
+		hbMaxFail:          3,
+		removalDelay:       600,
+		registryFlushMode:  "async",
+		registryFlushMS:    1000,
+		eventStorageMode:   "memory",
+		metricsStorageMode: "memory",
+		metricsRetDays:     30,
+		dataPath:           dataPath,
+		alertConfigs:       make(map[string]*alert.Config),
+		notifyConfigs:      make(map[string]*notify.Config),
+	}
+	s.Load()
+	return s
+}
+
+func (s *Profile) GetMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mode
+}
+
+func (s *Profile) SetMode(m string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mode = m
+}
+
+func (s *Profile) GetEnvironment() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.environment
+}
+
+func (s *Profile) LoadedFromDisk() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.loaded
+}
+
+func (s *Profile) SetEnvironment(e string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.environment = e
+}
+
+func (s *Profile) GetSeeds() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.seeds
+}
+
+func (s *Profile) SetSeeds(seeds []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seeds = seeds
+}
+
+func (s *Profile) GetLogLevel() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.logLevel
+}
+
+func (s *Profile) SetLogLevel(l string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logLevel = NormalizeLogLevel(l)
+}
+
+func (s *Profile) GetEventRetentionDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.eventRetDays
+}
+
+func (s *Profile) SetEventRetentionDays(days int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.eventRetDays = days
+}
+
+func (s *Profile) GetLogRetentionDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.logRetDays
+}
+
+func (s *Profile) SetLogRetentionDays(days int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logRetDays = days
+}
+
+func (s *Profile) GetEventTypes() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]string, len(s.eventTypes))
+	copy(result, s.eventTypes)
+	return result
+}
+
+func (s *Profile) SetEventTypes(types []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.eventTypes = catalog.NormalizeEventTypes(types)
+}
+
+func (s *Profile) GetHeartbeatMaxFailures() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.hbMaxFail
+}
+
+func (s *Profile) SetHeartbeatMaxFailures(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hbMaxFail = n
+}
+
+func (s *Profile) GetInstanceRemovalDelaySeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.removalDelay
+}
+
+func (s *Profile) SetInstanceRemovalDelaySeconds(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.removalDelay = n
+}
+
+func (s *Profile) GetAPIKeyAuthEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.apiKeyAuth
+}
+
+func (s *Profile) HasAPIKeyAuthEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.apiKeyAuthSet
+}
+
+func (s *Profile) SetAPIKeyAuthEnabled(enabled bool) {
+	s.mu.Lock()
+	s.apiKeyAuth = enabled
+	s.apiKeyAuthSet = true
+	s.mu.Unlock()
+
+	s.Save()
+}
+
+func (s *Profile) GetNotifyAlertNodeID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.notifyAlertNodeID
+}
+
+func (s *Profile) GetRegistryFlushMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.registryFlushMode
+}
+
+func (s *Profile) SetRegistryFlushMode(mode string) {
+	s.mu.Lock()
+	s.registryFlushMode = mode
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetRegistryFlushIntervalMS() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.registryFlushMS
+}
+
+func (s *Profile) SetRegistryFlushIntervalMS(ms int) {
+	s.mu.Lock()
+	s.registryFlushMS = ms
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetEventStorageMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.eventStorageMode
+}
+
+func (s *Profile) SetEventStorageMode(mode string) {
+	s.mu.Lock()
+	s.eventStorageMode = mode
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetMetricsStorageMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.metricsStorageMode
+}
+
+func (s *Profile) SetMetricsStorageMode(mode string) {
+	s.mu.Lock()
+	s.metricsStorageMode = mode
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) GetMetricsRetentionDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.metricsRetDays
+}
+
+func (s *Profile) SetMetricsRetentionDays(days int) {
+	s.mu.Lock()
+	s.metricsRetDays = days
+	s.mu.Unlock()
+	s.Save()
+}
+
+func (s *Profile) SetNotifyAlertNodeID(nodeID string) {
+	s.mu.Lock()
+	s.notifyAlertNodeID = nodeID
+	s.mu.Unlock()
+
+	s.Save()
+}
+
+func (s *Profile) Restore(mode, env, logLevel string, seeds []string, eventRet, logRet int, eventTypes []string, hbMaxFail, removalDelay int, apiKeyAuth bool, notifyAlertNodeID, registryFlushMode string, registryFlushMS int, eventStorageMode string, metricsStorageMode string, metricsRetDays int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mode = mode
+	s.environment = env
+	s.logLevel = NormalizeLogLevel(logLevel)
+	s.seeds = seeds
+	if eventRet > 0 {
+		s.eventRetDays = eventRet
+	}
+	if logRet > 0 {
+		s.logRetDays = logRet
+	}
+	if eventTypes != nil {
+		s.eventTypes = catalog.NormalizeEventTypes(eventTypes)
+	}
+	if hbMaxFail > 0 {
+		s.hbMaxFail = hbMaxFail
+	}
+	if removalDelay > 0 {
+		s.removalDelay = removalDelay
+	}
+	s.apiKeyAuth = apiKeyAuth
+	s.apiKeyAuthSet = true
+	s.notifyAlertNodeID = notifyAlertNodeID
+	s.registryFlushMode = registryFlushMode
+	if registryFlushMS > 0 {
+		s.registryFlushMS = registryFlushMS
+	}
+	s.eventStorageMode = eventStorageMode
+	s.metricsStorageMode = metricsStorageMode
+	if metricsRetDays > 0 {
+		s.metricsRetDays = metricsRetDays
+	}
+	s.Save()
+}
+
+func (s *Profile) GetAlertConfig(namespace string) *alert.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if cfg, ok := s.alertConfigs[namespace]; ok {
+		return cfg
+	}
+	return nil
+}
+
+func (s *Profile) SaveAlertConfig(namespace string, cfg *alert.Config) {
+	s.mu.Lock()
+	if s.alertConfigs == nil {
+		s.alertConfigs = make(map[string]*alert.Config)
+	}
+	s.alertConfigs[namespace] = cfg
+	s.mu.Unlock()
+
+	s.Save()
+}
+
+func (s *Profile) GetNotifyConfig(namespace string) *notify.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if cfg, ok := s.notifyConfigs[namespace]; ok {
+		return cfg
+	}
+	return nil
+}
+
+func (s *Profile) SaveNotifyConfig(namespace string, cfg *notify.Config) {
+	s.mu.Lock()
+	if s.notifyConfigs == nil {
+		s.notifyConfigs = make(map[string]*notify.Config)
+	}
+	s.notifyConfigs[namespace] = cfg
+	s.mu.Unlock()
+
+	s.Save()
+}
+
+func (s *Profile) Load() {
+	if s.dataPath == "" {
+		return
+	}
+	// Load settings
+	settingsFile := filepath.Join(s.dataPath, "settings.json")
+	if data, err := os.ReadFile(settingsFile); err == nil {
+		var meta struct {
+			Mode                 string                    `json:"mode"`
+			Environment          string                    `json:"environment"`
+			LogLevel             string                    `json:"log_level"`
+			EventRetentionDays   int                       `json:"event_retention_days"`
+			LogRetentionDays     int                       `json:"log_retention_days"`
+			EventTypes           *[]string                 `json:"event_types"`
+			HBMaxFail            int                       `json:"heartbeat_max_failures"`
+			RemovalDelay         int                       `json:"instance_removal_delay_seconds"`
+			APIKeyAuthEnabled    *bool                     `json:"api_key_auth_enabled"`
+			NotifyAlertNodeID    string                    `json:"notify_alert_node_id,omitempty"`
+			RegistryFlushMode    string                    `json:"registry_flush_mode"`
+			RegistryFlushMS      int                       `json:"registry_flush_interval_ms"`
+			EventStorageMode     string                    `json:"event_storage_mode"`
+			MetricsStorageMode   string                    `json:"metrics_storage_mode"`
+			MetricsRetentionDays int                       `json:"metrics_retention_days"`
+			AlertConfigs         map[string]*alert.Config  `json:"alert_configs,omitempty"`
+			NotifyConfigs        map[string]*notify.Config `json:"notify_configs,omitempty"`
+		}
+		if err := json.Unmarshal(data, &meta); err == nil {
+			s.mode = meta.Mode
+			s.environment = meta.Environment
+			s.logLevel = NormalizeLogLevel(meta.LogLevel)
+			if meta.EventRetentionDays > 0 {
+				s.eventRetDays = meta.EventRetentionDays
+			}
+			if meta.LogRetentionDays > 0 {
+				s.logRetDays = meta.LogRetentionDays
+			}
+			if meta.EventTypes != nil {
+				s.eventTypes = catalog.NormalizeEventTypes(*meta.EventTypes)
+			}
+			if meta.HBMaxFail > 0 {
+				s.hbMaxFail = meta.HBMaxFail
+			}
+			if meta.RemovalDelay > 0 {
+				s.removalDelay = meta.RemovalDelay
+			}
+			if meta.APIKeyAuthEnabled != nil {
+				s.apiKeyAuth = *meta.APIKeyAuthEnabled
+				s.apiKeyAuthSet = true
+			}
+			s.notifyAlertNodeID = meta.NotifyAlertNodeID
+			if meta.RegistryFlushMode != "" {
+				s.registryFlushMode = meta.RegistryFlushMode
+			}
+			if meta.RegistryFlushMS > 0 {
+				s.registryFlushMS = meta.RegistryFlushMS
+			}
+			s.eventStorageMode = meta.EventStorageMode
+			s.metricsStorageMode = meta.MetricsStorageMode
+			if meta.MetricsRetentionDays > 0 {
+				s.metricsRetDays = meta.MetricsRetentionDays
+			}
+			if meta.AlertConfigs != nil {
+				s.alertConfigs = meta.AlertConfigs
+			}
+			if meta.NotifyConfigs != nil {
+				s.notifyConfigs = meta.NotifyConfigs
+			}
+			s.loaded = true
+		}
+	}
+	// Load nodes
+	nodesFile := filepath.Join(s.dataPath, "nodes.json")
+	if data, err := os.ReadFile(nodesFile); err == nil {
+		var seeds []string
+		if err := json.Unmarshal(data, &seeds); err == nil {
+			s.seeds = seeds
+		}
+	}
+}
+
+func (s *Profile) Save() {
+	if s.dataPath == "" {
+		return
+	}
+	os.MkdirAll(s.dataPath, 0755)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Save settings
+	settingsFile := filepath.Join(s.dataPath, "settings.json")
+	meta := struct {
+		Mode                 string                    `json:"mode"`
+		Environment          string                    `json:"environment"`
+		LogLevel             string                    `json:"log_level"`
+		EventRetentionDays   int                       `json:"event_retention_days"`
+		LogRetentionDays     int                       `json:"log_retention_days"`
+		EventTypes           []string                  `json:"event_types"`
+		HBMaxFail            int                       `json:"heartbeat_max_failures"`
+		RemovalDelay         int                       `json:"instance_removal_delay_seconds"`
+		APIKeyAuthEnabled    bool                      `json:"api_key_auth_enabled"`
+		NotifyAlertNodeID    string                    `json:"notify_alert_node_id,omitempty"`
+		RegistryFlushMode    string                    `json:"registry_flush_mode"`
+		RegistryFlushMS      int                       `json:"registry_flush_interval_ms"`
+		EventStorageMode     string                    `json:"event_storage_mode"`
+		MetricsStorageMode   string                    `json:"metrics_storage_mode"`
+		MetricsRetentionDays int                       `json:"metrics_retention_days"`
+		AlertConfigs         map[string]*alert.Config  `json:"alert_configs,omitempty"`
+		NotifyConfigs        map[string]*notify.Config `json:"notify_configs,omitempty"`
+	}{
+		Mode:                 s.mode,
+		Environment:          s.environment,
+		LogLevel:             s.logLevel,
+		EventRetentionDays:   s.eventRetDays,
+		LogRetentionDays:     s.logRetDays,
+		EventTypes:           s.eventTypes,
+		HBMaxFail:            s.hbMaxFail,
+		RemovalDelay:         s.removalDelay,
+		APIKeyAuthEnabled:    s.apiKeyAuth,
+		NotifyAlertNodeID:    s.notifyAlertNodeID,
+		RegistryFlushMode:    s.registryFlushMode,
+		RegistryFlushMS:      s.registryFlushMS,
+		EventStorageMode:     s.eventStorageMode,
+		MetricsStorageMode:   s.metricsStorageMode,
+		MetricsRetentionDays: s.metricsRetDays,
+		AlertConfigs:         s.alertConfigs,
+		NotifyConfigs:        s.notifyConfigs,
+	}
+	data, _ := json.MarshalIndent(meta, "", "  ")
+	_ = os.WriteFile(settingsFile, data, 0644)
+
+	// Save nodes
+	nodesFile := filepath.Join(s.dataPath, "nodes.json")
+	nodesData, _ := json.MarshalIndent(s.seeds, "", "  ")
+	_ = os.WriteFile(nodesFile, nodesData, 0644)
+}

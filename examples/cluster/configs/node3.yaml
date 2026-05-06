@@ -1,0 +1,12 @@
+# Focalors Node 3
+node_id: "node-3"
+mode: "cluster"
+consistency: "cp"
+server:
+  http: ":8502"
+  grpc: "auto"
+  quic: "off"
+  raft: "auto"
+data_dir: "./data/node3"
+
+

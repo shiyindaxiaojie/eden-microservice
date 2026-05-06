@@ -1,0 +1,100 @@
+# 编译输出
+/bin
+/dist
+*.exe
+*.dll
+*.so
+*.dylib
+.gocache
+.gomodcache
+
+# 依赖目录
+/vendor/
+
+# IDE和编辑器文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+logs/
+
+# 配置文件（排除示例配置）
+config/config.yaml
+!config/config.yaml.example
+
+# 环境变量文件
+.env
+.env.local
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 测试覆盖率报告
+coverage.txt
+coverage.html
+
+# 临时文件
+tmp/
+temp/
+
+# 构建缓存
+.cache/
+
+# Go特定文件
+*.test
+*.out
+go.work
+
+# 证书文件
+*.pem
+*.key
+*.crt
+
+# Helm相关
+charts/
+*.tgz
+.helm/
+
+# 其他
+*.bak
+*.backup
+*.swp
+*.tmp
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.env
+web/.env.*
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/yarn.lock
+
+# TypeScript 编译生成的文件
+web/src/**/*.js
+web/src/**/*.js.map
+web/src/**/*.d.ts
+!web/src/**/*shims*.d.ts
+!web/src/**/vite-env.d.ts
+web/tsconfig.tsbuildinfo
+web/*.tsbuildinfo
+
+# Backend
+.env.*
+config/config.yaml
+config/config.*.yaml
+!config/config.yaml.example
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/

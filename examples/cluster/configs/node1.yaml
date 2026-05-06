@@ -1,0 +1,13 @@
+# Focalors Node 1
+node_id: "node-1"
+mode: "cluster"
+consistency: "cp"
+server:
+  http: ":8500"
+  grpc: "auto"
+  quic: "off"
+  raft: "auto"
+data_dir: "./data/node1"
+bootstrap: true
+
+

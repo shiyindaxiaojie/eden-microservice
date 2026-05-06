@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package sdk.registry.v1;
+
+option go_package = "github.com/shiyindaxiaojie/eden-registry/api/proto/registry/v1;registryv1";
+
+// RegistryService defines the gRPC API for client-to-registry communication.
+service RegistryService {
+  // Register a service instance.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // Deregister a service instance (deprecated, use SetInstanceStatus).
+  rpc Deregister(DeregisterRequest) returns (DeregisterResponse);
+  // Set instance status (online/offline).
+  rpc SetInstanceStatus(SetInstanceStatusRequest) returns (SetInstanceStatusResponse);
+  // Send heartbeat to keep instance alive.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  // Discover all healthy instances of a service.
+  rpc Discover(DiscoverRequest) returns (DiscoverResponse);
+  // Watch for changes in service instance list (server-side streaming).
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+  // Get cluster members and their transport endpoints for client-side discovery.
+  rpc GetMembers(GetMembersRequest) returns (GetMembersResponse);
+  // Report consumer-provider topology.
+  rpc ReportTopology(ReportTopologyRequest) returns (ReportTopologyResponse);
+}
+
+message ServiceInstance {
+  string id = 1;
+  string service_name = 2;
+  string host = 3;
+  int32  port = 4;
+  int32  weight = 5;
+  string status = 6;
+  string datacenter = 7;
+  map<string, string> metadata = 8;
+  string namespace = 9;
+}
+
+message RegisterRequest {
+  ServiceInstance instance = 1;
+}
+
+message RegisterResponse {
+  bool success = 1;
+}
+
+message DeregisterRequest {
+  string service_name = 1;
+  string instance_id = 2;
+  string namespace = 3;
+}
+
+message DeregisterResponse {
+  bool success = 1;
+}
+
+message SetInstanceStatusRequest {
+  string namespace = 1;
+  string service_name = 2;
+  string instance_id = 3;
+  string status = 4; // "online" or "offline"
+}
+
+message SetInstanceStatusResponse {
+  bool success = 1;
+}
+
+message HeartbeatRequest {
+  string service_name = 1;
+  string instance_id = 2;
+  string namespace = 3;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+}
+
+message DiscoverRequest {
+  string service_name = 1;
+  bool   healthy_only = 2;
+  string datacenter = 3;
+  string namespace = 4;
+}
+
+message DiscoverResponse {
+  repeated ServiceInstance instances = 1;
+}
+
+message WatchRequest {
+  string service_name = 1;
+  string namespace = 2;
+}
+
+message WatchResponse {
+  string action = 1; // "update", "offline", "online"
+  repeated ServiceInstance instances = 2;
+}
+
+message GetMembersRequest {}
+
+message ClusterMember {
+  string id = 1;
+  string address = 2;
+  string status = 3;
+  string role = 4;
+  bool is_local = 5;
+  string http_addr = 6;
+  string grpc_addr = 7;
+  string quic_addr = 8;
+  string raft_addr = 9;
+}
+
+message GetMembersResponse {
+  repeated ClusterMember members = 1;
+}
+
+message ReportTopologyRequest {
+  string namespace = 1;
+  string consumer_service = 2;
+  repeated string providers = 3;
+  string checksum = 4;
+}
+
+message ReportTopologyResponse {
+  bool success = 1;
+  bool changed = 2;
+}
+
