@@ -20,36 +20,103 @@ Settings
 
 ## Product Positioning
 
-Focalors targets registry-only scenarios. It covers registration, discovery, health control, topology, governance, and AP / CP cluster coordination, while providing compatible access for Nacos and Consul APIs.
+Focalors targets registry-only scenarios. It covers registration, discovery, health control, topology, governance, and AP / CP cluster coordination while remaining compatible with Nacos and Consul APIs.
 
-<table align="right" width="38%">
+<table>
   <tr>
-    <td>
-
-**Applicable Scenarios**
-
-- Registry-only deployments that do not require a separate configuration center or service mesh.
-- Environments that require both `AP` high availability and `CP` consistency management within one runtime model.
-- Memory-constrained environments where the available runtime budget remains below `100MB`.
-
+    <td valign="top" width="62%">
+      <strong>Capability Comparison</strong>
+      <table>
+        <tr>
+          <th>Capability</th>
+          <th>Focalors</th>
+          <th>Nacos</th>
+          <th>Consul</th>
+        </tr>
+        <tr>
+          <td>Service registration and discovery</td>
+          <td>✓</td>
+          <td>✓</td>
+          <td>✓</td>
+        </tr>
+        <tr>
+          <td>Service health checks</td>
+          <td>✓</td>
+          <td>✓</td>
+          <td>✓</td>
+        </tr>
+        <tr>
+          <td>Instance online / offline control</td>
+          <td>✓</td>
+          <td>✓</td>
+          <td>✓</td>
+        </tr>
+        <tr>
+          <td>Service dependency topology</td>
+          <td>✓</td>
+          <td>✗</td>
+          <td>✗</td>
+        </tr>
+        <tr>
+          <td>AP consistency</td>
+          <td>✓</td>
+          <td>✓</td>
+          <td>✗</td>
+        </tr>
+        <tr>
+          <td>CP consistency</td>
+          <td>✓</td>
+          <td>✗</td>
+          <td>✓</td>
+        </tr>
+        <tr>
+          <td>AP / CP switching</td>
+          <td>✓</td>
+          <td>✗</td>
+          <td>✗</td>
+        </tr>
+        <tr>
+          <td>RBAC control</td>
+          <td>✓</td>
+          <td>✓</td>
+          <td>✓</td>
+        </tr>
+        <tr>
+          <td>Namespace isolation</td>
+          <td>✓</td>
+          <td>✓</td>
+          <td>✓ (paid)</td>
+        </tr>
+        <tr>
+          <td>Weak-network transport</td>
+          <td>✓</td>
+          <td>✗</td>
+          <td>✗</td>
+        </tr>
+        <tr>
+          <td>Event storage</td>
+          <td>✓</td>
+          <td>✗</td>
+          <td>✗</td>
+        </tr>
+        <tr>
+          <td>Memory footprint</td>
+          <td>Low</td>
+          <td>High</td>
+          <td>Medium</td>
+        </tr>
+      </table>
+    </td>
+    <td valign="top" width="38%">
+      <strong>Applicable Scenarios</strong>
+      <ul>
+        <li>Registry-only deployments without a separate configuration center or service mesh.</li>
+        <li>Environments that need both <code>AP</code> high availability and <code>CP</code> consistency management in one runtime.</li>
+        <li>Memory-constrained deployments with a runtime budget below <code>100MB</code>.</li>
+      </ul>
     </td>
   </tr>
 </table>
-
-| Capability | Focalors | Nacos | Consul |
-| --- | --- | --- | --- |
-| Service registration and discovery | ✓ | ✓ | ✓ |
-| Service health checks | ✓ | ✓ | ✓ |
-| Instance online / offline control | ✓ | ✓ | ✓ |
-| Service dependency topology | ✓ | ✗ | ✗ |
-| AP consistency | ✓ | ✓ | ✗ |
-| CP consistency | ✓ | ✗ | ✓ |
-| AP / CP switching | ✓ | ✗ | ✗ |
-| RBAC control | ✓ | ✓ | ✓ |
-| Namespace isolation | ✓ | ✓ | ✓ (paid) |
-| Weak-network transport | ✓ | ✗ | ✗ |
-| Event storage | ✓ | ✗ | ✗ |
-| Memory footprint | Low | High | Medium |
 
 ## Architecture / Runtime Flow
 
@@ -60,6 +127,11 @@ Focalors targets registry-only scenarios. It covers registration, discovery, hea
 title: Focalors Service Registry Architecture
 ---
 flowchart TB
+    classDef client fill:#edf4ff,stroke:#4c78ff,stroke-width:1.5px,color:#102a43;
+    classDef registry fill:#eafaf1,stroke:#2f9e5b,stroke-width:1.5px,color:#123524;
+    classDef cluster fill:#fff4e6,stroke:#f08c00,stroke-width:1.5px,color:#7a4100;
+    classDef storage fill:#f5f0ff,stroke:#7c4dff,stroke-width:1.5px,color:#2d1b69;
+
     subgraph ActiveClients["Clients"]
         direction LR
         SDK["Focalors Client"]
@@ -98,6 +170,16 @@ flowchart TB
         RAFT["Raft Log / Snapshot"]
     end
 
+    style ActiveClients fill:#f7fbff,stroke:#4c78ff,stroke-width:2px,color:#102a43
+    style REGISTRY fill:#f3fff8,stroke:#2f9e5b,stroke-width:2px,color:#123524
+    style PeerNodes fill:#fff8ef,stroke:#f08c00,stroke-width:2px,color:#7a4100
+    style PersistentStore fill:#faf7ff,stroke:#7c4dff,stroke-width:2px,color:#2d1b69
+
+    class SDK,NACOS,CONSUL,CUSTOM,CONSOLE client
+    class ACCESS,CONTROL,CATALOG,CLUSTER registry
+    class N1,N2,N3 cluster
+    class RBAC,NS,EVENT,LOG,ALERT,NOTICE,RAFT storage
+
     SDK -->|gRPC| ACCESS
     NACOS -->|Nacos gRPC / HTTP| ACCESS
     CONSUL -->|Consul HTTP| ACCESS
@@ -127,6 +209,7 @@ flowchart TB
 ### Runtime Flow
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#edf4ff', 'primaryTextColor': '#102a43', 'primaryBorderColor': '#4c78ff', 'lineColor': '#5c677d', 'secondaryColor': '#eafaf1', 'tertiaryColor': '#fff4e6', 'fontSize': '14px'}}}%%
 sequenceDiagram
     autonumber
 
@@ -136,6 +219,7 @@ sequenceDiagram
     participant R as Cluster Sync
     participant D as Persistent Storage
 
+    rect rgb(237,244,255)
     Note over C,D: Scenario 1: Register / Heartbeat
     C->>T: Send register request
     alt Focalors SDK
@@ -156,7 +240,9 @@ sequenceDiagram
     D-->>F: Return write result
     F-->>T: Return register result
     T-->>C: Success response
+    end
 
+    rect rgb(234,250,241)
     Note over C,D: Scenario 2: Service Discovery
     C->>T: Query service
     T->>F: Route to registry / discovery logic
@@ -164,6 +250,7 @@ sequenceDiagram
     D-->>F: Return query result
     F-->>T: Assemble protocol response
     T-->>C: Return discovery result
+    end
 ```
 
 ## Quick Start
@@ -196,9 +283,9 @@ go test ./...
 
 | Mode | Key configuration | Best fit |
 | --- | --- | --- |
-| `standalone` | `mode: "standalone"` | local development, testing, fast validation |
-| `cluster + ap` | `mode: "cluster"` + `consistency: "ap"` | availability-first production environments |
-| `cluster + cp` | `mode: "cluster"` + `consistency: "cp"` | consistency-first production environments with leader-based writes |
+| Standalone | `mode: "standalone"` | local development, testing, fast validation |
+| Cluster + AP | `mode: "cluster"` + `consistency: "ap"` | availability-first production environments |
+| Cluster + CP | `mode: "cluster"` + `consistency: "cp"` | consistency-first production environments with leader-based writes |
 
 Standalone example:
 
