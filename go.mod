@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb/v2 v2.3.1
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/shiyindaxiaojie/eden-go-logger v1.0.2
 	github.com/spf13/viper v1.21.0
 	go.etcd.io/bbolt v1.3.5
