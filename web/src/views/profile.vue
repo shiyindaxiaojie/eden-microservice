@@ -16,7 +16,7 @@ import {
 import { useI18n } from '../utils/i18n'
 import { sha256 } from '../utils/crypto'
 
-const { locale, t, toggleLocale } = useI18n()
+const { locale, t, text, setLocale, supportedLocales, localeLabels } = useI18n()
 
 // Current values in components (controlled state)
 const username = ref(localStorage.getItem('username') || '')
@@ -72,36 +72,34 @@ async function saveAllSettings() {
     localStorage.setItem('theme', theme.value)
     document.cookie = `theme=${theme.value};path=/;max-age=31536000`
     
-    if (localStorage.getItem('locale') !== locale.value) {
-       toggleLocale()
-    }
+    setLocale(locale.value)
     
     ElMessage.success({
-      message: locale.value === 'zh' ? '设置已持久化保存' : 'Settings persisted successfully',
+      message: text('设置已持久化保存', 'Settings persisted successfully'),
       type: 'success'
     })
     
     window.dispatchEvent(new Event('storage'))
   } catch (err: any) {
-    ElMessage.error(locale.value === 'zh' ? `保存失败: ${err.message}` : `Save failed: ${err.message}`)
+    ElMessage.error(text(`保存失败: ${err.message}`, `Save failed: ${err.message}`))
   }
 }
 
 async function handleUpdatePassword() {
   if (!pwdForm.value.old || !pwdForm.value.new || !pwdForm.value.confirm) {
-    ElMessage.warning(locale.value === 'zh' ? '请填写完整密码信息' : 'Please fill all password fields')
+    ElMessage.warning(text('请填写完整密码信息', 'Please fill all password fields'))
     return
   }
   if (pwdForm.value.new !== pwdForm.value.confirm) {
-    ElMessage.error(locale.value === 'zh' ? '两次输入的密码不一致' : 'Passwords do not match')
+    ElMessage.error(text('两次输入的密码不一致', 'Passwords do not match'))
     return
   }
   
   try {
     await ElMessageBox.confirm(
-      locale.value === 'zh' ? '确定要修改密码吗？修改后将强制重新登录' : 'Are you sure to change password? You will need to re-login.',
-      locale.value === 'zh' ? '提示' : 'Tip',
-      { type: 'warning', confirmButtonText: locale.value === 'zh' ? '确定修改' : 'Confirm' }
+      text('确定要修改密码吗？修改后将强制重新登录', 'Are you sure to change password? You will need to re-login.'),
+      text('提示', 'Tip'),
+      { type: 'warning', confirmButtonText: text('确定修改', 'Confirm') }
     )
     
     const token = localStorage.getItem('token')
@@ -124,7 +122,7 @@ async function handleUpdatePassword() {
         throw new Error(await res.text())
     }
 
-    ElMessage.success(locale.value === 'zh' ? '密码修改成功，正在退出...' : 'Password changed successfully, logging out...')
+    ElMessage.success(text('密码修改成功，正在退出...', 'Password changed successfully, logging out...'))
     
     setTimeout(() => {
         localStorage.removeItem('token')
@@ -133,7 +131,7 @@ async function handleUpdatePassword() {
     
   } catch (err: any) {
       if (err !== 'cancel') {
-          ElMessage.error(locale.value === 'zh' ? `修改失败: ${err.message}` : `Update failed: ${err.message}`)
+          ElMessage.error(text(`修改失败: ${err.message}`, `Update failed: ${err.message}`))
       }
   }
 }
@@ -179,11 +177,11 @@ onMounted(() => {
             <div class="card-header">
               <div class="header-left">
                 <el-icon><Setting /></el-icon>
-                <span>{{ locale === 'zh' ? '常规配置与偏好' : 'General Settings & Preferences' }}</span>
+                <span>{{ text('常规配置与偏好', 'General Settings & Preferences') }}</span>
               </div>
               <el-button type="primary" size="small" @click="saveAllSettings">
                   <el-icon><Check /></el-icon>
-                  <span>{{ locale === 'zh' ? '保存更改' : 'Save Changes' }}</span>
+                  <span>{{ text('保存更改', 'Save Changes') }}</span>
               </el-button>
             </div>
           </template>
@@ -193,23 +191,23 @@ onMounted(() => {
             <div class="settings-section">
               <h4 class="section-title">
                   <el-icon><User /></el-icon>
-                  {{ locale === 'zh' ? '账号基础资料' : 'Basic Account Profile' }}
+                  {{ text('账号基础资料', 'Basic Account Profile') }}
               </h4>
               <div class="form-grid">
                 <div class="form-item">
-                  <label>{{ locale === 'zh' ? '登录名称' : 'Username' }}</label>
+                  <label>{{ text('登录名称', 'Username') }}</label>
                   <el-input v-model="username" disabled />
                 </div>
                 <div class="form-item">
-                  <label>{{ locale === 'zh' ? '显示昵称' : 'Nickname' }}</label>
+                  <label>{{ text('显示昵称', 'Nickname') }}</label>
                   <el-input v-model="nickname" :prefix-icon="EditPen" />
                 </div>
                 <div class="form-item">
-                  <label>{{ locale === 'zh' ? '手机号码' : 'Phone' }}</label>
+                  <label>{{ text('手机号码', 'Phone') }}</label>
                   <el-input v-model="phone" :prefix-icon="Iphone" placeholder="138****0000" />
                 </div>
                 <div class="form-item">
-                  <label>{{ locale === 'zh' ? '电子邮箱' : 'Email' }}</label>
+                  <label>{{ text('电子邮箱', 'Email') }}</label>
                   <el-input v-model="email" :prefix-icon="Message" placeholder="user@example.com" />
                 </div>
               </div>
@@ -221,27 +219,28 @@ onMounted(() => {
             <div class="settings-section pref-section-combined">
               <h4 class="section-title">
                   <el-icon><Sunny /></el-icon>
-                  {{ locale === 'zh' ? '个性化设定' : 'Personalization' }}
+                  {{ text('个性化设定', 'Personalization') }}
               </h4>
               <div class="pref-grid-horizontal">
                 <div class="pref-box compact">
                   <div class="pref-info">
                     <div class="sub-label">{{ t.settings.theme }}</div>
-                    <div class="sub-desc">{{ locale === 'zh' ? '深浅模式' : 'Theme mode' }}</div>
+                    <div class="sub-desc">{{ text('深浅模式', 'Theme mode') }}</div>
                   </div>
                   <el-radio-group v-model="theme" @change="previewTheme" size="small">
-                    <el-radio-button label="light">{{ locale === 'zh' ? '明亮' : 'Light' }}</el-radio-button>
-                    <el-radio-button label="dark">{{ locale === 'zh' ? '暗黑' : 'Dark' }}</el-radio-button>
+                    <el-radio-button label="light">{{ text('明亮', 'Light') }}</el-radio-button>
+                    <el-radio-button label="dark">{{ text('暗黑', 'Dark') }}</el-radio-button>
                   </el-radio-group>
                 </div>
                 <div class="pref-box compact">
                   <div class="pref-info">
                     <div class="sub-label">{{ t.settings.language }}</div>
-                    <div class="sub-desc">{{ locale === 'zh' ? '语言选择' : 'Language' }}</div>
+                    <div class="sub-desc">{{ text('语言选择', 'Language') }}</div>
                   </div>
                   <el-radio-group v-model="locale" size="small">
-                    <el-radio-button label="zh">中文</el-radio-button>
-                    <el-radio-button label="en">EN</el-radio-button>
+                    <el-radio-button v-for="item in supportedLocales" :key="item" :label="item">
+                      {{ localeLabels[item] }}
+                    </el-radio-button>
                   </el-radio-group>
                 </div>
               </div>
@@ -250,10 +249,10 @@ onMounted(() => {
             <div class="profile-info-footer mt-20">
                <div class="role-hint">
                   <span class="dot"></span>
-                  {{ locale === 'zh' ? '身份：' : 'Role: ' }}
+                  {{ text('身份：', 'Role: ') }}
                   <el-tag size="small" :type="role === 'admin' ? 'danger' : 'success'" effect="plain" class="role-tag">{{ role.toUpperCase() }}</el-tag>
                </div>
-               <span class="info-text">{{ locale === 'zh' ? '已开启服务端实时同步' : 'Cloud sync active' }}</span>
+               <span class="info-text">{{ text('已开启服务端实时同步', 'Cloud sync active') }}</span>
             </div>
           </div>
         </el-card>
@@ -266,33 +265,33 @@ onMounted(() => {
             <div class="card-header">
               <div class="header-left">
                 <el-icon><Lock /></el-icon>
-                <span>{{ locale === 'zh' ? '安全中心' : 'Security' }}</span>
+                <span>{{ text('安全中心', 'Security') }}</span>
               </div>
               <el-button type="primary" size="small" @click="handleUpdatePassword">
                   <el-icon><RefreshRight /></el-icon>
-                  <span>{{ locale === 'zh' ? '立即更新' : 'Update' }}</span>
+                  <span>{{ text('立即更新', 'Update') }}</span>
               </el-button>
             </div>
           </template>
           <div class="card-body">
             <div class="security-full-form">
               <div class="form-item">
-                <label>{{ locale === 'zh' ? '旧密码' : 'Current Password' }}</label>
+                <label>{{ text('旧密码', 'Current Password') }}</label>
                 <el-input v-model="pwdForm.old" type="password" show-password />
               </div>
               <div class="form-item mt-16">
-                <label>{{ locale === 'zh' ? '设定新密码' : 'New Password' }}</label>
+                <label>{{ text('设定新密码', 'New Password') }}</label>
                 <el-input v-model="pwdForm.new" type="password" show-password />
               </div>
               <div class="form-item mt-16">
-                <label>{{ locale === 'zh' ? '确认新密码' : 'Confirm New Password' }}</label>
+                <label>{{ text('确认新密码', 'Confirm New Password') }}</label>
                 <el-input v-model="pwdForm.confirm" type="password" show-password />
               </div>
               
               <div class="security-footer mt-20">
                  <div class="security-tip">
                     <el-icon><CircleCheckFilled /></el-icon>
-                    <span>{{ locale === 'zh' ? '修改后将强制注销会话' : 'Forced logout on change' }}</span>
+                    <span>{{ text('修改后将强制注销会话', 'Forced logout on change') }}</span>
                  </div>
               </div>
             </div>

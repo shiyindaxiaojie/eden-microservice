@@ -41,9 +41,7 @@ const EDGE_PADDING_Y = 14
 const NODE_SCALE_RATIO = 0.6
 const INSTANCE_HEX_SYMBOL = 'path://M0 -1L0.866 -0.5L0.866 0.5L0 1L-0.866 0.5L-0.866 -0.5Z'
 
-const { locale } = useI18n()
-const isZh = computed(() => locale.value === 'zh')
-const text = (zh: string, en: string) => (isZh.value ? zh : en)
+const { locale, text } = useI18n()
 
 const currentZoom = ref(1)
 

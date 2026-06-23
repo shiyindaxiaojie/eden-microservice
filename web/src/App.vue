@@ -9,7 +9,7 @@ import logo from './assets/logo.png'
 
 const GUIDE_STORAGE_KEY = 'registry-ui-guide-completed-v1'
 
-const { locale, t, toggleLocale } = useI18n()
+const { locale, t, toggleLocale, text, nextLocaleTitle, shortLocaleLabel } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -28,10 +28,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '从侧边栏进入核心模块',
       en: 'Use the sidebar to switch modules',
+      ja: 'サイドバーから主要モジュールへ移動',
     },
     description: {
       zh: '这里集中放了概览、服务、命名空间和集群等入口，日常操作基本都从这里开始。',
       en: 'The sidebar is your main entry point for overview, services, namespaces, and cluster operations.',
+      ja: '概要、サービス、名前空間、クラスターなどの入口が集約されており、日常操作はここから始めます。',
     },
   },
   {
@@ -42,10 +44,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '顶部放的是全局操作',
       en: 'The header contains global actions',
+      ja: 'ヘッダーにはグローバル操作があります',
     },
     description: {
       zh: '你可以在这里打开文档、切换语言和主题、查看账户菜单，也能随时重新打开这套界面导览。',
       en: 'From here you can open docs, switch language and theme, access your account menu, or reopen this product tour anytime.',
+      ja: 'ここからドキュメントを開き、言語やテーマを切り替え、アカウントメニューを確認し、このガイドをいつでも再表示できます。',
     },
   },
   {
@@ -56,10 +60,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '先看整体健康度',
       en: 'Start with system health at a glance',
+      ja: 'まず全体のヘルスを確認',
     },
     description: {
       zh: '概览页会快速展示节点、服务、命名空间和资源使用情况，适合先判断注册中心是否稳定。',
       en: 'The overview page gives you a quick read on nodes, services, namespaces, and resource usage so you can assess registry health fast.',
+      ja: '概要ページではノード、サービス、名前空間、リソース使用状況を素早く確認でき、レジストリの安定性を判断できます。',
     },
   },
   {
@@ -70,10 +76,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '事件和日志在这里追踪',
       en: 'Track events and logs here',
+      ja: 'イベントとログをここで追跡',
     },
     description: {
       zh: '出现异常时，可以先看事件流和日志面板，快速定位是注册、心跳还是节点同步出了问题。',
       en: 'When something goes wrong, this is the fastest place to inspect events and logs for registration, heartbeat, or node sync issues.',
+      ja: '異常時はイベントストリームとログパネルを確認し、登録、ハートビート、ノード同期のどこに問題があるか素早く特定できます。',
     },
   },
   {
@@ -85,10 +93,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '服务页支持快速筛选',
       en: 'Filter services quickly from the toolbar',
+      ja: 'ツールバーでサービスを素早く絞り込み',
     },
     description: {
       zh: '你可以按命名空间、服务名、IP 和健康状态过滤结果，适合在服务很多时快速缩小范围。',
       en: 'Filter by namespace, service name, IP, and health state to narrow down large service lists quickly.',
+      ja: '名前空間、サービス名、IP、ヘルス状態で絞り込み、多数のサービスから素早く対象を絞れます。',
     },
   },
   {
@@ -100,10 +110,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '这里可以切换到拓扑视图',
       en: 'Switch to topology view here',
+      ja: 'ここでトポロジー表示へ切り替え',
     },
     description: {
       zh: '服务页支持列表、卡片和拓扑三种视图，排查依赖调用关系时建议直接切到拓扑。',
       en: 'The services page supports list, card, and topology views. Use topology when you need to inspect service dependencies.',
+      ja: 'サービスページはリスト、カード、トポロジー表示に対応しています。依存関係を調べるときはトポロジー表示が便利です。',
     },
   },
   {
@@ -115,10 +127,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '拓扑里可以查看依赖链路',
       en: 'Explore dependency links in topology view',
+      ja: 'トポロジーで依存リンクを確認',
     },
     description: {
       zh: '在这里可以看到服务上下游关系，选中节点后还能查看实例状态和依赖详情。',
       en: 'The topology graph shows upstream and downstream relationships, and selecting a node reveals instance state and dependency details.',
+      ja: '上流と下流の関係を確認でき、ノードを選択するとインスタンス状態と依存関係の詳細も表示されます。',
     },
   },
   {
@@ -129,10 +143,12 @@ const guideSteps: GuideStep[] = [
     title: {
       zh: '节点页用于管理集群成员',
       en: 'Use the cluster page to manage nodes',
+      ja: 'ノードページでクラスター構成を管理',
     },
     description: {
       zh: '你可以在这里搜索节点、切换展示方式，并在允许的模式下添加或移除集群成员。',
       en: 'Search nodes, switch layouts, and add or remove cluster members from this page when your mode allows it.',
+      ja: 'ノードを検索し、表示方式を切り替え、モードが許可する場合はクラスター構成メンバーを追加または削除できます。',
     },
   },
 ]
@@ -172,7 +188,7 @@ const currentTitle = computed(() => {
   if (route.path.startsWith('/rbac')) return t.value.nav.accessControl
   if (route.path.startsWith('/settings')) return t.value.nav.settings
   if (route.path.startsWith('/docs')) return t.value.nav.docs
-  if (route.path.startsWith('/profile')) return locale.value === 'zh' ? '个人中心' : 'Profile'
+  if (route.path.startsWith('/profile')) return text('个人中心', 'Profile')
   return 'Focalors'
 })
 
@@ -327,7 +343,7 @@ onBeforeUnmount(() => {
             @click="restartGuide"
             @keydown.enter="restartGuide"
             @keydown.space.prevent="restartGuide"
-            :title="locale === 'zh' ? '界面导览' : 'Product tour'"
+            :title="text('界面导览', 'Product tour')"
           >
             <el-icon><Guide /></el-icon>
           </div>
@@ -336,8 +352,8 @@ onBeforeUnmount(() => {
             <el-icon><QuestionFilled /></el-icon>
           </router-link>
 
-          <div class="header-btn" @click="toggleLocale" :title="locale === 'en' ? t.common.switchToChinese : t.common.switchToEnglish">
-            <span class="lang-text">{{ locale === 'en' ? '中' : 'EN' }}</span>
+          <div class="header-btn" @click="toggleLocale" :title="nextLocaleTitle">
+            <span class="lang-text">{{ shortLocaleLabel }}</span>
           </div>
 
           <div class="header-btn" @click="toggleTheme" :title="theme === 'dark' ? t.settings.light : t.settings.dark">
@@ -354,7 +370,7 @@ onBeforeUnmount(() => {
               <el-dropdown-menu>
                 <el-dropdown-item @click="router.push('/profile')">
                   <el-icon><User /></el-icon>
-                  {{ t.common.profile || '个人中心' }}
+                  {{ t.common.profile }}
                 </el-dropdown-item>
                 <el-dropdown-item divided @click="handleLogout" style="color: var(--el-color-danger)">
                   <el-icon><SwitchButton /></el-icon>

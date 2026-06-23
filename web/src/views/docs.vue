@@ -23,12 +23,11 @@ type FaqItem = {
   a: string
 }
 
-const { locale } = useI18n()
+const { isLocale } = useI18n()
 
-const isZh = computed(() => locale.value === 'zh')
 
 const content = computed(() => {
-  if (isZh.value) {
+  if (isLocale('zh')) {
     return {
       sections: {
         start: '快速开始',
@@ -134,6 +133,125 @@ const content = computed(() => {
         {
           q: '控制台里已经看到服务，为什么客户端还发现不到？',
           a: '优先检查客户端连接的是不是正确的 gRPC 地址，其次检查命名空间、服务名、实例健康状态和订阅是否建立成功。',
+        },
+      ] satisfies FaqItem[],
+      serverCommand: `go run ./cmd/server
+
+# or specify config
+go run ./cmd/server -config ./configs/standalone.yaml`,
+      sdkCommand: `client, err := registry.NewClient(registry.Config{
+    Endpoints: []string{"127.0.0.1:9000"},
+    Namespace: "default",
+})`,
+    }
+  }
+
+  if (isLocale('ja')) {
+    return {
+      sections: {
+        start: 'クイックスタート',
+        mode: 'デプロイモードの選択',
+        access: '連携方式の選択',
+        commands: 'よく使うコマンド',
+        entries: 'コンソール入口',
+        faq: 'FAQ',
+      },
+      startLead: '初回デプロイと検証は、次の順序で進めるのがおすすめです。',
+      startSteps: [
+        {
+          title: '1. レジストリを起動',
+          desc: 'まず単一ノードで起動し、HTTP 管理 API と gRPC データプレーンの両方にアクセスできることを確認します。',
+        },
+        {
+          title: '2. 実行モードを選択',
+          desc: 'ローカル開発や機能検証には Standalone、可用性優先のクラスターには AP、より厳密な一貫性が必要な場合は CP を使用します。',
+        },
+        {
+          title: '3. サーバーとクライアントを連携',
+          desc: 'サービス提供側で登録とハートビートを行い、利用側で検出とサブスクリプションを接続してから、コンソールで状態を確認します。',
+        },
+      ] satisfies StepItem[],
+      modeLead: 'デプロイモードはノード連携、ポート設計、データ一貫性の境界を決めます。',
+      modeChoices: [
+        {
+          title: 'Standalone',
+          fit: 'ローカル開発、API 検証、単一ノード確認',
+          note: 'もっともシンプルな構成で、ノード間連携はありません。管理面の既定ポートは `:8500`、gRPC データ面は `:9000` です。',
+        },
+        {
+          title: 'Cluster + AP',
+          fit: '可用性と水平拡張を優先する登録・検出クラスター',
+          note: 'ノード間でサービス登録データを複製し、多くの本番サービス検出シナリオに適しています。',
+        },
+        {
+          title: 'Cluster + CP',
+          fit: 'Leader 書き込みとより厳密な一貫性制御が必要なクラスター',
+          note: 'bootstrap ノードと Raft 通信ポートの計画が必要で、メタデータ一貫性の要求が高い場面に向いています。',
+        },
+      ] satisfies ChoiceItem[],
+      accessLead: '接入方式はプロジェクトの種類に合わせて選び、すべてのプロトコルを同等の入口として扱わないことをおすすめします。',
+      accessChoices: [
+        {
+          title: 'pkg/sdk',
+          fit: 'Go サービスの推奨連携方式',
+          note: '登録、検出、サブスクリプション、ハートビートを一つのクライアントで扱えるため、新規 Go プロジェクトの標準ルートに適しています。',
+        },
+        {
+          title: 'HTTP API',
+          fit: 'スクリプト、プラットフォーム連携、軽量な管理操作',
+          note: '運用フローや自動化には向いていますが、高頻度なサービス検出経路としては推奨しません。',
+        },
+        {
+          title: 'gRPC',
+          fit: '型付きクライアント、長時間接続の購読、高頻度検出',
+          note: 'サービスプロセスが直接レジストリへ接続する主要なデータプレーンプロトコルです。',
+        },
+        {
+          title: 'Nacos / Consul 互換',
+          fit: '既存システムの移行や互換連携',
+          note: '移行期間の互換レイヤーとして有用ですが、新規システムの長期的な主入口にはおすすめしません。',
+        },
+      ] satisfies ChoiceItem[],
+      commandsLead: '以下の例は、もっとも一般的な起動と連携のベースラインです。',
+      entriesLead: '初回デプロイ後は、主に次のコンソール領域から管理とトラブルシュートを行います。',
+      entries: [
+        {
+          title: 'サービス',
+          desc: 'サービス名、インスタンスアドレス、ヘルス状態、購読関係、検出結果を確認する、登録・検出調査の主要入口です。',
+        },
+        {
+          title: '名前空間',
+          desc: '開発、ステージング、本番などの環境やテナント境界を分離します。',
+        },
+        {
+          title: 'ノード',
+          desc: 'クラスター構成、ノードロール、ヘルス状態、トポロジー変化を確認し、ノード参加状態を検証します。',
+        },
+        {
+          title: 'アクセス制御',
+          desc: 'コンソールアクセスと外部 API 利用のためのユーザー、ロール、API キーを管理します。',
+        },
+        {
+          title: '設定',
+          desc: '運用中に実行モード、保存設定、ログレベル、クラスター関連設定を調整します。',
+        },
+      ] satisfies EntryItem[],
+      faq: [
+        {
+          q: '既定ポートは何ですか？',
+          a: 'HTTP 管理面は既定で `:8500`、gRPC データ面は既定で `:9000` を使用します。CP クラスターでは別途 Raft ポートも計画してください。',
+        },
+        {
+          q: 'AP と CP はいつ使い分けますか？',
+          a: 'サービス登録・検出は通常 AP を優先します。メタデータ書き込みを Leader 経由で厳密に制御したい場合だけ CP を選びます。',
+        },
+        {
+          q: '新規プロジェクトはどの接口から始めるべきですか？',
+          a: 'Go プロジェクトは `pkg/sdk` を優先し、スクリプトやプラットフォーム自動化では HTTP API を使います。互換接口は主に移行用途です。',
+        },
+        {
+          q: 'コンソールではサービスが見えるのに、クライアントから検出できないのはなぜですか？',
+          a: 'まずクライアントの gRPC 接続先を確認し、次に名前空間、サービス名、インスタンスのヘルス状態、サブスクリプション確立を確認してください。',
         },
       ] satisfies FaqItem[],
       serverCommand: `go run ./cmd/server

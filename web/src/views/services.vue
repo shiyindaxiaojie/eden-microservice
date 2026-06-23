@@ -15,8 +15,6 @@ import {
 } from '../api/registry'
 import TopologyGraphCanvas from '../components/topology-graph.vue'
 import { useI18n } from '../utils/i18n'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import en from 'element-plus/es/locale/lang/en'
 
 type PanelMode = 'catalog' | 'topology'
 type CatalogMode = 'grid' | 'list'
@@ -40,13 +38,10 @@ interface ServiceEntry extends ServiceSummary {
 
 const autoRefreshSeconds = 15
 
-const { locale } = useI18n()
-const elLocale = computed(() => (locale.value === 'zh' ? zhCn : en))
+const { text, elementLocale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const isZh = computed(() => locale.value === 'zh')
-const text = (zh: string, en: string) => (isZh.value ? zh : en)
 
 const namespaces = ref<Namespace[]>([])
 const currentNamespace = ref((route.query.namespace as string) || 'default')
@@ -523,7 +518,7 @@ onBeforeUnmount(() => {
                   <el-tooltip
                     v-for="inst in service.instances"
                     :key="inst.id"
-                    :content="`${inst.host}:${inst.port} (${inst.status === 'passing' ? (isZh ? '健康' : 'Healthy') : (isZh ? '异常' : 'Critical')})`"
+                    :content="`${inst.host}:${inst.port} (${inst.status === 'passing' ? text('健康', 'Healthy') : text('异常', 'Critical')})`"
                     placement="top"
                   >
                     <div
@@ -648,7 +643,7 @@ onBeforeUnmount(() => {
 
           <footer class="svc-footer">
             <span class="footer-info">{{ filteredServices.length }} {{ text('条', 'records') }}</span>
-            <el-config-provider :locale="elLocale">
+            <el-config-provider :locale="elementLocale">
               <el-pagination
                 v-model:current-page="currentPage"
                 v-model:page-size="pageSize"

@@ -5,18 +5,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, RefreshRight, Search } from '@element-plus/icons-vue'
 import { getServiceInstances, setInstanceStatus, type Instance } from '../api/registry'
 import { useI18n } from '../utils/i18n'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import en from 'element-plus/es/locale/lang/en'
 
 type StatusFilter = 'all' | 'passing' | 'critical' | 'manual_offline'
 
 const route = useRoute()
 const router = useRouter()
-const { locale } = useI18n()
-const elLocale = computed(() => (locale.value === 'zh' ? zhCn : en))
+const { text, elementLocale, localeTag } = useI18n()
 
-const isZh = computed(() => locale.value === 'zh')
-const text = (zh: string, en: string) => (isZh.value ? zh : en)
 
 const instances = ref<Instance[]>([])
 const loading = ref(false)
@@ -86,7 +81,7 @@ function formatTime(value?: string) {
   if (!value || value.startsWith('0001')) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleString(isZh.value ? 'zh-CN' : 'en-US')
+  return date.toLocaleString(localeTag.value)
 }
 
 function instanceAddress(instance: Instance) {
@@ -344,7 +339,7 @@ onMounted(() => {
 
         <footer class="svc-footer">
           <span class="footer-info">{{ filteredInstances.length }} {{ text('条', 'records') }}</span>
-          <el-config-provider :locale="elLocale">
+          <el-config-provider :locale="elementLocale">
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"

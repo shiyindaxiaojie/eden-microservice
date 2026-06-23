@@ -11,7 +11,7 @@ import {
   type ClusterStats,
   type RegistryEvent,
 } from '../api/registry'
-import { useI18n } from '../utils/i18n'
+import { useI18n, type LocaleText } from '../utils/i18n'
 
 interface LogFileOption {
   name: string
@@ -52,7 +52,7 @@ const KNOWN_EVENT_TYPES = [
   'health_change',
 ] as const
 
-const { t, locale } = useI18n()
+const { t, text } = useI18n()
 const stats = ref<ClusterStats | null>(null)
 const events = ref<RegistryEvent[]>([])
 const logFiles = ref<LogFileOption[]>([])
@@ -89,39 +89,39 @@ const eventSearchDate = ref<[Date, Date] | null>(null)
 const leaderNoteText = computed(() => {
   if (!stats.value) return '-'
   if (stats.value.is_leader) {
-    return locale.value === 'zh' ? '褰撳墠鑺傜偣涓?Leader' : 'This node is the leader'
+    return text('当前节点是 Leader', 'This node is the leader')
   }
 
   const leaderAddr = stats.value.leader_addr ? compactAddress(stats.value.leader_addr) : t.value.common.unknown
   return `${t.value.dashboard.leaderAddr}: ${leaderAddr}`
 })
 
-const eventsTabText = computed(() => (locale.value === 'zh' ? '浜嬩欢' : 'Events'))
-const logsTabText = computed(() => (locale.value === 'zh' ? '鏃ュ織' : 'Logs'))
+const eventsTabText = computed(() => (text('事件', 'Events')))
+const logsTabText = computed(() => (text('日志', 'Logs')))
 const logSelectPlaceholder = computed(() =>
-  locale.value === 'zh' ? '閫夋嫨鏃ュ織鏂囦欢' : 'Select log file',
+  text('选择日志文件', 'Select log file'),
 )
-const loadingLabel = computed(() => (locale.value === 'zh' ? '鍔犺浇涓?..' : 'Loading...'))
+const loadingLabel = computed(() => (text('加载中...', 'Loading...')))
 const noLogFilesLabel = computed(() =>
-  locale.value === 'zh' ? '褰撳墠鏈厤缃棩蹇楁枃浠? : 'No log files configured',
+  text('当前未配置日志文件', 'No log files configured'),
 )
 const noLogsLabel = computed(() =>
-  locale.value === 'zh' ? '鏆傛棤鏃ュ織鍐呭' : 'No log content',
+  text('暂无日志内容', 'No log content'),
 )
 const logLineOptions = computed(() => [
-  { value: 100, label: locale.value === 'zh' ? '100 琛? : '100 Lines' },
-  { value: 500, label: locale.value === 'zh' ? '500 琛? : '500 Lines' },
-  { value: 1000, label: locale.value === 'zh' ? '1000 琛? : '1000 Lines' },
-  { value: 2000, label: locale.value === 'zh' ? '2000 琛? : '2000 Lines' },
-  { value: 5000, label: locale.value === 'zh' ? '5000 琛? : '5000 Lines' },
+  { value: 100, label: text('100 行', '100 Lines') },
+  { value: 500, label: text('500 行', '500 Lines') },
+  { value: 1000, label: text('1000 行', '1000 Lines') },
+  { value: 2000, label: text('2000 行', '2000 Lines') },
+  { value: 5000, label: text('5000 行', '5000 Lines') },
 ])
-const eventTypeFilterLabel = computed(() => (locale.value === 'zh' ? '浜嬩欢绫诲瀷' : 'Event Type'))
-const eventTimeFilterLabel = computed(() => (locale.value === 'zh' ? '鍙戠敓鏃堕棿' : 'Occurred'))
-const autoScrollLabel = computed(() => (locale.value === 'zh' ? '鑷姩婊氬姩' : 'Auto Scroll'))
+const eventTypeFilterLabel = computed(() => (text('事件绫诲瀷', 'Event Type')))
+const eventTimeFilterLabel = computed(() => (text('发生时间', 'Occurred')))
+const autoScrollLabel = computed(() => (text('自动滚动', 'Auto Scroll')))
 
 const datePickerShortcuts = computed(() => [
   {
-    text: locale.value === 'zh' ? '杩?30 鍒嗛挓' : 'Last 30m',
+    text: text('最近 30 分钟', 'Last 30m'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -130,7 +130,7 @@ const datePickerShortcuts = computed(() => [
     },
   },
   {
-    text: locale.value === 'zh' ? '杩?1 灏忔椂' : 'Last 1h',
+    text: text('最近 1 小时', 'Last 1h'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -139,7 +139,7 @@ const datePickerShortcuts = computed(() => [
     },
   },
   {
-    text: locale.value === 'zh' ? '杩?6 灏忔椂' : 'Last 6h',
+    text: text('最近 6 小时', 'Last 6h'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -148,7 +148,7 @@ const datePickerShortcuts = computed(() => [
     },
   },
   {
-    text: locale.value === 'zh' ? '杩?24 灏忔椂' : 'Last 24h',
+    text: text('最近 24 小时', 'Last 24h'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -157,7 +157,7 @@ const datePickerShortcuts = computed(() => [
     },
   },
   {
-    text: locale.value === 'zh' ? '鏈€杩?3 澶? : 'Last 3 days',
+    text: text('最近 3 天', 'Last 3 days'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -166,7 +166,7 @@ const datePickerShortcuts = computed(() => [
     },
   },
   {
-    text: locale.value === 'zh' ? '鏈€杩?7 澶? : 'Last 7 days',
+    text: text('最近 7 天', 'Last 7 days'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -182,17 +182,17 @@ const localizedRoleText = computed(() => {
   const role = (stats.value?.role || '').toLowerCase()
   if (!role) return t.value.common.unknown
 
-  const roleMap: Record<string, { zh: string; en: string }> = {
-    leader: { zh: 'Leader', en: 'Leader' },
-    follower: { zh: 'Follower', en: 'Follower' },
-    candidate: { zh: 'Candidate', en: 'Candidate' },
-    peer: { zh: '鑺傜偣', en: 'Peer' },
-    standalone: { zh: '鍗曟満', en: 'Standalone' },
+  const roleMap: Record<string, LocaleText> = {
+    leader: { zh: 'Leader', en: 'Leader', ja: 'Leader' },
+    follower: { zh: 'Follower', en: 'Follower', ja: 'Follower' },
+    candidate: { zh: 'Candidate', en: 'Candidate', ja: 'Candidate' },
+    peer: { zh: '节点', en: 'Peer', ja: 'ピア' },
+    standalone: { zh: '单机', en: 'Standalone', ja: 'スタンドアロン' },
   }
 
   const matched = roleMap[role]
   if (matched) {
-    return locale.value === 'zh' ? matched.zh : matched.en
+    return text(matched)
   }
 
   return stats.value?.role || t.value.common.unknown
@@ -201,20 +201,20 @@ const localizedRoleText = computed(() => {
 const deploymentModeText = computed(() => {
   if (!stats.value) return '-'
   return stats.value.environment === 'cluster'
-    ? (locale.value === 'zh' ? '闆嗙兢閮ㄧ讲' : 'Cluster deployment')
-    : (locale.value === 'zh' ? '鍗曟満閮ㄧ讲' : 'Standalone deployment')
+    ? (text('集群部署', 'Cluster deployment'))
+    : (text('单机部署', 'Standalone deployment'))
 })
 
 const deploymentUnitText = computed(() =>
-  locale.value === 'zh' ? '涓妭鐐? : 'nodes',
+  text('个节点', 'nodes'),
 )
 
 const serviceUnitText = computed(() =>
-  locale.value === 'zh' ? '涓湇鍔? : 'services',
+  text('个服务', 'services'),
 )
 
 const namespaceUnitText = computed(() =>
-  locale.value === 'zh' ? '涓懡鍚嶇┖闂? : 'namespaces',
+  text('个命名空间', 'namespaces'),
 )
 
 const serviceHealthRateValue = computed(() => {
@@ -225,12 +225,10 @@ const serviceHealthRateValue = computed(() => {
 const serviceHealthComparisonText = computed(() => {
   if (!stats.value) return '-'
   if (stats.value.instance_count === 0) {
-    return locale.value === 'zh' ? '鏆傛棤鍙敤鍋ュ悍瀵规瘮' : 'No health comparison available'
+    return text('暂无可用健康对比', 'No health comparison available')
   }
 
-  return locale.value === 'zh'
-    ? `鍋ュ悍鐜?${stats.value.health_rate.toFixed(1)}%`
-    : `${stats.value.health_rate.toFixed(1)}% health rate`
+  return text(`健康率 ${stats.value.health_rate.toFixed(1)}%`, `${stats.value.health_rate.toFixed(1)}% health rate`)
 })
 
 const memoryTrendModel = computed(() => {
@@ -375,18 +373,16 @@ const memoryTrendMaxText = computed(() =>
 const memoryTrendDeltaText = computed(() => {
   const delta = memoryTrendModel.value.delta
   if (delta == null) {
-    return locale.value === 'zh' ? '閲囨牱涓?..' : 'Collecting samples'
+    return text('采样中...', 'Collecting samples')
   }
 
-  const prefix = delta > 0 ? '+' : delta < 0 ? '-' : '卤'
+  const prefix = delta > 0 ? '+' : delta < 0 ? '-' : '±'
   const value = formatMemory(Math.abs(delta))
-  return locale.value === 'zh'
-    ? `杈?10 鍒嗛挓鍓?${prefix}${value}`
-    : `${prefix}${value} vs 10m ago`
+  return text(`较 10 分钟前 ${prefix}${value}`, `${prefix}${value} vs 10m ago`)
 })
 
 const memoryTrendEmptyText = computed(() =>
-  locale.value === 'zh' ? '閲囨牱鍑犳鍚庡皢鏄剧ず瓒嬪娍' : 'The trend will appear after a few samples',
+  text('采样几次后将显示趋势', 'The trend will appear after a few samples'),
 )
 
 const memoryTrendPolyline = computed(() => memoryTrendModel.value.polyline)
@@ -634,24 +630,24 @@ function recordMemorySample(bytes: number | undefined) {
 }
 
 function getEventTypeMeta(type: string) {
-  const metas: Record<string, { zh: string; en: string; tone: string }> = {
-    service_register: { zh: '鏈嶅姟娉ㄥ唽', en: 'Service Register', tone: 'green' },
-    service_online: { zh: '鏈嶅姟涓婄嚎', en: 'Service Online', tone: 'green' },
-    service_offline: { zh: '鏈嶅姟涓嬬嚎', en: 'Service Offline', tone: 'red' },
-    service_heartbeat: { zh: '鏈嶅姟蹇冭烦', en: 'Service Heartbeat', tone: 'blue' },
-    service_remove: { zh: '鏈嶅姟绉婚櫎', en: 'Service Remove', tone: 'orange' },
-    registry_node_sync: { zh: '鑺傜偣鍚屾', en: 'Node Sync', tone: 'cyan' },
-    register: { zh: '娉ㄥ唽', en: 'Register', tone: 'green' },
-    deregister: { zh: '涓嬬嚎', en: 'Deregister', tone: 'red' },
-    health_change: { zh: '鍋ュ悍鍙樻洿', en: 'Health Change', tone: 'orange' },
+  const metas: Record<string, LocaleText & { tone: string }> = {
+    service_register: { zh: '服务注册', en: 'Service Register', ja: 'サービス登録', tone: 'green' },
+    service_online: { zh: '服务上线', en: 'Service Online', ja: 'サービスオンライン', tone: 'green' },
+    service_offline: { zh: '服务下线', en: 'Service Offline', ja: 'サービスオフライン', tone: 'red' },
+    service_heartbeat: { zh: '服务心跳', en: 'Service Heartbeat', ja: 'サービスハートビート', tone: 'blue' },
+    service_remove: { zh: '服务移除', en: 'Service Remove', ja: 'サービス削除', tone: 'orange' },
+    registry_node_sync: { zh: '节点同步', en: 'Node Sync', ja: 'ノード同期', tone: 'cyan' },
+    register: { zh: '注册', en: 'Register', ja: '登録', tone: 'green' },
+    deregister: { zh: '下线', en: 'Deregister', ja: '登録解除', tone: 'red' },
+    health_change: { zh: '健康变更', en: 'Health Change', ja: 'ヘルス変更', tone: 'orange' },
   }
 
-  return metas[type] || { zh: type || '浜嬩欢', en: type || 'Event', tone: 'blue' }
+  return metas[type] || { zh: type || '事件', en: type || 'Event', ja: type || 'イベント', tone: 'blue' }
 }
 
 function getEventTypeLabel(type: string) {
   const meta = getEventTypeMeta(type)
-  return locale.value === 'zh' ? meta.zh : meta.en
+  return text(meta)
 }
 
 function getEventToneClass(type: string) {
@@ -660,29 +656,35 @@ function getEventToneClass(type: string) {
 
 function getEventMessage(event: RegistryEvent) {
   if (!event.message) return '-'
-  if (locale.value !== 'zh') return event.message
 
-  const exactMessages: Record<string, string> = {
-    'Instance registered': '瀹炰緥宸叉敞鍐?,
-    'Heartbeat received': '鏀跺埌瀹炰緥蹇冭烦',
-    'Heartbeat recovered instance to online': '瀹炰緥宸叉仮澶嶄笂绾?,
-    'Instance manually set to offline': '瀹炰緥宸叉墜鍔ㄤ笅绾?,
-    'Instance manually set to online': '瀹炰緥宸叉墜鍔ㄤ笂绾?,
-    'Instance restored online': '瀹炰緥宸叉仮澶嶄笂绾?,
-    'Health checker marked instance offline after missed heartbeats': '蹇冭烦涓㈠け锛屽仴搴锋鏌ュ凡灏嗗叾鏍囪涓轰笅绾?,
-    'Instance removed after retention window': '瀹炰緥鍦ㄤ繚鐣欑獥鍙ｇ粨鏉熷悗宸茬Щ闄?,
-    'Full sync completed': '鑺傜偣鍏ㄩ噺鍚屾瀹屾垚',
+  const exactMessages: Record<string, LocaleText> = {
+    'Instance registered': { zh: '实例已注册', en: 'Instance registered', ja: 'インスタンスを登録しました' },
+    'Heartbeat received': { zh: '收到实例心跳', en: 'Heartbeat received', ja: 'インスタンスのハートビートを受信しました' },
+    'Heartbeat recovered instance to online': { zh: '实例已恢复上线', en: 'Heartbeat recovered instance to online', ja: 'ハートビートによりインスタンスがオンラインに復旧しました' },
+    'Instance manually set to offline': { zh: '实例已手动下线', en: 'Instance manually set to offline', ja: 'インスタンスを手動でオフラインにしました' },
+    'Instance manually set to online': { zh: '实例已手动上线', en: 'Instance manually set to online', ja: 'インスタンスを手動でオンラインにしました' },
+    'Instance restored online': { zh: '实例已恢复上线', en: 'Instance restored online', ja: 'インスタンスがオンラインに復旧しました' },
+    'Health checker marked instance offline after missed heartbeats': {
+      zh: '心跳丢失，健康检查已将其标记为下线',
+      en: 'Health checker marked instance offline after missed heartbeats',
+      ja: 'ハートビート欠落によりヘルスチェックがインスタンスをオフラインにしました',
+    },
+    'Instance removed after retention window': {
+      zh: '实例在保留窗口结束后已移除',
+      en: 'Instance removed after retention window',
+      ja: '保持期間終了後にインスタンスを削除しました',
+    },
+    'Full sync completed': { zh: '节点全量同步完成', en: 'Full sync completed', ja: 'ノードのフル同期が完了しました' },
   }
 
-  return exactMessages[event.message] || event.message
+  const localizedMessage = exactMessages[event.message]
+  return localizedMessage ? text(localizedMessage) : event.message
 }
 
 function localizeLogFileName(name: string) {
-  if (locale.value !== 'zh') return name
-
-  if (/info/i.test(name)) return '淇℃伅鏃ュ織'
-  if (/error/i.test(name)) return '閿欒鏃ュ織'
-  if (/access/i.test(name)) return '璁块棶鏃ュ織'
+  if (/info/i.test(name)) return text('信息日志', 'Info Log', '情報ログ')
+  if (/error/i.test(name)) return text('错误日志', 'Error Log', 'エラーログ')
+  if (/access/i.test(name)) return text('访问日志', 'Access Log', 'アクセスログ')
 
   return name
 }
@@ -797,7 +799,7 @@ onBeforeUnmount(() => {
         <div class="metric-card-head">
           <div class="metric-card-title">
             <div class="metric-icon"><el-icon><Connection /></el-icon></div>
-            <h3 class="metric-heading">{{ locale === 'zh' ? '鑺傜偣' : 'Nodes' }}</h3>
+            <h3 class="metric-heading">{{ text('节点', 'Nodes') }}</h3>
           </div>
           <span class="metric-badge">{{ stats?.mode?.toUpperCase() || '--' }}</span>
         </div>
@@ -816,7 +818,7 @@ onBeforeUnmount(() => {
           <div class="metric-inline-meta">
             <span>{{ deploymentModeText }}</span>
             <span>{{ localizedRoleText }}</span>
-            <span>{{ locale === 'zh' ? '鑷畾涔? : 'Custom' }} {{ customNamespaceCount }}</span>
+            <span>{{ text('自定义', 'Custom') }} {{ customNamespaceCount }}</span>
           </div>
           <div class="metric-note" :title="leaderNoteText">{{ leaderNoteText }}</div>
         </div>
@@ -826,7 +828,7 @@ onBeforeUnmount(() => {
         <div class="metric-card-head">
           <div class="metric-card-title">
             <div class="metric-icon"><el-icon><Grid /></el-icon></div>
-            <h3 class="metric-heading">{{ locale === 'zh' ? '鏈嶅姟娉ㄥ唽' : 'Services' }}</h3>
+            <h3 class="metric-heading">{{ text('服务注册', 'Services') }}</h3>
           </div>
           <span class="metric-badge">{{ `${stats?.healthy_count ?? 0}/${stats?.instance_count ?? 0}` }}</span>
         </div>
@@ -837,8 +839,8 @@ onBeforeUnmount(() => {
             <small class="metric-unit">{{ serviceUnitText }}</small>
           </div>
           <div class="metric-inline-meta">
-            <span>{{ locale === 'zh' ? '瀹炰緥' : 'Instances' }} {{ stats?.instance_count ?? '-' }}</span>
-            <span>{{ locale === 'zh' ? '鍋ュ悍' : 'Healthy' }} {{ stats?.healthy_count ?? '-' }}</span>
+            <span>{{ text('实例', 'Instances') }} {{ stats?.instance_count ?? '-' }}</span>
+            <span>{{ text('健康', 'Healthy') }} {{ stats?.healthy_count ?? '-' }}</span>
           </div>
           <div class="metric-progress">
             <div class="metric-progress-track">
@@ -855,7 +857,7 @@ onBeforeUnmount(() => {
         <div class="metric-card-head">
           <div class="metric-card-title">
             <div class="metric-icon"><el-icon><Monitor /></el-icon></div>
-            <h3 class="metric-heading">{{ locale === 'zh' ? '绯荤粺淇℃伅' : 'System' }}</h3>
+            <h3 class="metric-heading">{{ text('系统信息', 'System') }}</h3>
           </div>
           <div class="metric-card-actions">
             <el-button
@@ -877,8 +879,8 @@ onBeforeUnmount(() => {
               <div class="metric-value metric-value--memory">{{ formatMemory(stats?.memory_usage) }}</div>
             </div>
             <div class="metric-inline-meta">
-              <span>{{ locale === 'zh' ? '鏈€浣? : 'Min' }} {{ memoryTrendMinText }}</span>
-              <span>{{ locale === 'zh' ? '鏈€楂? : 'Max' }} {{ memoryTrendMaxText }}</span>
+              <span>{{ text('最低', 'Min') }} {{ memoryTrendMinText }}</span>
+              <span>{{ text('最高', 'Max') }} {{ memoryTrendMaxText }}</span>
             </div>
             <div class="metric-note" :title="memoryTrendDeltaText">{{ memoryTrendDeltaText }}</div>
           </div>
@@ -936,24 +938,24 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="activePanel === 'events'" class="panel-actions panel-actions--events">
-          <!-- 鎼滅储鍐呭 -->
+          <!-- 搜索内容 -->
           <el-input
             v-model="eventSearchText"
-            :placeholder="locale === 'zh' ? '鎼滅储鍐呭...' : 'Search...'"
+            :placeholder="text('搜索内容...', 'Search...')"
             clearable
             style="width: 180px;"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
 
-          <!-- 鍙戠敓鏃堕棿鑼冨洿 -->
+          <!-- 发生时间鑼冨洿 -->
           <div class="filter-item">
             <span class="filter-label">{{ eventTimeFilterLabel }}</span>
             <el-date-picker
               v-model="eventSearchDate"
               type="datetimerange"
-              :start-placeholder="locale === 'zh' ? '寮€濮嬫椂闂? : 'Start'"
-              :end-placeholder="locale === 'zh' ? '缁撴潫鏃堕棿' : 'End'"
+              :start-placeholder="text('开始时间', 'Start')"
+              :end-placeholder="text('结束时间', 'End')"
               size="default"
               class="panel-date-picker"
               style="width: 320px;"
@@ -965,7 +967,7 @@ onBeforeUnmount(() => {
           <div class="filter-item">
             <span class="filter-label">{{ eventTypeFilterLabel }}</span>
             <el-select v-model="activeEventType" class="panel-select" :teleported="false" style="width: 130px;">
-              <el-option value="all" :label="locale === 'zh' ? '鍏ㄩ儴绫诲瀷' : 'All Types'" />
+              <el-option value="all" :label="text('全部类型', 'All Types')" />
               <el-option
                 v-for="item in eventTypeOptionsRaw"
                 :key="item"
@@ -984,7 +986,7 @@ onBeforeUnmount(() => {
 
           <el-input
             v-model="logSearchText"
-            :placeholder="locale === 'zh' ? '鎼滅储鍐呭...' : 'Search...'"
+            :placeholder="text('搜索内容...', 'Search...')"
             clearable
             style="width: 180px;"
           >
@@ -992,12 +994,12 @@ onBeforeUnmount(() => {
           </el-input>
 
           <div class="filter-item">
-            <span class="filter-label">{{ locale === 'zh' ? '璁板綍鏃堕棿' : 'Logged At' }}</span>
+            <span class="filter-label">{{ text('记录时间', 'Logged At') }}</span>
             <el-date-picker
               v-model="logSearchDate"
               type="datetimerange"
-              :start-placeholder="locale === 'zh' ? '寮€濮嬫椂闂? : 'Start'"
-              :end-placeholder="locale === 'zh' ? '缁撴潫鏃堕棿' : 'End'"
+              :start-placeholder="text('开始时间', 'Start')"
+              :end-placeholder="text('结束时间', 'End')"
               size="default"
               style="width: 300px;"
               :shortcuts="logPickerShortcuts"
@@ -1005,7 +1007,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="filter-item">
-            <span class="filter-label">{{ locale === 'zh' ? '鏃ュ織鏂囦欢' : 'Log File' }}</span>
+            <span class="filter-label">{{ text('日志鏂囦欢', 'Log File') }}</span>
             <el-select
               v-model="activeLogFile"
               class="panel-select"
@@ -1023,9 +1025,9 @@ onBeforeUnmount(() => {
             </el-select>
           </div>
 
-          <!-- 鏄剧ず琛屾暟 -->
+          <!-- 显示行数 -->
           <div class="panel-filter">
-            <span class="panel-filter-label">{{ locale === 'zh' ? '琛屾暟' : 'Lines' }}</span>
+            <span class="panel-filter-label">{{ text('行数', 'Lines') }}</span>
             <el-select v-model="logLineCount" class="panel-select" :teleported="false" style="width: 100px;">
               <el-option v-for="item in logLineOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
@@ -1070,7 +1072,7 @@ onBeforeUnmount(() => {
         
         <div class="panel-pagination">
           <div class="pagination-info">
-            {{ locale === 'zh' ? `鍏辫 ${eventTotal} 鏉 : `Total ${eventTotal}` }}
+            {{ text(`共计 ${eventTotal} 条`, `Total ${eventTotal}`) }}
           </div>
           <el-pagination
             v-model:current-page="currentPage"
@@ -1107,7 +1109,7 @@ onBeforeUnmount(() => {
           <template v-else>
             <div class="log-toolbar-note">
               <el-icon><InfoFilled /></el-icon>
-              <span>{{ locale === 'zh' ? '姝ｅ湪鏌ョ湅鏃ュ織鏂囦欢...' : 'Viewing log file...' }}</span>
+              <span>{{ text('姝ｅ湪鏌ョ湅日志鏂囦欢...', 'Viewing log file...') }}</span>
             </div>
 
             <div class="log-viewer">
@@ -1133,7 +1135,7 @@ onBeforeUnmount(() => {
 
         <div class="panel-pagination">
           <div class="pagination-info">
-            {{ locale === 'zh' ? `鍏辫 ${logTotal} 鏉 : `Total ${logTotal}` }}
+            {{ text(`共计 ${logTotal} 条`, `Total ${logTotal}`) }}
           </div>
           <el-pagination
             v-model:current-page="logCurrentPage"
@@ -1150,10 +1152,10 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- 鍐呭瓨璇︽儏鎵╁睍寮圭獥 -->
+    <!-- 内存详情扩展弹窗 -->
     <el-dialog
       v-model="isMemoryExpanded"
-      :title="locale === 'zh' ? '鍐呭瓨浣跨敤鎯呭喌锛堣繎 10 鍒嗛挓锛? : 'Memory Usage (Last 10m)'"
+      :title="text('内存使用情况（近 10 分钟）', 'Memory Usage (Last 10m)')"
       width="800px"
       destroy-on-close
       class="memory-dialog"
@@ -1161,19 +1163,19 @@ onBeforeUnmount(() => {
       <div class="memory-expanded-content">
         <div class="memory-expanded-stats">
           <div class="expanded-stat-item">
-            <div class="stat-label">{{ locale === 'zh' ? '褰撳墠浣跨敤' : 'Current' }}</div>
+            <div class="stat-label">{{ text('当前使用', 'Current') }}</div>
             <div class="stat-value">{{ formatMemory(stats?.memory_usage) }}</div>
           </div>
           <div class="expanded-stat-item">
-            <div class="stat-label">{{ locale === 'zh' ? '鏈€楂樺嘲鍊? : 'Peak' }}</div>
+            <div class="stat-label">{{ text('最高峰值', 'Peak') }}</div>
             <div class="stat-value">{{ memoryTrendMaxText }}</div>
           </div>
           <div class="expanded-stat-item">
-            <div class="stat-label">{{ locale === 'zh' ? '鏈€浣庢按浣? : 'Floor' }}</div>
+            <div class="stat-label">{{ text('最低水位', 'Floor') }}</div>
             <div class="stat-value">{{ memoryTrendMinText }}</div>
           </div>
           <div class="expanded-stat-item">
-            <div class="stat-label">{{ locale === 'zh' ? '娉㈠姩鑼冨洿' : 'Volatility' }}</div>
+            <div class="stat-label">{{ text('波动范围', 'Volatility') }}</div>
             <div class="stat-value">{{ memoryTrendDeltaText }}</div>
           </div>
         </div>
@@ -1187,11 +1189,11 @@ onBeforeUnmount(() => {
 
             <!-- 鍧愭爣杞存枃瀛?-->
             <g class="chart-axis-labels">
-              <!-- Y 杞?(鍐呭瓨澶у皬) -->
+              <!-- Y 轴（内存大小） -->
               <text x="35" y="25" text-anchor="end" font-size="10">{{ memoryTrendMaxText }}</text>
               <text x="35" y="285" text-anchor="end" font-size="10">{{ memoryTrendMinText }}</text>
               
-              <!-- X 杞?(鏃堕棿) -->
+              <!-- X 轴（时间） -->
               <text
                 v-for="(tick, index) in fullChartModel.xTicks"
                 :key="`${tick.timestamp}-${index}`"
@@ -1210,7 +1212,7 @@ onBeforeUnmount(() => {
               </linearGradient>
             </defs>
 
-            <!-- 涓诲浘琛ㄥ唴瀹?-->
+            <!-- 主图表内容-->
             <g transform="translate(40, 0)">
               <path
                 v-if="fullChartModel.areaPath"
@@ -1769,7 +1771,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-pagination__jump)::before {
-  content: v-bind("locale === 'zh' ? '璺宠浆鑷? : 'Go to'");
+  content: v-bind("text('跳转至', 'Go to')");
   margin-right: 8px;
 }
 

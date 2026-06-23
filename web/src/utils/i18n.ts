@@ -1,6 +1,22 @@
 import { computed, ref } from 'vue'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import enElement from 'element-plus/es/locale/lang/en'
+import jaElement from 'element-plus/es/locale/lang/ja'
 
-export type Locale = 'en' | 'zh'
+export type Locale = 'en' | 'zh' | 'ja'
+export type LocaleText = Partial<Record<Locale, string>> & { en: string }
+type WidenMessages<T> = T extends string
+  ? string
+  : T extends Record<string, unknown>
+    ? { [K in keyof T]: WidenMessages<T[K]> }
+    : T
+
+export const supportedLocales = ['en', 'zh', 'ja'] as const
+export const localeLabels: Record<Locale, string> = {
+  en: 'English',
+  zh: '中文',
+  ja: '日本語',
+}
 
 export const messages = {
   en: {
@@ -40,6 +56,7 @@ export const messages = {
       loginError: 'Invalid username or password',
       switchToChinese: 'Switch to Chinese',
       switchToEnglish: 'Switch to English',
+      switchToJapanese: 'Switch to Japanese',
       all: 'All',
       createdAt: 'Created At',
       name: 'Name',
@@ -381,6 +398,7 @@ export const messages = {
       loginError: '用户名或密码错误',
       switchToChinese: '切换到中文',
       switchToEnglish: '切换到英文',
+      switchToJapanese: '切换到日文',
       all: '全部',
       createdAt: '创建时间',
       name: '名称',
@@ -687,32 +705,607 @@ export const messages = {
   },
 } as const
 
-const currentLocale = ref<Locale>((getCookie('lang') as Locale) || 'en')
+type MessageSchema = WidenMessages<typeof messages.en>
+
+const jaMessages: MessageSchema = {
+  ...messages.en,
+  nav: {
+    dashboard: '概要',
+    services: 'サービス',
+    namespaces: '名前空間',
+    dependencies: 'トポロジー',
+    cluster: 'ノード',
+    accessControl: 'RBAC',
+    settings: '設定',
+    docs: 'ドキュメント',
+  },
+  common: {
+    ...messages.en.common,
+    refresh: '更新',
+    back: '戻る',
+    actions: '操作',
+    confirm: '確認',
+    cancel: 'キャンセル',
+    edit: '編集',
+    delete: '削除',
+    success: '成功',
+    warning: '警告',
+    none: 'なし',
+    unknown: '不明',
+    search: '検索...',
+    status: 'ステータス',
+    weight: '重み',
+    metadata: 'メタデータ',
+    address: 'アドレス',
+    login: 'ログイン',
+    logout: 'ログアウト',
+    profile: 'プロフィール',
+    username: 'ユーザー名',
+    password: 'パスワード',
+    loginError: 'ユーザー名またはパスワードが正しくありません',
+    switchToChinese: '中国語に切り替え',
+    switchToEnglish: '英語に切り替え',
+    switchToJapanese: '日本語に切り替え',
+    all: 'すべて',
+    createdAt: '作成日時',
+    name: '名前',
+    type: 'タイプ',
+    active: '有効',
+  },
+  dashboard: {
+    ...messages.en.dashboard,
+    nodes: 'ノード数',
+    services: 'サービス数',
+    instances: 'インスタンス数',
+    healthRate: 'ヘルス率',
+    leaderInfo: 'Leader 情報',
+    isLeader: '現在のノードは Leader です',
+    leaderAddr: 'Leader',
+    recentEvents: '最近のイベント',
+    noEvents: 'イベントはありません',
+    memoryUsage: 'メモリ使用量',
+    memoryDesc: 'システム使用メモリ',
+  },
+  services: {
+    ...messages.en.services,
+    searchPlaceholder: 'サービス名または IP を検索',
+    noServices: '登録済みサービスはありません',
+    instances: 'インスタンス',
+    healthy: '正常',
+    service: 'サービス',
+    subscribers: 'サブスクライバー',
+    namespace: '名前空間',
+    dependency: '依存関係',
+    viewDependencies: '関係を表示',
+    dependencyTitle: '依存関係の詳細',
+    dependencyHint: 'このサービスの依存先と依存元を確認します。',
+    upstream: '依存サービス',
+    downstream: '依存元サービス',
+    noDependencies: '依存関係はありません',
+    healthFilter: 'ヘルス状態',
+    healthRate: 'ヘルス率',
+    healthyOption: '正常',
+    degradedOption: '異常',
+    subscribersTitle: '{service} のサブスクライバー',
+    noSubscribers: 'サブスクライバーはありません',
+  },
+  detail: {
+    ...messages.en.detail,
+    backToServices: 'サービス一覧へ戻る',
+    instanceCount: 'インスタンス',
+    instanceId: 'インスタンス ID',
+    healthStatus: 'ステータス',
+    lastHeartbeat: '最終ハートビート',
+    registeredAt: '登録日時',
+    deregister: '登録解除',
+    deregisterConfirm: 'インスタンス {addr} を登録解除しますか？この操作は元に戻せません。',
+    deregisterTitle: '登録解除の確認',
+    deregisterSuccess: 'インスタンスを登録解除しました',
+    namespace: '名前空間',
+    noInstances: 'インスタンスはありません',
+    filterByIp: 'IP で絞り込み',
+    allStatus: 'すべての状態',
+    passing: '正常',
+    critical: '異常',
+    online: 'オンライン',
+    offline: 'オフライン',
+    onlineConfirm: 'インスタンス {addr} をオンラインに戻しますか？',
+    offlineConfirm: 'インスタンス {addr} をオフラインにしますか？',
+    onlineSuccess: 'インスタンスはオンラインに戻りました',
+    offlineSuccess: 'インスタンスはオフラインです',
+  },
+  namespace: {
+    ...messages.en.namespace,
+    title: '名前空間管理',
+    subtitle: 'クライアント統合を変えずに、環境、テナント、業務ドメインを分離します。',
+    create: '名前空間を作成',
+    edit: '名前空間を編集',
+    total: '名前空間合計',
+    custom: 'カスタム',
+    system: 'システム',
+    searchPlaceholder: '名前空間名を入力',
+    name: '名前',
+    description: '説明',
+    createdAt: '作成日時',
+    defaultBadge: 'デフォルト',
+    customBadge: 'カスタム',
+    createDialog: '名前空間を作成',
+    editDialog: '名前空間を編集',
+    namePlaceholder: '例: dev、test、prod',
+    descriptionPlaceholder: 'この名前空間の用途を入力',
+    emptyTitle: '名前空間はまだありません',
+    emptyDescription: '環境または業務ドメインごとにサービスを分離する名前空間を作成します。',
+    cannotEditDefault: 'デフォルト名前空間は編集できません',
+    cannotDeleteDefault: 'デフォルト名前空間は削除できません',
+    defaultDescription: 'システムデフォルト名前空間',
+    deleteConfirm: '名前空間「{name}」を削除しますか？',
+    lockedHint: 'システム',
+  },
+  cluster: {
+    ...messages.en.cluster,
+    nodeCount: 'ノード数',
+    isLeader: '現在の Leader',
+    leaderAddr: 'Leader アドレス',
+    nodeList: 'ノード一覧',
+    nodeId: 'ノード ID',
+    address: 'アドレス',
+    role: 'ロール',
+    status: 'ステータス',
+    online: 'オンライン',
+    offline: 'オフライン',
+    yes: 'はい',
+    no: 'いいえ',
+    roles: {
+      ...messages.en.cluster.roles,
+      local: '現在',
+      peer: 'ピア',
+      standalone: 'スタンドアロン',
+    },
+    addNode: 'ノードを追加',
+    currentNode: '現在のノード',
+  },
+  rbac: {
+    ...messages.en.rbac,
+    title: 'アクセス制御',
+    addUser: 'ユーザーを追加',
+    username: 'ユーザー名',
+    password: 'パスワード',
+    role: 'ロール',
+    nickname: 'ニックネーム',
+    remark: '備考',
+    actions: '操作',
+    deleteConfirm: 'ユーザー {name} を削除しますか？',
+    admin: '管理者',
+    developer: '開発者',
+    viewer: '閲覧者',
+  },
+  settings: {
+    ...messages.en.settings,
+    title: 'システム設定',
+    apiKey: 'API キー',
+    generateKey: 'キーを生成',
+    description: '説明',
+    created: '作成日時',
+    createdBy: '作成者',
+    actions: '操作',
+    copySuccess: 'キーをクリップボードにコピーしました',
+    deleteConfirm: 'この API キーを削除しますか？',
+    consistency: '一貫性モード',
+    apTitle: 'AP モード（高可用）',
+    cpTitle: 'CP モード（強一貫性）',
+    switchSuccess: '操作に成功しました',
+    envSwitchSuccess: '{env} に切り替えました',
+    modeSwitchSuccess: '一貫性モードを {mode} に切り替えました',
+    basic: '基本設定',
+    singleTitle: 'スタンドアロンモード',
+    clusterTitle: 'クラスターモード',
+    preferences: '個人設定',
+    language: '表示言語',
+    theme: 'テーマ',
+    dark: 'ダーク',
+    light: 'ライト',
+    storage: 'ストレージ設定',
+    retention: 'イベント保持期間（日）',
+    logRetention: 'ログ保持期間（日）',
+    logLevel: 'ログレベル',
+    eventNodeSync: 'ノード同期',
+    eventClientReg: 'クライアント登録',
+    eventHeartbeat: 'ハートビート',
+    logFile: 'ログファイル',
+    tailing: '自動追従',
+    heartbeatMaxFailures: '最大ハートビート失敗回数',
+    removalDelay: 'インスタンス削除遅延（秒）',
+    logSettings: 'ログ設定',
+    eventMgmt: 'イベント管理',
+    credentials: '認証情報',
+    channels: '通知チャネル',
+    monitoring: 'アラームと監視',
+    alarmConfig: 'アラーム設定',
+    webhooks: 'Webhook',
+    webhookUrl: 'Webhook URL',
+    events: 'トリガーイベント',
+    alarms: 'アラーム',
+    enableAlarm: 'アラームを有効化',
+    threshold: 'ヘルスしきい値',
+    saveSettings: '基本設定を保存',
+    smtpSettings: 'メール SMTP 設定',
+    smtpHost: 'SMTP ホスト',
+    smtpPort: 'ポート',
+    smtpUser: 'ユーザー',
+    smtpPass: 'パスワード',
+    smtpFrom: '送信元メール',
+    expiration: '有効期限',
+    expired: '期限切れ',
+    activeStatus: '有効',
+    listView: 'リスト表示',
+    gridView: 'カード表示',
+    neverExpire: '期限なし',
+    expireIn: '{n} 日',
+    credentialsDesc: '安全なシステムアクセス用の API キーと認証情報を管理します。',
+    notificationChannel: '通知チャネル',
+    email: 'メール',
+    webhook: 'Webhook',
+    eventRegister: '登録',
+    eventDeregister: '登録解除',
+    eventHealth: 'ヘルス変更',
+    noDescription: '説明なし',
+    noCredentials: '認証情報はありません',
+    runningMode: '実行モード',
+    currentRunning: '現在の実行:',
+    survivalStrategy: '登録ライフサイクル',
+    observabilitySettings: '可観測性',
+    clientAuth: 'クライアント認証',
+    eventSettings: 'イベント設定',
+    triggerEvents: 'トリガーイベント',
+    logConfig: 'ログ設定',
+    persistenceTitle: '永続化設定',
+    registryPersistence: 'レジストリ永続化',
+    registrySync: 'フラッシュ戦略',
+    syncFlush: '同期フラッシュ',
+    asyncFlush: '非同期フラッシュ',
+    persistentMetrics: 'メトリクス永続化',
+    reset: 'リセット',
+    credentialsMgmt: '認証情報',
+    newApiKey: '新規 API キー',
+    saveNodeConfig: 'ノード設定を保存',
+    addChannel: 'チャネルを追加',
+    editChannel: 'チャネルを編集',
+    channelEnabled: '有効',
+    channelDisabled: '無効',
+    addAlarmRule: 'アラームルールを追加',
+    editAlarmRule: 'アラームルールを編集',
+    ruleCondition: '条件',
+    times: '回',
+    newApiKeySuccess: '新しい API キーを生成しました',
+    messageTemplate: 'メッセージテンプレート',
+    titleTemplate: 'タイトルテンプレート',
+    bodyTemplate: '本文テンプレート',
+    customTemplate: 'カスタムテンプレート',
+    advancedOptions: '詳細オプション',
+    variableReference: '変数リファレンス',
+    testNotice: 'テスト通知',
+    copyFail: 'コピーに失敗しました',
+    availabilityFirst: '可用性優先',
+    consistencyFirst: '一貫性優先',
+    saveSuccess: '設定を保存しました',
+    restartWarning: '変更は再起動後に有効になります',
+    deleteTitle: '削除確認',
+    deleteConfirmText: '{name} を削除しますか？',
+    serviceRegister: 'サービス登録',
+    serviceOnline: 'サービスオンライン',
+    serviceOffline: 'サービスオフライン',
+    nodeSync: 'ノード同期',
+    serviceHeartbeat: 'サービスハートビート',
+    serviceRemove: 'サービス削除',
+    providers: {
+      ...messages.en.settings.providers,
+      generic: '汎用 Webhook',
+      dingtalk: 'DingTalk',
+      feishu: 'Lark/Feishu',
+      wecom: 'WeCom',
+    },
+  },
+  docs: {
+    title: 'ドキュメント',
+    intro: 'システム紹介',
+    quickStart: 'クイックスタート',
+    integration: 'コード連携',
+    apiDesc: 'API リファレンス',
+  },
+}
+
+const localizedMessages = {
+  ...messages,
+  ja: jaMessages,
+}
+
+const elementLocales = {
+  en: enElement,
+  zh: zhCn,
+  ja: jaElement,
+} as const
+
+const localeTags: Record<Locale, string> = {
+  en: 'en-US',
+  zh: 'zh-CN',
+  ja: 'ja-JP',
+}
+
+const japaneseTextByEnglish: Record<string, string> = {
+  'Overview': '概要',
+  'Profile': 'プロフィール',
+  'Product tour': 'プロダクトツアー',
+  'Skip': 'スキップ',
+  'Back': '戻る',
+  'Done': '完了',
+  'Next': '次へ',
+  'No.': '番号',
+  'records': '件',
+  'All': 'すべて',
+  'Name': '名前',
+  'Type': 'タイプ',
+  'Status': 'ステータス',
+  'Actions': '操作',
+  'Edit': '編集',
+  'Delete': '削除',
+  'Confirm': '確認',
+  'Cancel': 'キャンセル',
+  'Notice': '通知',
+  'Reset Filters': 'フィルターをリセット',
+  'Search...': '検索...',
+  'Input name': '名前を入力',
+  'Please input name': '名前を入力してください',
+  'No description': '説明なし',
+  'Not updated': '未更新',
+  'Created': '作成',
+  'Updated': '更新',
+  'Created At': '作成日時',
+  'Description': '説明',
+  'System': 'システム',
+  'Custom': 'カスタム',
+  'Deleted successfully': '削除しました',
+  'Namespace': '名前空間',
+  'Namespaces': '名前空間',
+  'Service': 'サービス',
+  'Services': 'サービス',
+  'Service Name': 'サービス名',
+  'Instances': 'インスタンス',
+  'Instance ID': 'インスタンス ID',
+  'Instance Addr': 'インスタンスアドレス',
+  'Address': 'アドレス',
+  'IP Address': 'IP アドレス',
+  'Health': 'ヘルス',
+  'Healthy': '正常',
+  'OK': '正常',
+  'Err': '異常',
+  'Critical': '重大',
+  'Partial': '一部異常',
+  'Degraded': '劣化',
+  'No instance': 'インスタンスなし',
+  'No instances': 'インスタンスなし',
+  'Online': 'オンライン',
+  'Offline': 'オフライン',
+  'Restore Online': 'オンラインに戻す',
+  'Current Service': '現在のサービス',
+  'View detail': '詳細を見る',
+  'Dependency service': '依存サービス',
+  'Dependent service': '依存元サービス',
+  'Dependencies': '依存サービス',
+  'Dependents': '依存元サービス',
+  'None': 'なし',
+  'List View': 'リスト表示',
+  'Card View': 'カード表示',
+  'Topology View': 'トポロジー表示',
+  'No services matched': '一致するサービスはありません',
+  'Try another namespace or clear filters.': '別の名前空間を選ぶか、検索条件をクリアしてください。',
+  'Select a node from the topology graph.': '左側のトポロジーからノードを選択してください。',
+  'Node ID': 'ノード ID',
+  'Nodes': 'ノード',
+  'Local node': 'ローカルノード',
+  'Cluster node': 'クラスターノード',
+  'Not configured': '未設定',
+  'No nodes found': 'ノードはありません',
+  'Add failed': '追加に失敗しました',
+  'Please enter valid address information': '有効なノードアドレスを入力してください',
+  'Leader': 'Leader',
+  'Peer': 'ピア',
+  'Standalone': 'スタンドアロン',
+  'Cluster deployment': 'クラスター構成',
+  'Standalone deployment': 'スタンドアロン構成',
+  'nodes': 'ノード',
+  'services': 'サービス',
+  'namespaces': '名前空間',
+  'This node is the leader': 'このノードは Leader です',
+  'Events': 'イベント',
+  'Logs': 'ログ',
+  'Select log file': 'ログファイルを選択',
+  'Loading...': '読み込み中...',
+  'No log files configured': 'ログファイルは設定されていません',
+  'No log content': 'ログ内容はありません',
+  'Event Type': 'イベントタイプ',
+  'Occurred': '発生日時',
+  'Auto Scroll': '自動スクロール',
+  'Last 30m': '直近 30 分',
+  'Last 1h': '直近 1 時間',
+  'Last 6h': '直近 6 時間',
+  'Last 24h': '直近 24 時間',
+  'Last 3 days': '直近 3 日',
+  'Last 7 days': '直近 7 日',
+  'No health comparison available': '比較できるヘルス情報はありません',
+  'Collecting samples': 'サンプル収集中...',
+  'The trend will appear after a few samples': '数回サンプリング後に傾向が表示されます',
+  'Service Register': 'サービス登録',
+  'Service Online': 'サービスオンライン',
+  'Service Offline': 'サービスオフライン',
+  'Service Heartbeat': 'サービスハートビート',
+  'Service Remove': 'サービス削除',
+  'Node Sync': 'ノード同期',
+  'Register': '登録',
+  'Deregister': '登録解除',
+  'Health Change': 'ヘルス変更',
+  'All Types': 'すべてのタイプ',
+  'Logged At': '記録日時',
+  'Log File': 'ログファイル',
+  'Lines': '行数',
+  'Viewing log file...': 'ログファイルを表示中...',
+  'Memory Usage (Last 10m)': 'メモリ使用量（直近 10 分）',
+  'Current': '現在',
+  'Min': '最小',
+  'Max': '最大',
+  'Peak': 'ピーク',
+  'Floor': '最小値',
+  'Volatility': '変動幅',
+  'Go to': '移動先',
+  'Username': 'ユーザー名',
+  'Password': 'パスワード',
+  'Role': 'ロール',
+  'Nickname': 'ニックネーム',
+  'Email': 'メール',
+  'Phone': '電話',
+  'Admin': '管理者',
+  'Developer': '開発者',
+  'Guest': 'ゲスト',
+  'Built-in': '組み込み',
+  'Add User': 'ユーザーを追加',
+  'Edit User': 'ユーザーを編集',
+  'Please input username': 'ユーザー名を入力してください',
+  'Please input password': 'パスワードを入力してください',
+  'Please select role': 'ロールを選択してください',
+  'Please input nickname': 'ニックネームを入力してください',
+  'Please input email': 'メールを入力してください',
+  'Please input phone': '電話番号を入力してください',
+  'Please input remark': '備考を入力してください',
+  'Remark': '備考',
+  'General Settings & Preferences': '一般設定と個人設定',
+  'Save Changes': '変更を保存',
+  'Basic Account Profile': '基本プロフィール',
+  'Personalization': 'パーソナライズ',
+  'Theme mode': 'テーマモード',
+  'Light': 'ライト',
+  'Dark': 'ダーク',
+  'Language': '言語',
+  'Role: ': 'ロール: ',
+  'Cloud sync active': 'サーバー同期が有効です',
+  'Security': 'セキュリティ',
+  'Update': '更新',
+  'Current Password': '現在のパスワード',
+  'New Password': '新しいパスワード',
+  'Confirm New Password': '新しいパスワードを確認',
+  'Forced logout on change': '変更後は強制ログアウトされます',
+  'Settings persisted successfully': '設定を保存しました',
+  'Please fill all password fields': 'パスワード項目をすべて入力してください',
+  'Passwords do not match': '確認用パスワードが一致しません',
+  'Tip': 'ヒント',
+  'Password changed successfully, logging out...': 'パスワードを変更しました。ログアウトします...',
+  'Storage Mode': '保存方式',
+  'Memory': 'メモリ',
+  'Persistent': '永続化',
+  'Metrics Config': 'メトリクス設定',
+  'Live Preview': 'ライブプレビュー',
+  'Create': '作成',
+  'Expiration': '有効期限',
+  'Enter a description': '説明を入力',
+}
+
+const currentLocale = ref<Locale>(normalizeLocale(getCookie('lang') || getStorageItem('locale') || 'en'))
 
 export function useI18n() {
-  const t = computed(() => messages[currentLocale.value])
+  const t = computed(() => localizedMessages[currentLocale.value])
+  const elementLocale = computed(() => elementLocales[currentLocale.value])
+  const localeTag = computed(() => localeTags[currentLocale.value])
+
+  const setLocale = (nextLocale: Locale | string) => {
+    currentLocale.value = normalizeLocale(nextLocale)
+    persistLocale(currentLocale.value)
+  }
 
   const toggleLocale = () => {
-    currentLocale.value = currentLocale.value === 'en' ? 'zh' : 'en'
-    setCookie('lang', currentLocale.value, 365)
+    const index = supportedLocales.indexOf(currentLocale.value)
+    setLocale(supportedLocales[(index + 1) % supportedLocales.length] || 'en')
   }
+
+  const text = (zhOrText: string | LocaleText, enText?: string, jaText?: string) => {
+    if (typeof zhOrText !== 'string') {
+      return zhOrText[currentLocale.value] || zhOrText.en
+    }
+
+    if (currentLocale.value === 'zh') return zhOrText
+    if (currentLocale.value === 'ja') return jaText || japaneseTextByEnglish[enText || ''] || enText || zhOrText
+    return enText || zhOrText
+  }
+
+  const format = (template: string, params: Record<string, string | number>) => formatMessage(template, params)
+
+  const isLocale = (targetLocale: Locale) => currentLocale.value === targetLocale
+
+  const nextLocaleLabel = computed(() => {
+    const index = supportedLocales.indexOf(currentLocale.value)
+    const nextLocale = supportedLocales[(index + 1) % supportedLocales.length] || 'en'
+    return localeLabels[nextLocale]
+  })
+
+  const nextLocaleTitle = computed(() => {
+    const nextLocale = supportedLocales[(supportedLocales.indexOf(currentLocale.value) + 1) % supportedLocales.length] || 'en'
+    if (nextLocale === 'zh') return t.value.common.switchToChinese
+    if (nextLocale === 'ja') return t.value.common.switchToJapanese
+    return t.value.common.switchToEnglish
+  })
+
+  const shortLocaleLabel = computed(() => {
+    if (currentLocale.value === 'zh') return '中'
+    if (currentLocale.value === 'ja') return '日'
+    return 'EN'
+  })
 
   return {
     locale: currentLocale,
     t,
+    text,
+    format,
+    setLocale,
     toggleLocale,
+    elementLocale,
+    localeTag,
+    isLocale,
+    nextLocaleLabel,
+    nextLocaleTitle,
+    shortLocaleLabel,
+    supportedLocales,
+    localeLabels,
   }
 }
 
 function setCookie(name: string, value: string, daysUp: number) {
+  if (typeof document === 'undefined') return
   const expires = new Date()
   expires.setTime(expires.getTime() + daysUp * 24 * 60 * 60 * 1000)
   document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`
 }
 
 function getCookie(name: string) {
+  if (typeof document === 'undefined') return null
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
   return match ? match[2] : null
+}
+
+function getStorageItem(name: string) {
+  if (typeof localStorage === 'undefined') return null
+  return localStorage.getItem(name)
+}
+
+function persistLocale(locale: Locale) {
+  setCookie('lang', locale, 365)
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('locale', locale)
+  }
+}
+
+function normalizeLocale(locale: string | null | undefined): Locale {
+  return supportedLocales.includes(locale as Locale) ? (locale as Locale) : 'en'
+}
+
+export function formatMessage(template: string, params: Record<string, string | number>) {
+  return template.replace(/\{(\w+)\}/g, (_, key) => `${params[key] ?? ''}`)
 }
 
 

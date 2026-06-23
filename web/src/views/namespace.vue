@@ -2,8 +2,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { FolderOpened, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import en from 'element-plus/es/locale/lang/en'
 import {
   createNamespace,
   deleteNamespace,
@@ -33,9 +31,7 @@ interface NamespaceForm {
   description: string
 }
 
-const { locale } = useI18n()
-const text = (zh: string, enText: string) => (locale.value === 'zh' ? zh : enText)
-const elLocale = computed(() => (locale.value === 'zh' ? zhCn : en))
+const { text, elementLocale } = useI18n()
 
 const loading = ref(false)
 const rows = ref<NamespaceRow[]>([])
@@ -406,7 +402,7 @@ onMounted(() => {
 
           <footer class="svc-footer">
             <span class="footer-info">{{ filteredRows.length }} {{ text('条', 'records') }}</span>
-            <el-config-provider :locale="elLocale">
+            <el-config-provider :locale="elementLocale">
               <el-pagination
                 v-model:current-page="currentPage"
                 v-model:page-size="pageSize"

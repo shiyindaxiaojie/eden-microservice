@@ -1,21 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from '../utils/i18n'
+import { useI18n, type LocaleText } from '../utils/i18n'
 
 export interface GuideStep {
   id: string
   selector?: string
   route?: string
   query?: Record<string, string>
-  title: {
-    zh: string
-    en: string
-  }
-  description: {
-    zh: string
-    en: string
-  }
+  title: LocaleText
+  description: LocaleText
   placement?: 'top' | 'right' | 'bottom' | 'left' | 'center'
   padding?: number
 }
@@ -36,7 +30,7 @@ const VIEWPORT_GAP = 16
 
 const route = useRoute()
 const router = useRouter()
-const { locale } = useI18n()
+const { locale, text } = useI18n()
 
 const stepIndex = ref(0)
 const spotlightRect = ref<{ top: number; left: number; width: number; height: number; radius: number } | null>(null)
@@ -50,11 +44,11 @@ let rafId = 0
 const currentStep = computed(() => props.steps[stepIndex.value] || null)
 const currentTitle = computed(() => {
   if (!currentStep.value) return ''
-  return locale.value === 'zh' ? currentStep.value.title.zh : currentStep.value.title.en
+  return text(currentStep.value.title)
 })
 const currentDescription = computed(() => {
   if (!currentStep.value) return ''
-  return locale.value === 'zh' ? currentStep.value.description.zh : currentStep.value.description.en
+  return text(currentStep.value.description)
 })
 const backdropStyles = computed<Record<string, string>[]>(() => {
   if (typeof window === 'undefined') return []
@@ -339,14 +333,14 @@ onBeforeUnmount(() => {
 
           <div class="guide-actions">
             <button type="button" class="ghost-btn" @click="closeGuide(false)">
-              {{ locale === 'zh' ? '跳过' : 'Skip' }}
+              {{ text('跳过', 'Skip') }}
             </button>
             <div class="guide-main-actions">
               <button type="button" class="ghost-btn" :disabled="stepIndex === 0" @click="previousStep">
-                {{ locale === 'zh' ? '上一步' : 'Back' }}
+                {{ text('上一步', 'Back') }}
               </button>
               <button type="button" class="solid-btn" @click="nextStep">
-                {{ stepIndex === steps.length - 1 ? (locale === 'zh' ? '完成' : 'Done') : (locale === 'zh' ? '下一步' : 'Next') }}
+                {{ stepIndex === steps.length - 1 ? (text('完成', 'Done')) : (text('下一步', 'Next')) }}
               </button>
             </div>
           </div>

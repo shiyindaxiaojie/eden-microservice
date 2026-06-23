@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useI18n } from '../utils/i18n'
+import { useI18n, type LocaleText } from '../utils/i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Bell,
@@ -41,7 +41,7 @@ import {
 type CredentialView = 'grid' | 'list'
 type EditMode = 'create' | 'edit'
 
-const { t, locale } = useI18n()
+const { t, text, localeTag } = useI18n()
 
 interface ChannelEditor extends NotificationChannel {
   webhookUrl: string
@@ -150,43 +150,59 @@ const EMAIL_CONFIG_KEYS = new Set([
 ])
 
 const TEMPLATE_VARIABLES = computed<TemplateVariable[]>(() => [
-  { name: 'event_code', label: locale.value === 'zh' ? '事件类型' : 'Event Code', desc: locale.value === 'zh' ? '触发事件的英文标识' : 'Internal event identifier', example: 'service_offline' },
-  { name: 'event_name', label: locale.value === 'zh' ? '事件名称' : 'Event Name', desc: locale.value === 'zh' ? '事件类型的本地化名称' : 'Localized name of the event', example: locale.value === 'zh' ? '服务下线' : 'Service Offline' },
-  { name: 'rule_name', label: locale.value === 'zh' ? '规则名称' : 'Rule Name', desc: locale.value === 'zh' ? '当前告警规则名称' : 'Name of the current alarm rule', example: locale.value === 'zh' ? '服务下线告警' : 'Offline Alarm' },
-  { name: 'threshold', label: locale.value === 'zh' ? '阈值次数' : 'Threshold', desc: locale.value === 'zh' ? '规则配置的触发阈值' : 'Configured trigger threshold', example: '3' },
-  { name: 'window_sec', label: locale.value === 'zh' ? '窗口秒数' : 'Window (Sec)', desc: locale.value === 'zh' ? '统计窗口时长（秒）' : 'Duration of the evaluation window in seconds', example: '300' },
-  { name: 'window_min', label: locale.value === 'zh' ? '窗口分钟' : 'Window (Min)', desc: locale.value === 'zh' ? '统计窗口时长（分钟）' : 'Duration of the evaluation window in minutes', example: '5' },
-  { name: 'count', label: locale.value === 'zh' ? '实际次数' : 'Actual Count', desc: locale.value === 'zh' ? '窗口内实际累计次数' : 'Cumulative count within the window', example: '5' },
-  { name: 'service', label: locale.value === 'zh' ? '服务名' : 'Service Name', desc: locale.value === 'zh' ? '触发事件的服务名称' : 'Name of the service that triggered the event', example: 'order-service' },
-  { name: 'instance', label: locale.value === 'zh' ? '实例地址' : 'Instance Addr', desc: locale.value === 'zh' ? '触发事件的实例地址' : 'Address of the instance that triggered the event', example: '10.0.1.5:8080' },
-  { name: 'message', label: locale.value === 'zh' ? '事件描述' : 'Event Desc', desc: locale.value === 'zh' ? '事件的详细描述信息' : 'Detailed description information of the event', example: 'Instance deregistered' },
-  { name: 'timestamp', label: locale.value === 'zh' ? '触发时间' : 'Timestamp', desc: locale.value === 'zh' ? '事件发生的时间' : 'Time when the event occurred', example: '2026-04-02 13:30:00' },
+  { name: 'event_code', label: text('事件类型', 'Event Code'), desc: text('触发事件的英文标识', 'Internal event identifier'), example: 'service_offline' },
+  { name: 'event_name', label: text('事件名称', 'Event Name'), desc: text('事件类型的本地化名称', 'Localized name of the event'), example: text('服务下线', 'Service Offline') },
+  { name: 'rule_name', label: text('规则名称', 'Rule Name'), desc: text('当前告警规则名称', 'Name of the current alarm rule'), example: text('服务下线告警', 'Offline Alarm') },
+  { name: 'threshold', label: text('阈值次数', 'Threshold'), desc: text('规则配置的触发阈值', 'Configured trigger threshold'), example: '3' },
+  { name: 'window_sec', label: text('窗口秒数', 'Window (Sec)'), desc: text('统计窗口时长（秒）', 'Duration of the evaluation window in seconds'), example: '300' },
+  { name: 'window_min', label: text('窗口分钟', 'Window (Min)'), desc: text('统计窗口时长（分钟）', 'Duration of the evaluation window in minutes'), example: '5' },
+  { name: 'count', label: text('实际次数', 'Actual Count'), desc: text('窗口内实际累计次数', 'Cumulative count within the window'), example: '5' },
+  { name: 'service', label: text('服务名', 'Service Name'), desc: text('触发事件的服务名称', 'Name of the service that triggered the event'), example: 'order-service' },
+  { name: 'instance', label: text('实例地址', 'Instance Addr'), desc: text('触发事件的实例地址', 'Address of the instance that triggered the event'), example: '10.0.1.5:8080' },
+  { name: 'message', label: text('事件描述', 'Event Desc'), desc: text('事件的详细描述信息', 'Detailed description information of the event'), example: 'Instance deregistered' },
+  { name: 'timestamp', label: text('触发时间', 'Timestamp'), desc: text('事件发生的时间', 'Time when the event occurred'), example: '2026-04-02 13:30:00' },
 ])
 
 function getDynamicTitleTemplate() {
-  return locale.value === 'zh' ? '芙卡洛斯告警 - {{ event_name }}' : 'Focalors Alert - {{ event_name }}'
+  return text('芙卡洛斯告警 - {{ event_name }}', 'Focalors Alert - {{ event_name }}', 'Focalors アラート - {{ event_name }}')
 }
 
 function getDynamicBodyTemplate(eventCode: string) {
-  if (locale.value === 'zh') {
-    switch (eventCode) {
-      case 'service_offline': return '服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。'
-      case 'service_heartbeat': return '服务心跳异常：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：服务实例连续多次心跳失败。'
-      case 'registry_node_sync': return '集群节点同步异常告警\n事件类型：{{ event_code }}\n触发时间：{{ timestamp }}\n影响范围：可能导致服务列表短暂不一致。'
-      case 'service_online': return '服务上线通知：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：新服务实例已上线并准备好接收流量。'
-      case 'service_remove': return '服务移除告警：{{ service }}\n触发时间：{{ timestamp }}\n说明：服务已被管理员或系统从注册中心完全移除。'
-      default: return '事件：{{ event_name }}（{{ event_code }}）\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n记录时间：{{ timestamp }}\n请及时关注系统状态。'
-    }
-  } else {
-    switch (eventCode) {
-      case 'service_offline': return 'Service Offline Alert: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nCondition: {{ threshold }} times within {{ window_sec }}s\nPlease check the service status.'
-      case 'service_heartbeat': return 'Heartbeat Failure: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: Multiple consecutive heartbeat failures.'
-      case 'registry_node_sync': return 'Node Sync Error\nEvent: {{ event_code }}\nTime: {{ timestamp }}\nImpact: Potential inconsistency in service list.'
-      case 'service_online': return 'Service Online: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: New instance is ready for traffic.'
-      case 'service_remove': return 'Service Removed: {{ service }}\nTime: {{ timestamp }}\nDesc: Service was completely removed from the registry.'
-      default: return 'Event: {{ event_name }} ({{ event_code }})\nCondition: {{ threshold }} times within {{ window_sec }}s\nTime: {{ timestamp }}\nPlease monitor system health.'
-    }
+  const templates: Record<string, LocaleText> = {
+    service_offline: {
+      zh: '服务下线告警：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n请检查服务运行状态。',
+      en: 'Service Offline Alert: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nCondition: {{ threshold }} times within {{ window_sec }}s\nPlease check the service status.',
+      ja: 'サービスオフラインアラート：{{ service }}\nインスタンス：{{ instance }}\n発生時刻：{{ timestamp }}\n条件：{{ window_sec }} 秒以内に {{ threshold }} 回到達\nサービスの稼働状態を確認してください。',
+    },
+    service_heartbeat: {
+      zh: '服务心跳异常：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：服务实例连续多次心跳失败。',
+      en: 'Heartbeat Failure: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: Multiple consecutive heartbeat failures.',
+      ja: 'ハートビート異常：{{ service }}\nインスタンス：{{ instance }}\n発生時刻：{{ timestamp }}\n説明：サービスインスタンスのハートビートが連続して失敗しました。',
+    },
+    registry_node_sync: {
+      zh: '集群节点同步异常告警\n事件类型：{{ event_code }}\n触发时间：{{ timestamp }}\n影响范围：可能导致服务列表短暂不一致。',
+      en: 'Node Sync Error\nEvent: {{ event_code }}\nTime: {{ timestamp }}\nImpact: Potential inconsistency in service list.',
+      ja: 'ノード同期異常アラート\nイベント：{{ event_code }}\n発生時刻：{{ timestamp }}\n影響：サービス一覧が一時的に不整合になる可能性があります。',
+    },
+    service_online: {
+      zh: '服务上线通知：{{ service }}\n实例地址：{{ instance }}\n触发时间：{{ timestamp }}\n说明：新服务实例已上线并准备好接收流量。',
+      en: 'Service Online: {{ service }}\nInstance: {{ instance }}\nTime: {{ timestamp }}\nDesc: New instance is ready for traffic.',
+      ja: 'サービスオンライン通知：{{ service }}\nインスタンス：{{ instance }}\n発生時刻：{{ timestamp }}\n説明：新しいサービスインスタンスがオンラインになり、トラフィックを受け付ける準備ができました。',
+    },
+    service_remove: {
+      zh: '服务移除告警：{{ service }}\n触发时间：{{ timestamp }}\n说明：服务已被管理员或系统从注册中心完全移除。',
+      en: 'Service Removed: {{ service }}\nTime: {{ timestamp }}\nDesc: Service was completely removed from the registry.',
+      ja: 'サービス削除アラート：{{ service }}\n発生時刻：{{ timestamp }}\n説明：サービスは管理者またはシステムによりレジストリから完全に削除されました。',
+    },
+    default: {
+      zh: '事件：{{ event_name }}（{{ event_code }}）\n触发条件：{{ window_sec }} 秒内达到 {{ threshold }} 次\n记录时间：{{ timestamp }}\n请及时关注系统状态。',
+      en: 'Event: {{ event_name }} ({{ event_code }})\nCondition: {{ threshold }} times within {{ window_sec }}s\nTime: {{ timestamp }}\nPlease monitor system health.',
+      ja: 'イベント：{{ event_name }}（{{ event_code }}）\n条件：{{ window_sec }} 秒以内に {{ threshold }} 回到達\n記録時刻：{{ timestamp }}\nシステム状態を確認してください。',
+    },
   }
+
+  const template = templates[eventCode] || templates.default!
+  return text(template)
 }
 
 const dynamicTitleTemplate = computed(() => getDynamicTitleTemplate())
@@ -374,7 +390,7 @@ function channelName(channelID: string) {
 }
 
 function ruleChannelNames(channelIDs: string[]) {
-  return channelIDs.map(channelName).join(locale.value === 'zh' ? '、' : ', ') || '-'
+  return channelIDs.map(channelName).join(text('、', ', ')) || '-'
 }
 
 function insertVariable(varName: string) {
@@ -411,7 +427,7 @@ const defaultBodyTemplate = computed(() => {
     .replace(/\{\{\s*service\s*\}\}/g, 'example-service')
     .replace(/\{\{\s*instance\s*\}\}/g, '10.0.1.5:8080')
     .replace(/\{\{\s*message\s*\}\}/g, 'Instance deregistered')
-    .replace(/\{\{\s*timestamp\s*\}\}/g, new Date().toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US'))
+    .replace(/\{\{\s*timestamp\s*\}\}/g, new Date().toLocaleString(localeTag.value))
     .replace(/\{\{\s*count\s*\}\}/g, String(rule.threshold || 1))
 })
 
@@ -526,7 +542,7 @@ const ruleEditorTitle = computed(() => (ruleMode.value === 'create' ? t.value.se
 function handleSettingsSaveError(error: any, fallback: string) {
   const data = error.response?.data
   if (data?.error === 'not leader' && data?.leader) {
-    ElMessage.warning(`${locale.value === 'zh' ? '当前节点不是 Leader，请到' : 'Current node is not Leader, please go to'} ${data.leader} ${locale.value === 'zh' ? '节点执行保存' : 'to save'}`)
+    ElMessage.warning(`${text('当前节点不是 Leader，请到', 'Current node is not Leader, please go to')} ${data.leader} ${text('节点执行保存', 'to save')}`)
   } else {
     ElMessage.error(data?.error || fallback)
   }
@@ -564,7 +580,7 @@ async function saveSystemConfig() {
       ElMessage.success(t.value.settings.saveSuccess)
     }
   } catch (error: any) {
-    handleSettingsSaveError(error, locale.value === 'zh' ? '保存系统设置失败' : 'Failed to save system settings')
+    handleSettingsSaveError(error, text('保存系统设置失败', 'Failed to save system settings'))
   } finally {
     saveLoading.value = false
   }
@@ -584,12 +600,12 @@ async function saveNotifyAlertNode() {
     }
     draftSettings.value.notify_alert_node_id = payload.notify_alert_node_id
     if (data.restart_required) {
-      ElMessage.warning(data.message || (locale.value === 'zh' ? '通知配置节点修改后需要重启生效' : 'Notification node change requires restart'))
+      ElMessage.warning(data.message || (text('通知配置节点修改后需要重启生效', 'Notification node change requires restart')))
     } else {
       ElMessage.success(t.value.common.success)
     }
   } catch (error: any) {
-    handleSettingsSaveError(error, locale.value === 'zh' ? '保存通知配置节点失败' : 'Failed to save notification node config')
+    handleSettingsSaveError(error, text('保存通知配置节点失败', 'Failed to save notification node config'))
   } finally {
     notifyNodeSaving.value = false
   }
@@ -601,7 +617,7 @@ async function fetchNotifyConfig() {
     const response = await getNotificationConfig('default')
     notifyConfig.value = response.data || { channels: [] }
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || (locale.value === 'zh' ? '加载消息渠道配置失败' : 'Failed to load notification channels'))
+    ElMessage.error(error.response?.data?.error || (text('加载消息渠道配置失败', 'Failed to load notification channels')))
   } finally {
     messageLoading.value = false
   }
@@ -1186,12 +1202,12 @@ onMounted(() => {
                   <h4>{{ t.settings.eventSettings }}</h4>
                 </div>
                 <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item :label="locale === 'zh' ? '事件存储方式' : 'Storage Mode'" class="compact-segment-item">
+                  <el-form-item :label="text('事件存储方式', 'Storage Mode')" class="compact-segment-item">
                     <el-segmented
                       v-model="draftSettings.event_storage_mode"
                       :options="[
-                        { label: locale === 'zh' ? '内存' : 'Memory', value: 'memory' },
-                        { label: locale === 'zh' ? '持久化' : 'Persistent', value: 'persistent' }
+                        { label: text('内存', 'Memory'), value: 'memory' },
+                        { label: text('持久化', 'Persistent'), value: 'persistent' }
                       ]"
                     />
                   </el-form-item>
@@ -1246,15 +1262,15 @@ onMounted(() => {
               <section class="settings-section glass-card metrics-section">
                 <div class="section-header">
                   <el-icon><RefreshRight /></el-icon>
-                  <h4>{{ locale === 'zh' ? '指标配置' : 'Metrics Config' }}</h4>
+                  <h4>{{ text('指标配置', 'Metrics Config') }}</h4>
                 </div>
                 <el-form label-position="left" label-width="144px" class="compact-form basic-inline-form side-inline-form">
-                  <el-form-item :label="locale === 'zh' ? '存储方式' : 'Storage Mode'" class="compact-segment-item">
+                  <el-form-item :label="text('存储方式', 'Storage Mode')" class="compact-segment-item">
                     <el-segmented
                       v-model="draftSettings.metrics_storage_mode"
                       :options="[
-                        { label: locale === 'zh' ? '内存' : 'Memory', value: 'memory' },
-                        { label: locale === 'zh' ? '持久化' : 'Persistent', value: 'persistent' }
+                        { label: text('内存', 'Memory'), value: 'memory' },
+                        { label: text('持久化', 'Persistent'), value: 'persistent' }
                       ]"
                     />
                   </el-form-item>
@@ -1537,7 +1553,7 @@ onMounted(() => {
                           v-model="channelForm.emailRecipientsText"
                           type="textarea"
                           :rows="4"
-                          :placeholder="locale === 'zh' ? 'ops@example.com\\nowner@example.com' : 'ops@example.com\\nowner@example.com'"
+                          :placeholder="text('ops@example.com\\nowner@example.com', 'ops@example.com\\nowner@example.com')"
                         />
                       </el-form-item>
                     </template>
@@ -1688,7 +1704,7 @@ onMounted(() => {
                         </div>
                         
                         <div style="width: 250px; flex-shrink: 0; background: #f8fafc; border-left: 1px dashed #e2e8f0; padding: 0 12px;">
-                          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;"><el-icon><Monitor /></el-icon> {{ locale === 'zh' ? '实时预览' : 'Live Preview' }}</div>
+                          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 4px;"><el-icon><Monitor /></el-icon> {{ text('实时预览', 'Live Preview') }}</div>
                           <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.14); box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
                             <div style="font-weight: 600; margin-bottom: 8px; font-size: 13px; color: var(--text-primary);">{{ defaultTitleTemplate }}</div>
                             <div style="white-space: pre-wrap; font-size: 12px; color: var(--text-secondary); line-height: 1.6; word-break: break-all;">{{ defaultBodyTemplate }}</div>
@@ -1712,7 +1728,7 @@ onMounted(() => {
             <div class="key-preview-value" :title="keyForm.key">{{ keyForm.key }}</div>
             <el-button class="regenerate-key-btn" @click="generateRandKey" :icon="RefreshRight" />
           </div>
-          <div class="field-hint">{{ locale === 'zh' ? '创建前可重复生成，完整密钥会按原样展示。' : 'Can be regenerated before creation, the full key is displayed as-is.' }}</div>
+          <div class="field-hint">{{ text('创建前可重复生成，完整密钥会按原样展示。', 'Can be regenerated before creation, the full key is displayed as-is.') }}</div>
         </el-form-item>
 
         <el-form-item :label="t.settings.description">
@@ -1720,11 +1736,11 @@ onMounted(() => {
             v-model="keyForm.description"
             type="textarea"
             :rows="3"
-            :placeholder="locale === 'zh' ? '请输入描述' : 'Enter a description'"
+            :placeholder="text('请输入描述', 'Enter a description')"
           />
         </el-form-item>
 
-        <el-form-item :label="locale === 'zh' ? '有效期' : 'Expiration'">
+        <el-form-item :label="text('有效期', 'Expiration')">
           <el-select v-model="keyForm.expDays" style="width: 100%">
             <el-option :label="t.settings.neverExpire" :value="0" />
             <el-option label="7 {{ t.settings.expireIn.replace('{n}', '7') }}" :value="7" />
@@ -1737,7 +1753,7 @@ onMounted(() => {
 
       <template #footer>
         <el-button @click="showDialog = false">{{ t.common.cancel }}</el-button>
-        <el-button type="primary" @click="handleGenerate">{{ locale === 'zh' ? '创建' : 'Create' }}</el-button>
+        <el-button type="primary" @click="handleGenerate">{{ text('创建', 'Create') }}</el-button>
       </template>
     </el-dialog>
 

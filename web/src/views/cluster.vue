@@ -11,10 +11,8 @@ import {
   type ClusterStats,
 } from '../api/registry'
 import { useI18n } from '../utils/i18n'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import en from 'element-plus/es/locale/lang/en'
 
-const { t, locale } = useI18n()
+const { t, text, elementLocale } = useI18n()
 const members = ref<ClusterMember[]>([])
 const stats = ref<ClusterStats | null>(null)
 const loading = ref(true)
@@ -61,20 +59,16 @@ const pagedMembers = computed(() => {
 })
 
 const clusterHint = computed(() =>
-  locale.value === 'zh'
-    ? '统一查看节点状态、协议地址和当前集群角色。'
-    : 'Inspect node status, protocol endpoints, and the current cluster role in one place.',
+  text('统一查看节点状态、协议地址和当前集群角色。', 'Inspect node status, protocol endpoints, and the current cluster role in one place.'),
 )
 const invalidAddressMessage = computed(() =>
-  locale.value === 'zh' ? '请填写有效的节点地址信息' : 'Please enter valid address information',
+  text('请填写有效的节点地址信息', 'Please enter valid address information'),
 )
-const addFailedMessage = computed(() => (locale.value === 'zh' ? '添加失败' : 'Add failed'))
+const addFailedMessage = computed(() => (text('添加失败', 'Add failed')))
 const removeConfirm = (row: ClusterMember) =>
-  locale.value === 'zh'
-    ? `确定移除节点 ${row.id} (${row.address}) 吗？`
-    : `Are you sure you want to remove node ${row.id} (${row.address})?`
+  text(`确定移除节点 ${row.id} (${row.address}) 吗？`, `Are you sure you want to remove node ${row.id} (${row.address})?`)
 
-const emptyNodesLabel = computed(() => (locale.value === 'zh' ? '暂无节点数据' : 'No nodes found'))
+const emptyNodesLabel = computed(() => (text('暂无节点数据', 'No nodes found')))
 
 function addNodeRow() {
   addForms.value.push({ protocol: 'http://', host: '', port: '' })
@@ -213,7 +207,7 @@ function getMemberPrimaryHost(member: ClusterMember) {
     }
   }
 
-  return locale.value === 'zh' ? '未配置' : 'Not configured'
+  return text('未配置', 'Not configured')
 }
 
 function getMemberDisplayAddress(member: ClusterMember) {
@@ -274,11 +268,11 @@ onMounted(fetchCluster)
       <div class="toolbar-row">
         <div class="toolbar-group">
           <div class="field-item">
-            <span class="field-label">{{ locale === 'zh' ? '节点 ID' : 'Node ID' }}</span>
+            <span class="field-label">{{ text('节点 ID', 'Node ID') }}</span>
             <el-input
               v-model="searchID"
               :prefix-icon="Search"
-              :placeholder="locale === 'zh' ? '输入节点 ID' : 'Node ID'"
+              :placeholder="text('输入节点 ID', 'Node ID')"
               clearable
                 class="search-input"
               />
@@ -287,11 +281,11 @@ onMounted(fetchCluster)
 
         <div class="toolbar-group">
           <div class="field-item">
-            <span class="field-label">{{ locale === 'zh' ? 'IP 地址' : 'IP Address' }}</span>
+            <span class="field-label">{{ text('IP 地址', 'IP Address') }}</span>
             <el-input
               v-model="searchIP"
               :prefix-icon="Search"
-              :placeholder="locale === 'zh' ? '输入 IP 地址' : 'IP Address'"
+              :placeholder="text('输入 IP 地址', 'IP Address')"
               clearable
                 class="search-input"
               />
@@ -316,11 +310,11 @@ onMounted(fetchCluster)
               <span class="pill-count">{{ nodeStats.total }}</span>
             </button>
             <button type="button" :class="{ active: filterMode === 'online' }" @click="filterMode = 'online'">
-              {{ locale === 'zh' ? '在线' : 'Online' }}
+              {{ text('在线', 'Online') }}
               <span class="pill-count">{{ nodeStats.online }}</span>
             </button>
             <button type="button" :class="{ active: filterMode === 'offline' }" @click="filterMode = 'offline'">
-              {{ locale === 'zh' ? '离线' : 'Offline' }}
+              {{ text('离线', 'Offline') }}
               <span class="pill-count">{{ nodeStats.offline }}</span>
             </button>
           </div>
@@ -363,7 +357,7 @@ onMounted(fetchCluster)
       <template v-else>
         <div v-if="viewMode === 'list'" class="table-wrap">
           <el-table :data="pagedMembers" height="100%" style="width: 100%; font-size: 14px;">
-            <el-table-column type="index" :label="locale === 'zh' ? '序号' : 'No.'" width="60" align="center" />
+            <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
             <el-table-column :label="t.cluster.nodeId" min-width="120">
               <template #default="{ row }">
                 <div class="node-id-cell">
@@ -442,7 +436,7 @@ onMounted(fetchCluster)
                 <div class="card-copy">
                   <div class="card-title-row">
                     <strong class="card-title">{{ member.id }}</strong>
-                    <span v-if="member.is_local" class="card-current-mark">{{ locale === 'zh' ? '本机节点' : 'Local node' }}</span>
+                    <span v-if="member.is_local" class="card-current-mark">{{ text('本机节点', 'Local node') }}</span>
                   </div>
                   <p class="card-hostline">{{ getMemberPrimaryHost(member) }}</p>
                 </div>
@@ -451,7 +445,7 @@ onMounted(fetchCluster)
 
             <div class="card-body">
               <div class="compact-meta-row">
-                <span class="compact-label">{{ locale === 'zh' ? '状态' : 'Status' }}</span>
+                <span class="compact-label">{{ text('状态', 'Status') }}</span>
                 <div class="node-meta-pills">
                   <span class="meta-chip" :class="member.status === 'Online' ? 'online' : 'offline'">
                     <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
@@ -476,7 +470,7 @@ onMounted(fetchCluster)
 
             <div class="card-footer">
               <span class="card-footnote">
-                {{ member.is_local ? t.cluster.currentNode : (locale === 'zh' ? '集群节点' : 'Cluster node') }}
+                {{ member.is_local ? t.cluster.currentNode : (text('集群节点', 'Cluster node')) }}
               </span>
               <div class="card-actions">
                 <el-button
@@ -495,8 +489,8 @@ onMounted(fetchCluster)
         </div>
 
         <footer class="svc-footer">
-          <span class="footer-info">{{ filteredMembers.length }} {{ locale === 'zh' ? '条' : 'records' }}</span>
-          <el-config-provider :locale="locale === 'zh' ? zhCn : en">
+          <span class="footer-info">{{ filteredMembers.length }} {{ text('条', 'records') }}</span>
+          <el-config-provider :locale="elementLocale">
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
