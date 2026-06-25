@@ -23,6 +23,8 @@ export const messages = {
     nav: {
       dashboard: 'Overview',
       services: 'Services',
+      configs: 'Configs',
+      routes: 'Routes',
       namespaces: 'Namespaces',
       dependencies: 'Topology',
       cluster: 'Nodes',
@@ -365,6 +367,8 @@ export const messages = {
     nav: {
       dashboard: '概览',
       services: '服务列表',
+      configs: '配置管理',
+      routes: '路由管理',
       namespaces: '命名空间',
       dependencies: '拓扑视图',
       cluster: '节点管理',
@@ -712,6 +716,8 @@ const jaMessages: MessageSchema = {
   nav: {
     dashboard: '概要',
     services: 'サービス',
+    configs: '設定管理',
+    routes: 'ルート管理',
     namespaces: '名前空間',
     dependencies: 'トポロジー',
     cluster: 'ノード',

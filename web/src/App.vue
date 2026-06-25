@@ -167,6 +167,8 @@ const navItems = computed(() => {
   const baseItems = [
     { path: '/', label: t.value.nav.dashboard, icon: 'Odometer' },
     { path: '/services', label: t.value.nav.services, icon: 'Grid' },
+    { path: '/configs', label: t.value.nav.configs, icon: 'Document' },
+    { path: '/routes', label: t.value.nav.routes, icon: 'Share' },
     { path: '/namespaces', label: t.value.nav.namespaces, icon: 'Collection' },
     { path: '/cluster', label: t.value.nav.cluster, icon: 'Connection' },
   ]
@@ -183,6 +185,8 @@ const navItems = computed(() => {
 const currentTitle = computed(() => {
   if (route.path === '/') return t.value.nav.dashboard
   if (route.path.startsWith('/services')) return t.value.nav.services
+  if (route.path.startsWith('/configs')) return t.value.nav.configs
+  if (route.path.startsWith('/routes')) return t.value.nav.routes
   if (route.path.startsWith('/namespaces')) return t.value.nav.namespaces
   if (route.path.startsWith('/cluster')) return t.value.nav.cluster
   if (route.path.startsWith('/rbac')) return t.value.nav.accessControl

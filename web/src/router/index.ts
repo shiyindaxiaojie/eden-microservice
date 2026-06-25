@@ -20,6 +20,18 @@ const routes = [
     meta: { title: 'Service Detail' },
   },
   {
+    path: '/configs',
+    name: 'Configs',
+    component: () => import('../views/configs.vue'),
+    meta: { title: 'Configs' },
+  },
+  {
+    path: '/routes',
+    name: 'Routes',
+    component: () => import('../views/routes.vue'),
+    meta: { title: 'Routes' },
+  },
+  {
     path: '/cluster',
     name: 'Cluster',
     component: () => import('../views/cluster.vue'),
