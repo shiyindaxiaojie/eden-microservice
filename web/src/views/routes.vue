@@ -2,15 +2,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Connection,
   Delete,
   EditPen,
-  Finished,
   Plus,
   RefreshLeft,
   Search,
   Switch,
-  Timer,
 } from '@element-plus/icons-vue'
 import {
   deleteMockRoute,
@@ -120,19 +117,7 @@ const pagedRoutes = computed(() => {
   return filteredRoutes.value.slice(start, start + pageSize.value)
 })
 
-const selectedRoute = computed(() =>
-  routes.value.find((route) => routeKey(route) === selectedRouteKey.value) || filteredRoutes.value[0] || null,
-)
-
-const totalRoutes = computed(() => routes.value.length)
-const enabledRoutes = computed(() => routes.value.filter((route) => route.enabled).length)
-const disabledRoutes = computed(() => routes.value.filter((route) => !route.enabled).length)
-const totalRequests = computed(() => routes.value.reduce((sum, route) => sum + route.request_count, 0))
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredRoutes.value.length / pageSize.value)))
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat().format(value)
-}
 
 function formatDateTime(value: string) {
   const date = new Date(value)
@@ -157,11 +142,6 @@ function upstreamLabel(route: GatewayRoute) {
     return `${route.upstream.namespace || route.namespace}/${route.upstream.service_name}`
   }
   return (route.upstream.urls || []).join(', ')
-}
-
-function filterLabel(filter: GatewayFilter) {
-  if (filter.type === 'strip_prefix') return `strip_prefix(${filter.parts || 0})`
-  return `${filter.type}(${filter.name || '-'})`
 }
 
 function parseHeaders(input: string) {
@@ -408,44 +388,6 @@ onMounted(fetchRoutes)
 
 <template>
   <div class="route-shell">
-    <section class="route-hero">
-      <div class="hero-copy">
-        <span class="hero-kicker">{{ text('API 网关', 'API Gateway') }}</span>
-        <h2>{{ text('路由管理', 'Route Management') }}</h2>
-        <p>
-          {{ text('管理 HTTP 路由、匹配条件、上游服务和基础过滤器。当前页面使用模拟数据演示控制面体验。', 'Manage HTTP routes, predicates, upstreams, and basic filters with mock control-plane data.') }}
-        </p>
-      </div>
-      <div class="route-flow">
-        <span>{{ text('匹配', 'Match') }}</span>
-        <i></i>
-        <span>{{ text('选择上游', 'Resolve') }}</span>
-        <i></i>
-        <span>{{ text('过滤器', 'Filter') }}</span>
-        <i></i>
-        <span>{{ text('转发', 'Proxy') }}</span>
-      </div>
-    </section>
-
-    <section class="route-metrics">
-      <div class="metric-card">
-        <span>{{ text('路由总数', 'Routes') }}</span>
-        <strong>{{ totalRoutes }}</strong>
-      </div>
-      <div class="metric-card">
-        <span>{{ text('启用中', 'Enabled') }}</span>
-        <strong>{{ enabledRoutes }}</strong>
-      </div>
-      <div class="metric-card">
-        <span>{{ text('停用', 'Disabled') }}</span>
-        <strong>{{ disabledRoutes }}</strong>
-      </div>
-      <div class="metric-card">
-        <span>{{ text('模拟请求量', 'Mock requests') }}</span>
-        <strong>{{ formatNumber(totalRequests) }}</strong>
-      </div>
-    </section>
-
     <section class="route-panel">
       <div class="route-toolbar">
         <div class="field-item">
@@ -535,6 +477,9 @@ onMounted(fetchRoutes)
                 <span class="status-pill" :class="statusClass(row)">{{ statusText(row) }}</span>
               </template>
             </el-table-column>
+            <el-table-column :label="text('更新时间', 'Updated')" width="170">
+              <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
+            </el-table-column>
             <el-table-column :label="text('操作', 'Actions')" width="220" fixed="right">
               <template #default="{ row }">
                 <el-button link :icon="Switch" @click.stop="handleToggle(row)">
@@ -565,79 +510,6 @@ onMounted(fetchRoutes)
           </footer>
         </div>
 
-        <aside v-if="selectedRoute" class="route-detail">
-          <div class="detail-head">
-            <div class="detail-icon" :class="statusClass(selectedRoute)">
-              <el-icon><Connection /></el-icon>
-            </div>
-            <div>
-              <span class="detail-kicker">{{ selectedRoute.namespace }} / {{ selectedRoute.id }}</span>
-              <h3>{{ selectedRoute.name }}</h3>
-            </div>
-          </div>
-
-          <div class="detail-status-row">
-            <span class="status-pill" :class="statusClass(selectedRoute)">{{ statusText(selectedRoute) }}</span>
-            <span>{{ text('更新于', 'Updated') }} {{ formatDateTime(selectedRoute.updated_at) }}</span>
-          </div>
-
-          <div class="flow-card">
-            <div class="flow-step">
-              <span>{{ text('Host', 'Host') }}</span>
-              <strong>{{ selectedRoute.match.hosts.join(', ') || '*' }}</strong>
-            </div>
-            <div class="flow-step">
-              <span>{{ text('Path', 'Path') }}</span>
-              <strong>{{ selectedRoute.match.path_prefix }}</strong>
-            </div>
-            <div class="flow-step">
-              <span>{{ text('Methods', 'Methods') }}</span>
-              <strong>{{ selectedRoute.match.methods.join(', ') || '*' }}</strong>
-            </div>
-          </div>
-
-          <div class="detail-grid">
-            <div>
-              <el-icon><Timer /></el-icon>
-              <span>{{ text('超时', 'Timeout') }}</span>
-              <strong>{{ selectedRoute.timeout_ms }} ms</strong>
-            </div>
-            <div>
-              <el-icon><Finished /></el-icon>
-              <span>{{ text('负载均衡', 'Load balance') }}</span>
-              <strong>{{ selectedRoute.upstream.load_balance }}</strong>
-            </div>
-          </div>
-
-          <section class="detail-section">
-            <h4>{{ text('上游目标', 'Upstream target') }}</h4>
-            <p>{{ upstreamLabel(selectedRoute) }}</p>
-            <span class="hint">
-              {{ selectedRoute.upstream.healthy_only ? text('仅选择健康实例', 'Healthy instances only') : text('允许静态上游直接转发', 'Static upstream forwarding allowed') }}
-            </span>
-          </section>
-
-          <section class="detail-section">
-            <h4>{{ text('过滤器', 'Filters') }}</h4>
-            <div class="filter-stack">
-              <span v-for="filter in selectedRoute.filters" :key="filterLabel(filter)" class="filter-chip">
-                {{ filterLabel(filter) }}
-              </span>
-              <span v-if="selectedRoute.filters.length === 0" class="hint">{{ text('无过滤器', 'No filters') }}</span>
-            </div>
-          </section>
-
-          <section class="traffic-card">
-            <div>
-              <span>{{ text('请求量', 'Requests') }}</span>
-              <strong>{{ formatNumber(selectedRoute.request_count) }}</strong>
-            </div>
-            <div>
-              <span>{{ text('错误率', 'Error rate') }}</span>
-              <strong>{{ (selectedRoute.error_rate * 100).toFixed(2) }}%</strong>
-            </div>
-          </section>
-        </aside>
       </div>
     </section>
 
@@ -743,7 +615,7 @@ onMounted(fetchRoutes)
 .route-shell {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
   height: calc(100vh - var(--header-height) - 48px);
   min-height: 0;
 }
@@ -837,8 +709,8 @@ onMounted(fetchRoutes)
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
+  border: 0;
+  background: transparent;
   border-radius: 0;
   overflow: hidden;
 }
@@ -846,8 +718,9 @@ onMounted(fetchRoutes)
 .route-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 0 0 18px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -927,8 +800,8 @@ onMounted(fetchRoutes)
 .route-workbench {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
+  display: flex;
+  flex-direction: column;
 }
 
 .route-list {
@@ -936,7 +809,7 @@ onMounted(fetchRoutes)
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px 16px;
+  padding: 18px 0 0;
   overflow: hidden;
 }
 

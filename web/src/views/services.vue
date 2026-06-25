@@ -831,9 +831,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
   border-radius: 0;
 }
 
@@ -842,14 +842,15 @@ onBeforeUnmount(() => {
 /* ===== Toolbar ===== */
 .svc-toolbar {
   flex-shrink: 0;
-  padding: 16px 24px;
+  padding: 0 0 18px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .toolbar-row {
   display: flex;
   align-items: center;
-  gap: 0;
+  flex-wrap: wrap;
+  gap: 10px 0;
 }
 
 .toolbar-group {
@@ -901,7 +902,7 @@ onBeforeUnmount(() => {
 
 :deep(.ns-select .el-select__wrapper),
 :deep(.search-input .el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: var(--control-bg) !important;
   border: 1px solid var(--border-color) !important;
   box-shadow: none !important;
   border-radius: 6px;
@@ -914,7 +915,7 @@ onBeforeUnmount(() => {
 :deep(.ns-select .el-select__wrapper:focus-within),
 :deep(.search-input .el-input__wrapper:focus-within) {
   border-color: rgba(59, 130, 246, 0.4) !important;
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: var(--control-hover-bg) !important;
 }
 
 :deep(.ns-select .el-select__wrapper input),
@@ -962,7 +963,7 @@ onBeforeUnmount(() => {
   gap: 2px;
   padding: 2px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--control-muted-bg);
 }
 
 .pill-group button {
@@ -1043,7 +1044,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden; /* confined to table scroll */
-  padding: 12px 24px 12px;
+  padding: 18px 0 0;
 }
 
 /* ===== Card grid ===== */
@@ -1103,7 +1104,7 @@ onBeforeUnmount(() => {
   font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .status-wrap {
@@ -1421,6 +1422,10 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   min-height: 200px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .empty-inner {
@@ -1446,7 +1451,7 @@ onBeforeUnmount(() => {
   gap: 16px;
   flex: 1;
   min-height: 0;
-  padding: 16px 24px 16px;
+  padding: 18px 0 0;
 }
 
 .topo-canvas {
@@ -1596,7 +1601,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 16px 24px 12px;
+  padding: 18px 0 0;
 }
 
 .card-grid {
@@ -1906,15 +1911,15 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .svc-toolbar {
-    padding: 10px 16px;
+    padding: 0 0 14px;
   }
 
   .svc-content {
-    padding: 12px 16px 8px;
+    padding: 14px 0 0;
   }
 
   .topo-stage {
-    padding: 12px 16px;
+    padding: 14px 0 0;
   }
 
   .side-summary-grid {

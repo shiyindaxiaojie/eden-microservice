@@ -360,7 +360,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 24px;
+  padding: 0;
 }
 
 .svc-main {
@@ -368,21 +368,21 @@ onMounted(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
-  background: var(--bg-card);
+  background: transparent;
 }
 
 .svc-toolbar {
-  padding: 16px 24px;
+  padding: 0 0 18px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .toolbar-row {
   display: flex;
   align-items: center;
-  gap: 0;
-  flex-wrap: nowrap;
+  gap: 10px 0;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -438,7 +438,7 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .ns-badge {
@@ -568,7 +568,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px 24px 12px;
+  padding: 18px 0 0;
 }
 
 .table-wrap {
@@ -683,11 +683,11 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .svc-toolbar {
-    padding: 10px 16px;
+    padding: 0 0 14px;
   }
 
   .svc-content {
-    padding: 12px 16px 8px;
+    padding: 14px 0 0;
   }
 
   .toolbar-group {

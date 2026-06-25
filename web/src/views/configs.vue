@@ -3,9 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Clock,
-  CopyDocument,
   Delete,
-  Document,
   EditPen,
   Plus,
   RefreshLeft,
@@ -106,8 +104,6 @@ const selectedHistory = computed(() => {
 })
 
 const totalCount = computed(() => configs.value.length)
-const activeNamespaceCount = computed(() => new Set(configs.value.map((item) => item.namespace)).size)
-const watchedCount = computed(() => history.value.filter((item) => item.action === 'publish').length)
 const typeCount = (type: ConfigContentType) => configs.value.filter((item) => item.type === type).length
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredConfigs.value.length / pageSize.value)))
 
@@ -158,14 +154,6 @@ function resetFilters() {
   namespaceFilter.value = 'all'
   typeFilter.value = 'all'
   currentPage.value = 1
-}
-
-function selectConfig(row: ConfigResource) {
-  selectedKey.value = configKey(row)
-}
-
-function configRowClass({ row }: { row: ConfigResource }) {
-  return configKey(row) === selectedKey.value ? 'selected-row' : ''
 }
 
 function openCreate() {
@@ -262,11 +250,6 @@ async function handleDelete(item: ConfigResource) {
   }
 }
 
-async function copyContent(item: ConfigResource) {
-  await navigator.clipboard.writeText(item.content)
-  ElMessage.success(text('内容已复制', 'Content copied'))
-}
-
 function showHistory(item: ConfigResource) {
   selectedKey.value = configKey(item)
   historyVisible.value = true
@@ -289,30 +272,6 @@ onMounted(fetchConfigs)
 
 <template>
   <div class="control-shell">
-    <section class="control-hero">
-      <div class="hero-copy">
-        <span class="hero-kicker">{{ text('配置中心', 'Config Center') }}</span>
-        <h2>{{ text('配置管理', 'Configuration Management') }}</h2>
-        <p>
-          {{ text('按 namespace、group 和 dataId 管理配置内容，演示发布、历史和监听版本信息。', 'Manage config content by namespace, group, and dataId with publish history and watch version signals.') }}
-        </p>
-      </div>
-      <div class="hero-stats">
-        <div class="mini-stat">
-          <span>{{ text('配置数', 'Configs') }}</span>
-          <strong>{{ totalCount }}</strong>
-        </div>
-        <div class="mini-stat">
-          <span>{{ text('命名空间', 'Namespaces') }}</span>
-          <strong>{{ activeNamespaceCount }}</strong>
-        </div>
-        <div class="mini-stat">
-          <span>{{ text('发布记录', 'Publishes') }}</span>
-          <strong>{{ watchedCount }}</strong>
-        </div>
-      </div>
-    </section>
-
     <section class="control-panel">
       <div class="control-toolbar">
         <div class="field-item">
@@ -368,8 +327,6 @@ onMounted(fetchConfigs)
             :data="pagedConfigs"
             height="100%"
             highlight-current-row
-            :row-class-name="configRowClass"
-            @row-click="selectConfig"
           >
             <el-table-column :label="text('Data ID', 'Data ID')" min-width="210">
               <template #default="{ row }">
@@ -427,54 +384,6 @@ onMounted(fetchConfigs)
           </footer>
         </div>
 
-        <aside class="detail-panel" v-if="selectedConfig">
-          <div class="detail-head">
-            <div class="detail-icon">
-              <el-icon><Document /></el-icon>
-            </div>
-            <div>
-              <span class="detail-kicker">{{ selectedConfig.namespace }} / {{ selectedConfig.group }}</span>
-              <h3>{{ selectedConfig.data_id }}</h3>
-            </div>
-          </div>
-
-          <div class="detail-meta">
-            <div>
-              <span>{{ text('Revision', 'Revision') }}</span>
-              <strong>r{{ selectedConfig.revision }}</strong>
-            </div>
-            <div>
-              <span>{{ text('类型', 'Type') }}</span>
-              <strong>{{ selectedConfig.type }}</strong>
-            </div>
-            <div>
-              <span>{{ text('更新人', 'Updated by') }}</span>
-              <strong>{{ selectedConfig.updated_by }}</strong>
-            </div>
-          </div>
-
-          <div class="fingerprint">
-            <span>{{ text('内容指纹', 'Content fingerprint') }}</span>
-            <code>{{ selectedConfig.md5 }}</code>
-          </div>
-
-          <div class="tag-row">
-            <el-tag v-for="tag in selectedConfig.tags" :key="tag" effect="plain" size="small">{{ tag }}</el-tag>
-          </div>
-
-          <p class="detail-desc">{{ selectedConfig.description || text('暂无描述', 'No description') }}</p>
-
-          <pre class="content-preview"><code>{{ selectedConfig.content }}</code></pre>
-
-          <div class="detail-actions">
-            <el-button :icon="CopyDocument" @click="copyContent(selectedConfig)">
-              {{ text('复制内容', 'Copy content') }}
-            </el-button>
-            <el-button type="primary" :icon="Upload" @click="openEdit(selectedConfig)">
-              {{ text('发布新版本', 'Publish revision') }}
-            </el-button>
-          </div>
-        </aside>
       </div>
     </section>
 
@@ -544,7 +453,7 @@ onMounted(fetchConfigs)
 .control-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   height: calc(100vh - var(--header-height) - 48px);
   min-height: 0;
 }
@@ -619,8 +528,8 @@ onMounted(fetchConfigs)
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
+  border: 0;
+  background: transparent;
   border-radius: 0;
   overflow: hidden;
 }
@@ -628,8 +537,9 @@ onMounted(fetchConfigs)
 .control-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 0 0 18px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -715,8 +625,8 @@ onMounted(fetchConfigs)
 .config-workbench {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  display: flex;
+  flex-direction: column;
 }
 
 .table-wrap {
@@ -724,7 +634,7 @@ onMounted(fetchConfigs)
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px 16px;
+  padding: 18px 0 0;
   overflow: hidden;
 }
 

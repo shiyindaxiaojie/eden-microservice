@@ -555,7 +555,7 @@ onMounted(fetchCluster)
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 16px 24px 12px;
+  padding: 18px 0 0;
 }
 
 .table-wrap {
@@ -579,14 +579,15 @@ onMounted(fetchCluster)
 /* ===== Toolbar ===== */
 .svc-toolbar {
   flex-shrink: 0;
-  padding: 12px 24px;
+  padding: 0 0 18px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .toolbar-row {
   display: flex;
   align-items: center;
-  gap: 0;
+  flex-wrap: wrap;
+  gap: 10px 0;
 }
 
 .toolbar-group {
@@ -656,7 +657,7 @@ onMounted(fetchCluster)
   gap: 2px;
   padding: 2px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--control-muted-bg);
 }
 
 .pill-group button {
@@ -709,7 +710,7 @@ onMounted(fetchCluster)
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 16px 24px 12px;
+  padding: 18px 0 0;
 }
 
 .empty-panel {
@@ -2584,14 +2585,14 @@ onMounted(fetchCluster)
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
   border-radius: 0;
 }
 
 .svc-toolbar {
-  padding: 16px 24px;
+  padding: 0 0 18px;
 }
 
 .field-item {
@@ -2623,24 +2624,24 @@ onMounted(fetchCluster)
 }
 
 .svc-content {
-  padding: 16px 24px 12px;
+  padding: 18px 0 0;
 }
 
 .empty-panel {
   flex: 1;
   min-height: 200px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .table-wrap {
   margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 12px;
-  padding: 0 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
 }
 
 .card-grid {
@@ -2968,11 +2969,11 @@ onMounted(fetchCluster)
 
 @media (max-width: 768px) {
   .svc-toolbar {
-    padding: 12px 16px;
+    padding: 0 0 14px;
   }
 
   .svc-content {
-    padding: 12px 16px 8px;
+    padding: 14px 0 0;
   }
 
   .field-item {

@@ -2,7 +2,7 @@
 
 :root {
   /* Default to dark mode variables */
-  --bg-primary: #0a0e1a;
+  --bg-primary: #111827;
   --bg-secondary: #111827;
   --bg-card: rgba(17, 24, 39, 0.8);
   --bg-glass: rgba(255, 255, 255, 0.04);
@@ -17,17 +17,24 @@
   --accent-cyan: #06b6d4;
   --sidebar-width: 240px;
   --header-height: 64px;
+  --page-gutter-x: 36px;
+  --control-bg: rgba(255, 255, 255, 0.04);
+  --control-muted-bg: rgba(255, 255, 255, 0.03);
+  --control-hover-bg: rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme="light"] {
-  --bg-primary: #f8fafc;
+  --bg-primary: #ffffff;
   --bg-secondary: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.9);
-  --bg-glass: rgba(0, 0, 0, 0.04);
-  --border-color: rgba(0, 0, 0, 0.08);
+  --bg-card: #ffffff;
+  --bg-glass: rgba(15, 23, 42, 0.05);
+  --border-color: rgba(15, 23, 42, 0.08);
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
+  --control-bg: #ffffff;
+  --control-muted-bg: #edf2fa;
+  --control-hover-bg: #ffffff;
 }
 
 * {
@@ -49,6 +56,7 @@ html, body, #app {
 .app-layout {
   display: flex;
   height: 100vh;
+  background: var(--bg-primary);
 }
 
 /* Sidebar */
@@ -93,7 +101,7 @@ html, body, #app {
 .sidebar-logo .logo-text {
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
   background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -140,11 +148,13 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg-primary);
 }
 
 .main-header {
   height: var(--header-height);
   border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -268,7 +278,8 @@ html, body, #app {
 .page-body {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 28px;
+  padding: 24px var(--page-gutter-x);
+  background: var(--bg-primary);
 }
 
 /* Scrollbar */
@@ -525,7 +536,7 @@ html, body, #app {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  background: var(--bg-glass);
+  background: var(--control-muted-bg);
   padding: 8px 20px;
   border-radius: 100px;
   border: 1px solid var(--border-color);
@@ -704,7 +715,7 @@ html, body, #app {
   padding: 12px 14px;
   border: 1px solid var(--border-color);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
 }
 
 .view-switch {
@@ -782,6 +793,10 @@ html, body, #app {
 }
 
 @media (max-width: 768px) {
+  :root {
+    --page-gutter-x: 16px;
+  }
+
   .panel-toolbar {
     padding: 14px;
   }
