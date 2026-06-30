@@ -326,7 +326,6 @@ onMounted(fetchConfigs)
           <el-table
             :data="pagedConfigs"
             height="100%"
-            highlight-current-row
           >
             <el-table-column :label="text('Data ID', 'Data ID')" min-width="210">
               <template #default="{ row }">
@@ -341,30 +340,27 @@ onMounted(fetchConfigs)
                 <el-tag :type="typeTag(row.type)" effect="plain">{{ row.type }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="text('Revision', 'Revision')" width="110">
+            <el-table-column :label="text('版本', 'Version')" width="100" align="center">
               <template #default="{ row }">
                 <span class="revision-badge">r{{ row.revision }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column :label="text('MD5', 'MD5')" min-width="180">
-              <template #default="{ row }">
-                <code class="mono-chip">{{ md5Short(row.md5) }}</code>
               </template>
             </el-table-column>
             <el-table-column :label="text('更新时间', 'Updated')" width="170">
               <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
             </el-table-column>
-            <el-table-column :label="text('操作', 'Actions')" width="190" fixed="right">
+            <el-table-column :label="text('操作', 'Actions')" width="230" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" :icon="EditPen" @click.stop="openEdit(row)">
-                  {{ text('编辑', 'Edit') }}
-                </el-button>
-                <el-button link :icon="Clock" @click.stop="showHistory(row)">
-                  {{ text('历史', 'History') }}
-                </el-button>
-                <el-button link type="danger" :icon="Delete" @click.stop="handleDelete(row)">
-                  {{ text('删除', 'Delete') }}
-                </el-button>
+                <div class="row-actions">
+                  <el-button link type="primary" :icon="EditPen" @click.stop="openEdit(row)">
+                    {{ text('编辑', 'Edit') }}
+                  </el-button>
+                  <el-button link :icon="Clock" @click.stop="showHistory(row)">
+                    {{ text('历史', 'History') }}
+                  </el-button>
+                  <el-button link type="danger" :icon="Delete" @click.stop="handleDelete(row)">
+                    {{ text('删除', 'Delete') }}
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -387,7 +383,13 @@ onMounted(fetchConfigs)
       </div>
     </section>
 
-    <el-drawer v-model="editorVisible" :title="editorMode === 'create' ? text('新建配置', 'New config') : text('发布配置', 'Publish config')" size="620px">
+    <el-drawer
+      v-model="editorVisible"
+      :title="editorMode === 'create' ? text('新建配置', 'New config') : text('发布配置', 'Publish config')"
+      direction="rtl"
+      size="620px"
+      class="form-drawer"
+    >
       <div class="drawer-form">
         <el-form label-position="top">
           <div class="form-grid">
@@ -431,7 +433,7 @@ onMounted(fetchConfigs)
       </template>
     </el-drawer>
 
-    <el-drawer v-model="historyVisible" :title="text('配置历史', 'Config history')" size="520px">
+    <el-drawer v-model="historyVisible" :title="text('配置历史', 'Config history')" direction="rtl" size="520px">
       <div class="history-list">
         <article v-for="item in selectedHistory" :key="`${item.revision}-${item.created_at}`" class="history-item">
           <div class="history-dot"></div>
@@ -454,7 +456,7 @@ onMounted(fetchConfigs)
   display: flex;
   flex-direction: column;
   gap: 0;
-  height: calc(100vh - var(--header-height) - 48px);
+  height: 100%;
   min-height: 0;
 }
 
@@ -590,10 +592,10 @@ onMounted(fetchConfigs)
 .pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 6px;
+  padding: 0;
   border-radius: 6px;
-  background: rgba(148, 163, 184, 0.1);
+  background: transparent;
 }
 
 .pill-group button {
@@ -604,7 +606,7 @@ onMounted(fetchConfigs)
   padding: 0 10px;
   border: 0;
   border-radius: 4px;
-  background: transparent;
+  background: var(--control-muted-bg);
   color: var(--text-muted);
   font-family: inherit;
   font-size: 13px;
@@ -627,9 +629,11 @@ onMounted(fetchConfigs)
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .table-wrap {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -639,6 +643,9 @@ onMounted(fetchConfigs)
 }
 
 :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+  height: auto !important;
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
   --el-table-row-hover-bg-color: rgba(59, 130, 246, 0.04);
@@ -652,8 +659,14 @@ onMounted(fetchConfigs)
   display: none;
 }
 
-:deep(.selected-row td.el-table__cell) {
-  background: rgba(59, 130, 246, 0.06) !important;
+:deep(.el-table__inner-wrapper) {
+  min-height: 0;
+}
+
+:deep(.el-table__body-wrapper) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .primary-cell {
@@ -685,6 +698,21 @@ onMounted(fetchConfigs)
   font-weight: 700;
 }
 
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.row-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.row-actions :deep(.el-button span) {
+  white-space: nowrap;
+}
+
 .mono-chip,
 .fingerprint code,
 .history-item code,
@@ -695,11 +723,17 @@ onMounted(fetchConfigs)
 .control-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  padding-top: 10px;
+  margin-top: auto;
+  padding-top: 14px;
   color: var(--text-muted);
   font-size: 13px;
+  flex-shrink: 0;
+}
+
+.control-footer > span {
+  margin-right: auto;
 }
 
 .detail-panel {
@@ -907,8 +941,8 @@ onMounted(fetchConfigs)
 
 @media (max-width: 760px) {
   .control-shell {
-    height: auto;
-    min-height: calc(100vh - var(--header-height) - 48px);
+    height: 100%;
+    min-height: 0;
   }
 
   .hero-stats,

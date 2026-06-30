@@ -505,14 +505,15 @@ onMounted(fetchCluster)
     </section>
     </div>
 
-    <!-- Add Node Dialog -->
-    <el-dialog
+    <!-- Add Node Drawer -->
+    <el-drawer
       v-model="showAddDialog"
       :title="t.cluster.addNode"
-      width="560px"
+      direction="rtl"
+      size="560px"
       append-to-body
       @close="addForms = [{ protocol: 'http://', host: '', port: '' }]"
-      class="glass-dialog"
+      class="form-drawer"
     >
       <div class="add-node-form">
         <div v-for="(form, index) in addForms" :key="index" class="node-input-row">
@@ -533,7 +534,7 @@ onMounted(fetchCluster)
         <el-button @click="showAddDialog = false">{{ t.common.cancel }}</el-button>
         <el-button type="primary" @click="handleAdd">{{ t.common.confirm }}</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -1430,6 +1431,7 @@ onMounted(fetchCluster)
     grid-template-columns: 1fr;
   }
 }
+
 </style>
 
 <style scoped>
@@ -1791,6 +1793,7 @@ onMounted(fetchCluster)
   }
 }
 </style>
+
 
 <style scoped>
 .card-grid.card-grid {
@@ -3247,6 +3250,348 @@ onMounted(fetchCluster)
   }
 
   .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style scoped>
+/* Node card redesign override: final layer. */
+.card-grid.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(440px, 520px));
+  justify-content: start;
+  align-content: start;
+  gap: 14px;
+  padding: 2px 0 12px;
+}
+
+.node-card.node-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 132px;
+  padding: 18px 18px 14px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: var(--bg-secondary);
+  box-shadow: none;
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.node-card.node-card:hover {
+  transform: none;
+  border-color: rgba(59, 130, 246, 0.32);
+  background: var(--bg-secondary);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.node-card.node-card.is-local {
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.node-card.node-card.is-local:hover {
+  border-color: rgba(16, 185, 129, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.1);
+}
+
+.node-card.node-card.is-offline {
+  border-color: rgba(148, 163, 184, 0.2);
+  opacity: 0.78;
+}
+
+.node-card.node-card .card-accent {
+  position: absolute;
+  inset: 16px auto 16px 0;
+  width: 3px;
+  height: auto;
+  border-radius: 0 999px 999px 0;
+  background: var(--accent-blue);
+}
+
+.node-card.node-card.is-local .card-accent {
+  background: var(--accent-green);
+}
+
+.node-card.node-card.is-offline .card-accent {
+  background: var(--text-muted);
+}
+
+.node-card.node-card .card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 150px 0 0;
+}
+
+.node-card.node-card .card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.node-card.node-card .card-symbol {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--accent-blue);
+  font-size: 20px;
+}
+
+.node-card.node-card.is-local .card-symbol {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.node-card.node-card.is-offline .card-symbol {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(148, 163, 184, 0.09);
+  color: var(--text-muted);
+}
+
+.node-card.node-card .card-copy {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+}
+
+.node-card.node-card .card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 0 4px;
+  flex-wrap: wrap;
+}
+
+.node-card.node-card .card-title {
+  min-width: 0;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-card.node-card .card-current-mark {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.node-card.node-card .card-current-mark::before {
+  display: none;
+}
+
+.node-card.node-card .card-hostline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-card.node-card .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 0 0 56px;
+}
+
+.node-card.node-card .compact-meta-row:first-child {
+  position: absolute;
+  top: 17px;
+  right: 18px;
+  z-index: 2;
+  display: block;
+}
+
+.node-card.node-card .compact-meta-row:first-child .compact-label {
+  display: none;
+}
+
+.node-card.node-card .compact-meta-row:first-child .node-meta-pills {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.node-card.node-card .meta-chip {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.node-card.node-card .meta-chip.online {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green);
+}
+
+.node-card.node-card .meta-chip.offline {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+}
+
+.node-card.node-card .meta-chip.role.leader {
+  border-color: rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--accent-red);
+}
+
+.node-card.node-card .meta-chip.role.follower {
+  border-color: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+}
+
+.node-card.node-card .meta-chip.role.candidate {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(245, 158, 11, 0.11);
+  color: var(--accent-orange);
+}
+
+.node-card.node-card .meta-chip .status-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.node-card.node-card .protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.node-card.node-card .protocol-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(148, 163, 184, 0.055);
+  box-shadow: none;
+}
+
+.node-card.node-card .protocol-card.http {
+  border-color: rgba(59, 130, 246, 0.16);
+}
+
+.node-card.node-card .protocol-card.grpc {
+  border-color: rgba(16, 185, 129, 0.16);
+}
+
+.node-card.node-card .protocol-name {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.node-card.node-card .protocol-port {
+  min-width: 0;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-card.node-card .card-footer {
+  display: none;
+  justify-content: flex-end;
+  padding: 2px 0 0;
+  margin: 0 0 0 56px;
+  border: 0;
+}
+
+.node-card.node-card:has(.card-actions .el-button) .card-footer {
+  display: flex;
+}
+
+.node-card.node-card .card-footnote {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .card-grid.card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-grid.card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .node-card.node-card {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .node-card.node-card .card-head {
+    padding-right: 0;
+  }
+
+  .node-card.node-card .compact-meta-row:first-child {
+    position: static;
+    margin-left: 52px;
+  }
+
+  .node-card.node-card .compact-meta-row:first-child .node-meta-pills {
+    justify-content: flex-start;
+  }
+
+  .node-card.node-card .card-body,
+  .node-card.node-card .card-footer {
+    margin-left: 52px;
+  }
+}
+
+@media (max-width: 520px) {
+  .node-card.node-card .protocol-grid {
     grid-template-columns: 1fr;
   }
 }

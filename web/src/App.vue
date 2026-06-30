@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Guide, Moon, QuestionFilled, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, Compass, Moon, QuestionFilled, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { useI18n } from './utils/i18n'
 import UiGuide, { type GuideStep } from './components/ui-guide.vue'
 import { getGuideStatus, updateGuideStatus } from './api/registry'
@@ -193,13 +193,13 @@ const currentTitle = computed(() => {
   if (route.path.startsWith('/settings')) return t.value.nav.settings
   if (route.path.startsWith('/docs')) return t.value.nav.docs
   if (route.path.startsWith('/profile')) return text('个人中心', 'Profile')
-  return 'Focalors'
+  return t.value.common.title
 })
 
 watch(
   [() => route.fullPath, locale],
   () => {
-    document.title = `${currentTitle.value} - Focalors`
+    document.title = `${currentTitle.value} - ${t.value.common.title}`
   },
   { immediate: true },
 )
@@ -349,7 +349,7 @@ onBeforeUnmount(() => {
             @keydown.space.prevent="restartGuide"
             :title="text('界面导览', 'Product tour')"
           >
-            <el-icon><Guide /></el-icon>
+            <el-icon><Compass /></el-icon>
           </div>
 
           <router-link to="/docs" class="header-btn" :title="t.nav.docs">

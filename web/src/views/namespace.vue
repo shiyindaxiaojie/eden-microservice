@@ -417,11 +417,12 @@ onMounted(() => {
       </section>
     </div>
 
-    <el-dialog
+    <el-drawer
       v-model="dialogVisible"
       :title="dialogType === 'add' ? text('新建命名空间', 'New') : text('编辑', 'Edit')"
-      width="500px"
-      class="glass-dialog"
+      direction="rtl"
+      size="460px"
+      class="form-drawer"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <el-form-item :label="text('名称', 'Name')" prop="name">
@@ -437,7 +438,7 @@ onMounted(() => {
           <el-button type="primary" @click="submitForm" :loading="submitting">{{ text('确定', 'Confirm') }}</el-button>
         </span>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 

@@ -277,9 +277,16 @@ html, body, #app {
 
 .page-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px var(--page-gutter-x);
   background: var(--bg-primary);
+}
+
+.page-body:has(.svc-shell),
+.page-body:has(.control-shell),
+.page-body:has(.route-shell) {
+  overflow: hidden;
 }
 
 /* Scrollbar */
@@ -292,6 +299,38 @@ html, body, #app {
 .page-body::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
+}
+
+/* Shared right-side editing drawers */
+.form-drawer.el-drawer {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.form-drawer .el-drawer__header {
+  min-height: 64px;
+  margin: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.form-drawer .el-drawer__body {
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.form-drawer .el-drawer__footer {
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.form-drawer .dialog-footer,
+.form-drawer .drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 /* Stat Cards */

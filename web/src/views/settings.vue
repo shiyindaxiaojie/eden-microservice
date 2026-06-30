@@ -164,7 +164,7 @@ const TEMPLATE_VARIABLES = computed<TemplateVariable[]>(() => [
 ])
 
 function getDynamicTitleTemplate() {
-  return text('芙卡洛斯告警 - {{ event_name }}', 'Focalors Alert - {{ event_name }}', 'Focalors アラート - {{ event_name }}')
+  return text('微服务平台告警 - {{ event_name }}', 'Microservices Alert - {{ event_name }}', 'Microservices アラート - {{ event_name }}')
 }
 
 function getDynamicBodyTemplate(eventCode: string) {
@@ -1721,7 +1721,13 @@ onMounted(() => {
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="showDialog" :title="t.settings.newApiKey" width="560px" top="6vh" class="glass-dialog credential-dialog">
+    <el-drawer
+      v-model="showDialog"
+      :title="t.settings.newApiKey"
+      direction="rtl"
+      size="560px"
+      class="form-drawer credential-drawer"
+    >
       <el-form label-position="top" class="compact-form credential-dialog-form">
         <el-form-item label="API Key">
           <div class="key-preview-shell">
@@ -1755,7 +1761,7 @@ onMounted(() => {
         <el-button @click="showDialog = false">{{ t.common.cancel }}</el-button>
         <el-button type="primary" @click="handleGenerate">{{ text('创建', 'Create') }}</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
 
   </div>
 </template>
@@ -3205,60 +3211,35 @@ onMounted(() => {
   flex: 1;
 }
 
-:deep(.credential-dialog.el-dialog) {
+:deep(.credential-drawer.el-drawer) {
   width: min(560px, calc(100vw - 24px)) !important;
-  max-height: 92vh;
-  margin-bottom: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 18px;
 }
 
-:deep(.credential-dialog .el-dialog__header) {
+:deep(.credential-drawer .el-drawer__header) {
   margin-right: 0;
-  padding: 20px 22px 6px;
 }
 
-:deep(.credential-dialog .el-dialog__title) {
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: var(--text-primary);
-}
-
-:deep(.credential-dialog .el-dialog__headerbtn) {
-  top: 20px;
-  right: 20px;
-}
-
-:deep(.credential-dialog .el-dialog__body) {
-  padding: 0 22px 8px;
-}
-
-:deep(.credential-dialog .el-dialog__footer) {
-  padding: 14px 22px 20px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
-}
-
-:deep(.credential-dialog .el-form-item) {
+:deep(.credential-drawer .el-form-item) {
   margin-bottom: 14px;
 }
 
-:deep(.credential-dialog .el-form-item__label) {
+:deep(.credential-drawer .el-form-item__label) {
   padding-bottom: 6px;
   color: var(--text-primary);
   font-weight: 700;
   line-height: 1.4;
 }
 
-:deep(.credential-dialog .el-input__wrapper),
-:deep(.credential-dialog .el-select__wrapper) {
+:deep(.credential-drawer .el-input__wrapper),
+:deep(.credential-drawer .el-select__wrapper) {
   min-height: 42px;
   border-radius: 12px;
 }
 
-:deep(.credential-dialog .el-textarea__inner) {
+:deep(.credential-drawer .el-textarea__inner) {
   min-height: 84px !important;
   border-radius: 12px;
 }

@@ -482,15 +482,17 @@ onMounted(fetchRoutes)
             </el-table-column>
             <el-table-column :label="text('操作', 'Actions')" width="220" fixed="right">
               <template #default="{ row }">
-                <el-button link :icon="Switch" @click.stop="handleToggle(row)">
-                  {{ row.enabled ? text('停用', 'Disable') : text('启用', 'Enable') }}
-                </el-button>
-                <el-button link type="primary" :icon="EditPen" @click.stop="openEdit(row)">
-                  {{ text('编辑', 'Edit') }}
-                </el-button>
-                <el-button link type="danger" :icon="Delete" @click.stop="handleDelete(row)">
-                  {{ text('删除', 'Delete') }}
-                </el-button>
+                <div class="row-actions">
+                  <el-button link :icon="Switch" @click.stop="handleToggle(row)">
+                    {{ row.enabled ? text('停用', 'Disable') : text('启用', 'Enable') }}
+                  </el-button>
+                  <el-button link type="primary" :icon="EditPen" @click.stop="openEdit(row)">
+                    {{ text('编辑', 'Edit') }}
+                  </el-button>
+                  <el-button link type="danger" :icon="Delete" @click.stop="handleDelete(row)">
+                    {{ text('删除', 'Delete') }}
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -513,7 +515,13 @@ onMounted(fetchRoutes)
       </div>
     </section>
 
-    <el-drawer v-model="drawerVisible" :title="editorMode === 'create' ? text('新建路由', 'New route') : text('编辑路由', 'Edit route')" size="640px">
+    <el-drawer
+      v-model="drawerVisible"
+      :title="editorMode === 'create' ? text('新建路由', 'New route') : text('编辑路由', 'Edit route')"
+      direction="rtl"
+      size="640px"
+      class="form-drawer"
+    >
       <div class="drawer-form">
         <el-form label-position="top">
           <div class="form-grid">
@@ -616,7 +624,7 @@ onMounted(fetchRoutes)
   display: flex;
   flex-direction: column;
   gap: 0;
-  height: calc(100vh - var(--header-height) - 48px);
+  height: 100%;
   min-height: 0;
 }
 
@@ -802,9 +810,11 @@ onMounted(fetchRoutes)
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .route-list {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -814,6 +824,9 @@ onMounted(fetchRoutes)
 }
 
 :deep(.el-table) {
+  flex: 1;
+  min-height: 0;
+  height: auto !important;
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
   --el-table-row-hover-bg-color: rgba(59, 130, 246, 0.04);
@@ -827,8 +840,18 @@ onMounted(fetchRoutes)
   display: none;
 }
 
+:deep(.el-table__inner-wrapper) {
+  min-height: 0;
+}
+
 :deep(.selected-row td.el-table__cell) {
   background: rgba(59, 130, 246, 0.06) !important;
+}
+
+:deep(.el-table__body-wrapper) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .priority-cell {
@@ -914,14 +937,35 @@ onMounted(fetchRoutes)
   background: rgba(148, 163, 184, 0.14);
 }
 
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.row-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.row-actions :deep(.el-button span) {
+  white-space: nowrap;
+}
+
 .route-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  padding-top: 10px;
+  margin-top: auto;
+  padding-top: 14px;
   color: var(--text-muted);
   font-size: 13px;
+  flex-shrink: 0;
+}
+
+.route-footer > span {
+  margin-right: auto;
 }
 
 .route-detail {
@@ -1132,8 +1176,8 @@ onMounted(fetchRoutes)
 
 @media (max-width: 760px) {
   .route-shell {
-    height: auto;
-    min-height: calc(100vh - var(--header-height) - 48px);
+    height: 100%;
+    min-height: 0;
   }
 
   .route-metrics,

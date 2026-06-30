@@ -33,7 +33,7 @@ export const messages = {
       docs: 'Documentation',
     },
     common: {
-      title: 'Focalors',
+      title: 'Microservices',
       refresh: 'Refresh',
       back: 'Back',
       actions: 'Actions',
@@ -377,7 +377,7 @@ export const messages = {
       docs: '操作文档',
     },
     common: {
-      title: 'Focalors',
+      title: '微服务平台',
       refresh: '刷新',
       back: '返回',
       actions: '操作',

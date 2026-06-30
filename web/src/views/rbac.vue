@@ -510,12 +510,12 @@ onMounted(() => {
       </section>
     </div>
 
-    <el-dialog
+    <el-drawer
       v-model="dialogVisible"
       :title="dialogType === 'add' ? text('添加用户', 'Add User') : text('编辑用户', 'Edit User')"
-      width="560px"
-      top="4vh"
-      class="glass-dialog user-dialog"
+      direction="rtl"
+      size="560px"
+      class="form-drawer user-drawer"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="user-dialog-form">
         <div class="form-grid">
@@ -569,7 +569,7 @@ onMounted(() => {
           <el-button type="primary" @click="submitForm" :loading="submitting">{{ text('确定', 'Confirm') }}</el-button>
         </span>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -1051,56 +1051,44 @@ onMounted(() => {
   background: rgba(245, 158, 11, 0.08);
 }
 
-:deep(.user-dialog.el-dialog) {
+:deep(.user-drawer.el-drawer) {
   width: min(560px, calc(100vw - 24px)) !important;
-  max-height: 92vh;
-  margin-bottom: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 16px;
 }
 
-:deep(.user-dialog .el-dialog__header) {
+:deep(.user-drawer .el-drawer__header) {
   margin-right: 0;
-  padding: 18px 20px 10px;
   flex-shrink: 0;
 }
 
-:deep(.user-dialog .el-dialog__headerbtn) {
-  top: 18px;
-  right: 18px;
-}
-
-:deep(.user-dialog .el-dialog__body) {
+:deep(.user-drawer .el-drawer__body) {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-  padding: 0 20px 6px;
+  overflow-y: auto;
 }
 
-:deep(.user-dialog .el-dialog__footer) {
+:deep(.user-drawer .el-drawer__footer) {
   flex-shrink: 0;
-  padding: 12px 20px 18px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-:deep(.user-dialog .el-form-item) {
+:deep(.user-drawer .el-form-item) {
   margin-bottom: 12px;
 }
 
-:deep(.user-dialog .el-form-item__label) {
+:deep(.user-drawer .el-form-item__label) {
   padding-bottom: 6px;
   line-height: 1.35;
 }
 
-:deep(.user-dialog .el-input__wrapper),
-:deep(.user-dialog .el-select__wrapper) {
+:deep(.user-drawer .el-input__wrapper),
+:deep(.user-drawer .el-select__wrapper) {
   min-height: 38px;
   border-radius: 10px;
 }
 
-:deep(.user-dialog .el-textarea__inner) {
+:deep(.user-drawer .el-textarea__inner) {
   min-height: 72px !important;
   border-radius: 10px;
 }
@@ -1212,21 +1200,8 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  :deep(.user-dialog.el-dialog) {
+  :deep(.user-drawer.el-drawer) {
     width: calc(100vw - 16px) !important;
-    max-height: 94vh;
-  }
-
-  :deep(.user-dialog .el-dialog__header) {
-    padding: 16px 16px 8px;
-  }
-
-  :deep(.user-dialog .el-dialog__body) {
-    padding: 0 16px 4px;
-  }
-
-  :deep(.user-dialog .el-dialog__footer) {
-    padding: 10px 16px 16px;
   }
 }
 </style>
