@@ -1261,12 +1261,40 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .dashboard-shell {
+  --surface-color: var(--bg-secondary);
+  --text-heading: var(--text-primary);
+  --text-body: var(--text-secondary);
+  --text-dim: var(--text-muted);
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace;
+  --dashboard-panel-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  --dashboard-card-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  --dashboard-card-hover-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+  --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --dashboard-system-bg:
+    radial-gradient(circle at 100% 0%, rgba(191, 219, 254, 0.35), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
+  --dashboard-activity-head-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0));
+  --dashboard-chart-bg: #ffffff;
+  --dashboard-event-dot-bg: #ffffff;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow: hidden;
+}
+
+:global(html[data-theme="dark"] .dashboard-shell) {
+  --dashboard-panel-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  --dashboard-card-shadow: none;
+  --dashboard-card-hover-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
+  --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --dashboard-system-bg:
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(15, 23, 42, 0.98));
+  --dashboard-activity-head-bg: linear-gradient(180deg, rgba(30, 41, 59, 0.76), rgba(15, 23, 42, 0.18));
+  --dashboard-chart-bg: rgba(15, 23, 42, 0.72);
+  --dashboard-event-dot-bg: var(--bg-secondary);
 }
 
 .metric-grid {
@@ -1291,7 +1319,7 @@ onBeforeUnmount(() => {
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: var(--bg-secondary);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--dashboard-card-shadow);
   transition: box-shadow 0.2s ease;
 }
 
@@ -1308,7 +1336,7 @@ onBeforeUnmount(() => {
 }
 
 .metric-card:hover {
-  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--dashboard-card-hover-shadow);
 }
 
 .metric-card.is-blue::before {
@@ -1354,7 +1382,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  box-shadow: var(--dashboard-icon-inset);
 }
 
 .metric-heading {
@@ -1507,7 +1535,7 @@ onBeforeUnmount(() => {
 }
 
 .memory-full-chart {
-  background: #fff;
+  background: var(--dashboard-chart-bg);
   border-radius: 12px;
   padding: 20px;
   box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.02);
@@ -1612,10 +1640,8 @@ onBeforeUnmount(() => {
   padding: 20px 22px;
   border-radius: 24px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  background:
-    radial-gradient(circle at 100% 0%, rgba(191, 219, 254, 0.35), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+  background: var(--dashboard-system-bg);
+  box-shadow: var(--dashboard-panel-shadow);
 }
 
 .system-summary {
@@ -1731,7 +1757,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--dashboard-activity-head-bg);
   backdrop-filter: blur(8px);
   position: sticky;
   top: 0;
@@ -1798,7 +1824,7 @@ onBeforeUnmount(() => {
   height: 10px;
   border-radius: 50%;
   border: 2px solid currentColor;
-  background: #fff;
+  background: var(--dashboard-event-dot-bg);
   z-index: 1;
 }
 
@@ -2060,7 +2086,7 @@ onBeforeUnmount(() => {
   border-radius: 24px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: var(--bg-secondary);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--dashboard-panel-shadow);
 }
 
 .activity-head {
@@ -2071,7 +2097,7 @@ onBeforeUnmount(() => {
   padding: 16px 20px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   flex-shrink: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0));
+  background: var(--dashboard-activity-head-bg);
 }
 
 .panel-tabs {

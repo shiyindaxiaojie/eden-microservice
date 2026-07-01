@@ -3,11 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown, Compass, Moon, QuestionFilled, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { useI18n } from './utils/i18n'
+import { applyTheme, persistTheme, readStoredTheme, type AppTheme } from './utils/theme'
 import UiGuide, { type GuideStep } from './components/ui-guide.vue'
 import { getGuideStatus, updateGuideStatus } from './api/registry'
 import logo from './assets/logo.png'
 
 const GUIDE_STORAGE_KEY = 'registry-ui-guide-completed-v1'
+const FIXED_DOCUMENT_TITLE = '微服务平台'
 
 const { locale, t, toggleLocale, text, nextLocaleTitle, shortLocaleLabel } = useI18n()
 const route = useRoute()
@@ -16,7 +18,7 @@ const router = useRouter()
 const userRole = ref(localStorage.getItem('user_role') || '')
 const username = ref(localStorage.getItem('username') || '')
 const nickname = ref(localStorage.getItem('nickname') || '')
-const theme = ref(localStorage.getItem('theme') || 'light')
+const theme = ref<AppTheme>(readStoredTheme())
 const showGuide = ref(false)
 
 const guideSteps: GuideStep[] = [
@@ -199,7 +201,7 @@ const currentTitle = computed(() => {
 watch(
   [() => route.fullPath, locale],
   () => {
-    document.title = `${currentTitle.value} - ${t.value.common.title}`
+    document.title = FIXED_DOCUMENT_TITLE
   },
   { immediate: true },
 )
@@ -230,19 +232,10 @@ function isActive(path: string) {
   return route.path.startsWith(path)
 }
 
-function applyTheme(nextTheme: string) {
-  document.documentElement.setAttribute('data-theme', nextTheme)
-  if (nextTheme === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-}
-
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   applyTheme(theme.value)
-  setCookie('theme', theme.value, 365)
+  persistTheme(theme.value)
 }
 
 function restartGuide() {
@@ -256,24 +249,15 @@ function finishGuide() {
   updateGuideStatus(true).catch(err => console.error('Failed to sync guide status:', err))
 }
 
-function setCookie(name: string, value: string, daysUp: number) {
-  const expires = new Date()
-  expires.setTime(expires.getTime() + daysUp * 24 * 60 * 60 * 1000)
-  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`
-}
-
-function getCookie(name: string) {
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
-  return match ? match[2] : null
-}
-
 function handleStorageChange() {
   username.value = localStorage.getItem('username') || ''
   nickname.value = localStorage.getItem('nickname') || ''
+  theme.value = readStoredTheme()
+  applyTheme(theme.value)
 }
 
 onMounted(async () => {
-  const savedTheme = getCookie('theme') || 'light'
+  const savedTheme = readStoredTheme()
   theme.value = savedTheme
   applyTheme(savedTheme)
 
@@ -360,7 +344,12 @@ onBeforeUnmount(() => {
             <span class="lang-text">{{ shortLocaleLabel }}</span>
           </div>
 
-          <div class="header-btn" @click="toggleTheme" :title="theme === 'dark' ? t.settings.light : t.settings.dark">
+          <div
+            class="header-btn"
+            data-theme-toggle
+            @click="toggleTheme"
+            :title="theme === 'dark' ? t.settings.light : t.settings.dark"
+          >
             <el-icon v-if="theme === 'dark'"><Sunny /></el-icon>
             <el-icon v-else><Moon /></el-icon>
           </div>

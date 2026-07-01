@@ -15,6 +15,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useI18n } from '../utils/i18n'
 import { sha256 } from '../utils/crypto'
+import { applyTheme, normalizeTheme, persistTheme, readStoredTheme, type AppTheme } from '../utils/theme'
 
 const { locale, t, text, setLocale, supportedLocales, localeLabels } = useI18n()
 
@@ -22,7 +23,7 @@ const { locale, t, text, setLocale, supportedLocales, localeLabels } = useI18n()
 const username = ref(localStorage.getItem('username') || '')
 const nickname = ref(localStorage.getItem('nickname') || '')
 const role = ref(localStorage.getItem('user_role') || '')
-const theme = ref(localStorage.getItem('theme') || 'light')
+const theme = ref<AppTheme>(readStoredTheme())
 const phone = ref(localStorage.getItem('user_phone') || '')
 const email = ref(localStorage.getItem('user_email') || '')
 
@@ -34,13 +35,10 @@ const pwdForm = ref({
 })
 
 // Visual only preview for theme
-function previewTheme(val: any) {
-  document.documentElement.setAttribute('data-theme', val)
-  if (val === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
+function previewTheme(val: string | number | boolean | undefined) {
+  const nextTheme = normalizeTheme(String(val))
+  theme.value = nextTheme
+  applyTheme(nextTheme)
 }
 
 async function saveAllSettings() {
@@ -69,8 +67,7 @@ async function saveAllSettings() {
     localStorage.setItem('nickname', nickname.value)
     localStorage.setItem('user_phone', phone.value)
     localStorage.setItem('user_email', email.value)
-    localStorage.setItem('theme', theme.value)
-    document.cookie = `theme=${theme.value};path=/;max-age=31536000`
+    persistTheme(theme.value)
     
     setLocale(locale.value)
     
@@ -160,9 +157,9 @@ async function fetchProfile() {
 }
 
 onMounted(() => {
-  const savedTheme = localStorage.getItem('theme') || 'light'
+  const savedTheme = readStoredTheme()
   theme.value = savedTheme
-  previewTheme(savedTheme)
+  applyTheme(savedTheme)
   fetchProfile()
 })
 </script>

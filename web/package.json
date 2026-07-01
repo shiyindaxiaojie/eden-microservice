@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "verify:theme": "node scripts/verify-login-theme.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
