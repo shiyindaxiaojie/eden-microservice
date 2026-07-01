@@ -82,6 +82,7 @@ function getBubbleStyle(index: number) {
   const delay = -1 * ((index * 0.72) % 10)
   const size = isSide ? 20 + (index % 6) * 8 : 10 + (index % 4) * 5
   const opacity = isSide ? 0.36 + (index % 5) * 0.08 : 0.2 + (index % 4) * 0.05
+  const scale = 0.82 + (index % 5) * 0.08
 
   return {
     left: `${left}%`,
@@ -90,9 +91,13 @@ function getBubbleStyle(index: number) {
     animationDuration: `${duration}s`,
     animationDelay: `${delay}s`,
     '--bubble-opacity': `${opacity}`,
+    '--bubble-soft-drift': `${Math.round(drift * 0.25)}px`,
     '--bubble-mid-drift': `${Math.round(drift / 2)}px`,
+    '--bubble-wide-drift': `${Math.round(drift * 0.72)}px`,
     '--bubble-end-drift': `${drift}px`,
-    '--bubble-scale': `${0.82 + (index % 5) * 0.08}`,
+    '--bubble-scale': `${scale}`,
+    '--bubble-scale-small': `${scale * 0.93}`,
+    '--bubble-scale-large': `${scale * 1.12}`,
   }
 }
 
@@ -126,8 +131,17 @@ onMounted(() => {
             <img :src="logo" :alt="t.common.title" class="logo-icon" />
             <span class="logo-text">{{ t.common.title }}</span>
           </a>
+          <span class="nav-divider" aria-hidden="true"></span>
           <nav class="nav-menu" :aria-label="text('\u9876\u90e8\u5bfc\u822a', 'Top navigation')">
             <button type="button" class="nav-item active">{{ text('\u9996\u9875', 'Home') }}</button>
+            <a
+              href="https://mengxiangge.netlify.app"
+              class="nav-item"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ text('\u7f51\u7ad9', 'Website') }}
+            </a>
             <button type="button" class="nav-item nav-link-button" @click="showDocsComingSoon">{{ text('\u6587\u6863', 'Docs') }}</button>
             <a
               href="https://github.com/shiyindaxiaojie/eden-registry/issues/new"
@@ -256,10 +270,11 @@ onMounted(() => {
     radial-gradient(circle at 18% 18%, rgba(125, 211, 252, 0.34), transparent 30%),
     radial-gradient(circle at 82% 78%, rgba(255, 191, 36, 0.18), transparent 26%),
     linear-gradient(135deg, #0b1d33 0%, #12395f 46%, #07101f 100%);
-  --login-bg-filter: brightness(0.58) saturate(0.95);
+  --login-bg-filter: none;
   --login-bg-opacity: 1;
-  --login-bg-width: 116%;
-  --login-bg-transform: translateX(-10%);
+  --login-bg-width: 100%;
+  --login-bg-transform: translateX(-6%);
+  --login-bg-position: center center;
   --login-bg-overlay:
     linear-gradient(90deg, rgba(8, 15, 28, 0.42) 0%, rgba(10, 24, 42, 0.18) 42%, rgba(4, 10, 24, 0.74) 100%),
     linear-gradient(180deg, rgba(4, 10, 24, 0.16) 0%, rgba(4, 10, 24, 0.5) 100%),
@@ -271,14 +286,19 @@ onMounted(() => {
   --login-nav-icon: rgba(255, 255, 255, 0.86);
   --login-brand-text: linear-gradient(90deg, #dff8ff, #dff8ff);
   --login-brand-shadow: none;
+  --login-hero-title-color: #ffffff;
+  --login-hero-title-shadow: none;
   --login-form-text: #102a45;
   --login-form-muted: rgba(239, 248, 255, 0.88);
   --login-field-bg: rgba(246, 251, 255, 0.78);
   --login-field-border: rgba(255, 255, 255, 0.62);
   --login-field-placeholder: rgba(82, 106, 136, 0.68);
+  --login-field-shadow: none;
+  --login-field-focus-shadow: none;
   --login-button-bg: #ffc247;
   --login-button-hover-bg: #ffd06a;
   --login-button-text: #102a45;
+  --login-button-shadow: none;
   --login-close-color: #94a3b8;
   --login-close-hover: #475569;
   --login-disabled-bg: #e8edf5;
@@ -291,28 +311,37 @@ onMounted(() => {
 }
 
 .mihoyo-login-page.theme-light {
-  --login-page-bg: #e8f7ff;
-  --login-scene-bg:
-    radial-gradient(circle at 16% 18%, rgba(165, 243, 252, 0.58), transparent 30%),
-    radial-gradient(circle at 70% 82%, rgba(255, 214, 102, 0.28), transparent 28%),
-    linear-gradient(135deg, #dff8ff 0%, #bfe8ff 42%, #315e9a 100%);
-  --login-bg-filter: brightness(0.88) saturate(1.04);
-  --login-bg-width: 116%;
-  --login-bg-transform: translateX(-11%);
+  --login-page-bg: #ffffff;
+  --login-scene-bg: #ffffff;
+  --login-bg-filter: none;
+  --login-bg-width: 100%;
+  --login-bg-transform: translateX(-6%);
+  --login-bg-position: center center;
   --login-bg-overlay:
-    linear-gradient(90deg, rgba(241, 253, 255, 0.28) 0%, rgba(224, 247, 255, 0.08) 44%, rgba(7, 22, 39, 0.44) 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(13, 49, 82, 0.12) 100%);
+    linear-gradient(90deg, rgba(247, 253, 255, 0.08) 0%, rgba(247, 253, 255, 0) 48%, rgba(6, 19, 38, 0.44) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(8, 28, 52, 0.1) 100%);
   --login-nav-bg: rgba(255, 255, 255, 0.68);
   --login-nav-border: rgba(15, 23, 42, 0.08);
   --login-nav-text: rgba(30, 41, 59, 0.72);
   --login-nav-text-active: #0f172a;
   --login-nav-icon: rgba(30, 41, 59, 0.78);
-  --login-brand-text: linear-gradient(90deg, #047fa8, #047fa8);
+  --login-brand-text: linear-gradient(90deg, #006f93, #006f93);
   --login-brand-shadow: none;
-  --login-field-bg: rgba(232, 244, 255, 0.82);
-  --login-field-border: rgba(255, 255, 255, 0.76);
+  --login-hero-title-color: #006f93;
+  --login-hero-title-shadow: none;
+  --login-form-muted: rgba(45, 71, 96, 0.82);
+  --login-field-bg: rgba(248, 252, 255, 0.86);
+  --login-field-border: rgba(255, 255, 255, 0.96);
+  --login-field-placeholder: rgba(60, 83, 108, 0.68);
+  --login-field-shadow:
+    0 14px 30px rgba(30, 69, 106, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --login-field-focus-shadow:
+    0 16px 34px rgba(30, 69, 106, 0.24),
+    0 0 0 3px rgba(255, 191, 36, 0.18);
   --login-button-bg: #ffc247;
   --login-button-hover-bg: #ffd06a;
+  --login-button-shadow: 0 16px 34px rgba(190, 118, 12, 0.24);
 }
 
 .mihoyo-login-page.theme-dark {
@@ -321,12 +350,13 @@ onMounted(() => {
     radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.32), transparent 32%),
     radial-gradient(circle at 78% 78%, rgba(245, 158, 11, 0.2), transparent 28%),
     linear-gradient(135deg, #061326 0%, #0f2f55 46%, #030712 100%);
-  --login-bg-filter: brightness(0.72) saturate(1.02);
-  --login-bg-width: 116%;
-  --login-bg-transform: translateX(-10%);
+  --login-bg-filter: none;
+  --login-bg-width: 100%;
+  --login-bg-transform: translateX(-6%);
+  --login-bg-position: center center;
   --login-bg-overlay:
-    linear-gradient(90deg, rgba(3, 7, 18, 0.34) 0%, rgba(8, 18, 34, 0.14) 42%, rgba(3, 7, 18, 0.48) 100%),
-    linear-gradient(180deg, rgba(3, 7, 18, 0.12) 0%, rgba(3, 7, 18, 0.32) 100%),
+    linear-gradient(90deg, rgba(3, 7, 18, 0.24) 0%, rgba(8, 18, 34, 0.18) 48%, rgba(3, 7, 18, 0.56) 100%),
+    linear-gradient(180deg, rgba(3, 7, 18, 0.1) 0%, rgba(3, 7, 18, 0.28) 100%),
     rgba(0, 0, 0, 0.18);
   --login-nav-bg: rgba(4, 14, 28, 0.58);
   --login-nav-border: rgba(255, 255, 255, 0.16);
@@ -355,12 +385,12 @@ onMounted(() => {
   height: 100%;
   max-width: none;
   object-fit: cover;
-  object-position: 58% center;
+  object-position: var(--login-bg-position);
   opacity: var(--login-bg-opacity);
   filter: var(--login-bg-filter);
   transform: var(--login-bg-transform);
   transform-origin: center center;
-  transition: transform 0.3s ease, filter 0.3s ease;
+  transition: filter 0.3s ease, opacity 0.3s ease;
 }
 
 .bg-overlay {
@@ -379,10 +409,16 @@ onMounted(() => {
 .bubble {
   position: absolute;
   bottom: -84px;
-  border: 1px solid rgba(191, 232, 255, 0.48);
+  border: 1px solid rgba(235, 250, 255, 0.52);
   border-radius: 999px;
-  background: rgba(191, 232, 255, 0.18);
-  box-shadow: none;
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.9) 0 5%, rgba(255, 255, 255, 0.34) 6% 10%, transparent 12%),
+    radial-gradient(ellipse at 72% 78%, rgba(111, 212, 255, 0.16), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0 54%, rgba(136, 219, 255, 0.2) 72%, rgba(255, 255, 255, 0.34) 100%);
+  box-shadow:
+    inset 2px 3px 8px rgba(255, 255, 255, 0.34),
+    inset -6px -9px 16px rgba(28, 87, 132, 0.2),
+    0 8px 20px rgba(16, 56, 92, 0.14);
   mix-blend-mode: normal;
   opacity: 0;
   user-select: none;
@@ -391,8 +427,28 @@ onMounted(() => {
 }
 
 .bubble::before {
-  display: none;
-  content: none;
+  position: absolute;
+  left: 22%;
+  top: 19%;
+  width: 18%;
+  height: 18%;
+  border-radius: 50%;
+  content: '';
+  background: rgba(255, 255, 255, 0.78);
+  filter: blur(0.6px);
+}
+
+.bubble::after {
+  position: absolute;
+  right: 15%;
+  bottom: 14%;
+  width: 34%;
+  height: 24%;
+  border-radius: 50%;
+  content: '';
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.22), transparent 68%);
+  filter: blur(1px);
+  transform: rotate(-22deg);
 }
 
 @keyframes bubbleRise {
@@ -403,15 +459,23 @@ onMounted(() => {
   10% {
     opacity: var(--bubble-opacity);
   }
-  48% {
-    transform: translate3d(var(--bubble-mid-drift), -46vh, 0) scale(var(--bubble-scale));
+  26% {
+    transform: translate3d(var(--bubble-mid-drift), -24vh, 0) scale(var(--bubble-scale-large));
     opacity: var(--bubble-opacity);
   }
-  78% {
-    opacity: calc(var(--bubble-opacity) * 0.72);
+  44% {
+    transform: translate3d(var(--bubble-soft-drift), -44vh, 0) scale(var(--bubble-scale-small));
+  }
+  62% {
+    transform: translate3d(var(--bubble-wide-drift), -68vh, 0) scale(var(--bubble-scale-large));
+    opacity: var(--bubble-opacity);
+  }
+  82% {
+    transform: translate3d(var(--bubble-end-drift), -92vh, 0) scale(var(--bubble-scale));
+    opacity: var(--bubble-opacity);
   }
   100% {
-    transform: translate3d(var(--bubble-end-drift), -116vh, 0) scale(0.72);
+    transform: translate3d(var(--bubble-end-drift), -116vh, 0) scale(0.74);
     opacity: 0;
   }
 }
@@ -425,7 +489,8 @@ onMounted(() => {
 }
 
 .nav-container {
-  min-height: 56px;
+  height: 64px;
+  min-height: 64px;
   width: 100%;
   display: flex;
   align-items: center;
@@ -444,19 +509,20 @@ onMounted(() => {
 
 .nav-left {
   min-width: 0;
-  gap: clamp(22px, 2.3vw, 34px);
+  gap: clamp(18px, 1.7vw, 24px);
 }
 
 .brand-link {
   flex: 0 1 auto;
   min-width: 0;
-  gap: 12px;
+  height: 64px;
+  gap: 10px;
   text-decoration: none;
 }
 
 .logo-icon {
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
   filter: none;
 }
@@ -471,7 +537,7 @@ onMounted(() => {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 820;
   line-height: 1;
   white-space: nowrap;
@@ -480,8 +546,16 @@ onMounted(() => {
   filter: var(--login-brand-shadow);
 }
 
+.nav-divider {
+  width: 1px;
+  height: 32px;
+  flex: 0 0 auto;
+  background: var(--login-nav-border);
+}
+
 .nav-menu {
   gap: clamp(20px, 2.1vw, 34px);
+  height: 64px;
   min-width: 0;
 }
 
@@ -489,7 +563,9 @@ onMounted(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 20px 0;
+  justify-content: center;
+  height: 64px;
+  padding: 1px 0 0;
   border: 0;
   background: transparent;
   color: var(--login-nav-text);
@@ -523,8 +599,7 @@ onMounted(() => {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.nav-item:hover::after,
-.nav-item.active::after {
+.nav-item:hover::after {
   opacity: 1;
   transform: translateX(-50%) scaleX(1);
 }
@@ -570,7 +645,7 @@ onMounted(() => {
 .login-main-content {
   position: relative;
   z-index: 2;
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 64px);
   width: 100%;
   display: flex;
   flex-direction: row;
@@ -618,12 +693,12 @@ onMounted(() => {
 .game-title {
   max-width: 100%;
   margin: 0 0 28px;
-  color: white;
+  color: var(--login-hero-title-color);
   font-size: clamp(34px, 2.7vw, 48px);
   line-height: 1.12;
   font-weight: 800;
   white-space: nowrap;
-  text-shadow: none;
+  text-shadow: var(--login-hero-title-shadow);
   opacity: 0;
   animation: magicItemReveal 0.72s cubic-bezier(0.19, 1, 0.22, 1) 0.34s both;
 }
@@ -675,14 +750,14 @@ onMounted(() => {
   border: 1px solid var(--login-field-border);
   border-radius: 12px;
   background: var(--login-field-bg);
-  box-shadow: none;
+  box-shadow: var(--login-field-shadow);
   overflow: hidden;
-  transition: border-color 0.25s ease, background 0.25s ease;
+  transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
 }
 
 .input-wrapper:focus-within {
   border-color: var(--login-theme-text-color);
-  box-shadow: none;
+  box-shadow: var(--login-field-focus-shadow);
 }
 
 .form-input {
@@ -758,12 +833,13 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: none;
-  transition: background 0.25s ease, color 0.25s ease;
+  box-shadow: var(--login-button-shadow);
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .login-btn:hover:not(:disabled) {
   background: var(--login-button-hover-bg);
+  box-shadow: var(--login-button-shadow);
 }
 
 .login-btn:disabled {
@@ -817,6 +893,10 @@ onMounted(() => {
     gap: 12px;
   }
 
+  .brand-link {
+    height: 56px;
+  }
+
   .logo-icon {
     width: 28px;
     height: 28px;
@@ -828,6 +908,10 @@ onMounted(() => {
   }
 
   .nav-menu {
+    display: none;
+  }
+
+  .nav-divider {
     display: none;
   }
 
