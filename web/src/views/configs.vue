@@ -451,7 +451,7 @@ onMounted(fetchConfigs)
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .control-shell {
   display: flex;
   flex-direction: column;

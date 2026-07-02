@@ -538,7 +538,7 @@ onMounted(fetchCluster)
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* ===== Shell ===== */
 .svc-shell {
   display: flex;
@@ -1073,7 +1073,7 @@ onMounted(fetchCluster)
 
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 .card-grid {
   grid-template-columns: repeat(auto-fill, minmax(336px, 360px));
   justify-content: start;
@@ -1434,7 +1434,7 @@ onMounted(fetchCluster)
 
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 .card-grid {
   grid-template-columns: repeat(auto-fill, minmax(336px, 360px));
   justify-content: start;
@@ -1795,7 +1795,7 @@ onMounted(fetchCluster)
 </style>
 
 
-<style scoped>
+<style scoped lang="scss">
 .card-grid.card-grid {
   grid-template-columns: repeat(auto-fill, minmax(336px, 360px));
   justify-content: start;
@@ -2280,7 +2280,7 @@ onMounted(fetchCluster)
 }
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 .card-grid {
   grid-template-columns: repeat(auto-fill, minmax(286px, 320px));
   gap: 14px;
@@ -2492,7 +2492,7 @@ onMounted(fetchCluster)
 }
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 .node-card {
   border-radius: 16px;
   background: var(--bg-secondary);
@@ -2581,7 +2581,7 @@ onMounted(fetchCluster)
 }
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 .svc-main {
   flex: 1;
   display: flex;
@@ -3045,7 +3045,7 @@ onMounted(fetchCluster)
 }
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 .card-grid {
   grid-template-columns: repeat(auto-fill, minmax(286px, 320px));
   gap: 14px;
@@ -3255,7 +3255,7 @@ onMounted(fetchCluster)
 }
 </style>
 
-<style scoped>
+<style scoped lang="scss">
 /* Node card redesign override: final layer. */
 .card-grid.card-grid {
   grid-template-columns: repeat(auto-fill, minmax(440px, 520px));

@@ -1766,7 +1766,7 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .settings-container {
   width: 100%;
   height: 100%;

@@ -4,6 +4,8 @@ This file guides Codex and other AI coding agents when working in the
 `eden-microservice` repository. Human-facing product docs live in `README.md`
 and `docs/`; behavior contracts for agents live in `specs/`.
 
+DO NOT send optional commentary.
+
 ## AI Contribution Guidelines
 
 - Spec-first coding is mandatory. Before changing behavior, APIs, SDKs,

@@ -299,7 +299,7 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .profile-dashboard {
   animation: fadeIn 0.4s ease-out;
 }

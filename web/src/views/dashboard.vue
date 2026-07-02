@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   getClusterStats,
@@ -1259,7 +1259,7 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .dashboard-shell {
   --surface-color: var(--bg-secondary);
   --text-heading: var(--text-primary);

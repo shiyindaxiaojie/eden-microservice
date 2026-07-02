@@ -350,7 +350,7 @@ onBeforeUnmount(() => {
   </teleport>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .guide-overlay {
   position: fixed;
   inset: 0;

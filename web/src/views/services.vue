@@ -813,7 +813,7 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* ===== Shell ===== */
 .svc-shell {
   display: flex;

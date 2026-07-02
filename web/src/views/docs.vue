@@ -460,7 +460,7 @@ go run ./cmd/server -config ./configs/standalone.yaml`,
   </article>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .glass-card {
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.14);

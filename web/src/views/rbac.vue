@@ -573,7 +573,7 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .svc-shell {
   display: flex;
   flex-direction: column;

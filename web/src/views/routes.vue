@@ -619,7 +619,7 @@ onMounted(fetchRoutes)
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .route-shell {
   display: flex;
   flex-direction: column;

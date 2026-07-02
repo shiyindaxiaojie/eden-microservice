@@ -260,7 +260,7 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .mihoyo-login-page {
   --login-theme-text-color: #ffbf24;
   --login-theme-accent-color: #ffbf24;

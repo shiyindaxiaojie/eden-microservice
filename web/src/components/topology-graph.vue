@@ -932,7 +932,7 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .topology-board {
   position: relative;
   height: 100%;
