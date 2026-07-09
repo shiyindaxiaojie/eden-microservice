@@ -325,9 +325,9 @@ onMounted(() => {
   --login-nav-text: rgba(30, 41, 59, 0.72);
   --login-nav-text-active: #0f172a;
   --login-nav-icon: rgba(30, 41, 59, 0.78);
-  --login-brand-text: linear-gradient(90deg, #006f93, #006f93);
+  --login-brand-text: linear-gradient(90deg, #0078c8, #0078c8);
   --login-brand-shadow: none;
-  --login-hero-title-color: #006f93;
+  --login-hero-title-color: #0078c8;
   --login-hero-title-shadow: none;
   --login-form-muted: rgba(45, 71, 96, 0.82);
   --login-field-bg: rgba(248, 252, 255, 0.86);
@@ -365,6 +365,7 @@ onMounted(() => {
   --login-field-bg: rgba(38, 59, 89, 0.72);
   --login-field-border: rgba(139, 186, 225, 0.38);
   --login-field-placeholder: #7f93ad;
+  --login-brand-text: linear-gradient(90deg, #ffffff, #ffffff);
   --login-button-bg: #ffc247;
   --login-button-hover-bg: #ffd06a;
   --login-close-color: #9fb1c9;

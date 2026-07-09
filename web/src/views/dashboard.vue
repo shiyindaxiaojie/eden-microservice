@@ -1261,14 +1261,14 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .dashboard-shell {
-  --surface-color: var(--bg-secondary);
+  --surface-color: transparent;
   --text-heading: var(--text-primary);
   --text-body: var(--text-secondary);
   --text-dim: var(--text-muted);
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace;
-  --dashboard-panel-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-  --dashboard-card-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
-  --dashboard-card-hover-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+  --dashboard-panel-shadow: none;
+  --dashboard-card-shadow: none;
+  --dashboard-card-hover-shadow: none;
   --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   --dashboard-system-bg:
     radial-gradient(circle at 100% 0%, rgba(191, 219, 254, 0.35), transparent 34%),
@@ -1280,54 +1280,61 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 28px;
   overflow: hidden;
 }
 
 :global(html[data-theme="dark"] .dashboard-shell) {
-  --dashboard-panel-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  --dashboard-panel-shadow: none;
   --dashboard-card-shadow: none;
-  --dashboard-card-hover-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
-  --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --dashboard-system-bg:
-    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(15, 23, 42, 0.98));
-  --dashboard-activity-head-bg: linear-gradient(180deg, rgba(30, 41, 59, 0.76), rgba(15, 23, 42, 0.18));
-  --dashboard-chart-bg: rgba(15, 23, 42, 0.72);
+  --dashboard-card-hover-shadow: none;
+  --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --dashboard-system-bg: var(--bg-card);
+  --dashboard-activity-head-bg: transparent;
+  --dashboard-chart-bg: rgba(10, 33, 56, 0.7);
   --dashboard-event-dot-bg: var(--bg-secondary);
 }
 
 .metric-grid {
-  flex: 0 0 25%;
-  min-height: 0;
-  max-height: 25%;
+  flex: 0 0 auto;
+  min-height: 178px;
+  max-height: none;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  align-items: stretch;
+  gap: 0;
+  align-items: center;
+  padding: 30px 8px 34px;
+  background: transparent;
 }
 
 .metric-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
   min-height: 0;
   height: 100%;
-  padding: 12px 14px 10px;
-  overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: var(--bg-secondary);
+  justify-content: center;
+  padding: 0 42px 14px;
+  overflow: visible;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   box-shadow: var(--dashboard-card-shadow);
-  transition: box-shadow 0.2s ease;
+  transition: background 0.2s ease;
+}
+
+.metric-card + .metric-card {
+  border-left: none;
 }
 
 .metric-card::before {
   content: '';
   position: absolute;
-  inset: 0 0 auto;
+  inset: auto auto 0 24px;
+  width: 64px;
   height: 3px;
+  border-radius: 999px;
   opacity: 0.9;
 }
 
@@ -1335,16 +1342,28 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+.metric-card + .metric-card::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 18px;
+  left: 0;
+  display: block;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(148, 213, 255, 0.12), transparent);
+}
+
 .metric-card:hover {
+  background: transparent;
   box-shadow: var(--dashboard-card-hover-shadow);
 }
 
 .metric-card.is-blue::before {
-  background: linear-gradient(90deg, #3b82f6, #38bdf8);
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
 }
 
 .metric-card.is-cyan::before {
-  background: linear-gradient(90deg, #06b6d4, #14b8a6);
+  background: linear-gradient(90deg, var(--accent-cyan), #2dd4bf);
 }
 
 .metric-card.is-purple::before {
@@ -1363,32 +1382,32 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 30px;
+  gap: 12px;
+  min-height: 38px;
 }
 
 .metric-card-title {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .metric-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   box-shadow: var(--dashboard-icon-inset);
 }
 
 .metric-heading {
   margin: 0;
   min-width: 0;
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1.2;
   color: var(--text-primary);
@@ -1398,13 +1417,13 @@ onBeforeUnmount(() => {
 }
 
 .metric-card.is-blue .metric-icon {
-  color: #2563eb;
-  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  background: rgba(57, 169, 246, 0.13);
 }
 
 .metric-card.is-cyan .metric-icon {
-  color: #0891b2;
-  background: rgba(6, 182, 212, 0.12);
+  color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.13);
 }
 
 .metric-card.is-purple .metric-icon {
@@ -1426,16 +1445,16 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 11px;
   flex: 1;
 }
 
 .metric-main--system {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
+  grid-template-columns: minmax(0, 1fr) 172px;
   align-items: stretch;
-  gap: 8px 10px;
+  gap: 10px 20px;
 }
 
 .metric-system-copy {
@@ -1453,7 +1472,7 @@ onBeforeUnmount(() => {
 }
 
 .metric-value {
-  font-size: clamp(20px, 1.55vw, 28px);
+  font-size: clamp(32px, 2.3vw, 42px);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1462,11 +1481,12 @@ onBeforeUnmount(() => {
 }
 
 .metric-value--memory {
-  font-size: clamp(18px, 1.4vw, 24px);
+  font-size: clamp(28px, 2vw, 38px);
 }
 
 .metric-unit {
-  font-size: 11px;
+  padding-bottom: 3px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-muted);
 }
@@ -1557,13 +1577,13 @@ onBeforeUnmount(() => {
 .metric-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
+  min-height: 28px;
   max-width: 44%;
-  padding: 0 7px;
+  padding: 0 10px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.1);
+  background: rgba(125, 211, 252, 0.08);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -1573,25 +1593,25 @@ onBeforeUnmount(() => {
 .metric-inline-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 8px;
 }
 
 .metric-inline-meta span {
   display: inline-flex;
   align-items: center;
-  min-height: 18px;
-  padding: 0 6px;
+  min-height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.08);
+  background: rgba(125, 211, 252, 0.07);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .metric-note {
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1602,13 +1622,13 @@ onBeforeUnmount(() => {
 .metric-progress {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
 }
 
 .metric-progress-track {
   position: relative;
   width: 100%;
-  height: 5px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.16);
@@ -1618,12 +1638,12 @@ onBeforeUnmount(() => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #06b6d4, #10b981);
-  box-shadow: 0 6px 14px rgba(16, 185, 129, 0.2);
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
+  box-shadow: 0 6px 14px rgba(34, 211, 238, 0.18);
 }
 
 .metric-progress-text {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
   display: -webkit-box;
@@ -1652,8 +1672,8 @@ onBeforeUnmount(() => {
 }
 
 .system-icon {
-  color: #2563eb;
-  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  background: rgba(57, 169, 246, 0.13);
 }
 
 .system-value {
@@ -1693,7 +1713,7 @@ onBeforeUnmount(() => {
 
 .panel-scroll.event-scroll {
   flex: 1;
-  padding: 16px;
+  padding: 18px 0 0;
   overflow-y: auto;
 }
 
@@ -1731,43 +1751,46 @@ onBeforeUnmount(() => {
 /* Minimalist Element Plus overrides */
 :deep(.el-input__wrapper),
 :deep(.el-select__wrapper) {
-  border-radius: 8px !important;
-  box-shadow: 0 0 0 1px var(--border-color) inset !important;
+  border-radius: 10px !important;
+  background: rgba(125, 211, 252, 0.07) !important;
+  box-shadow: none !important;
   transition: all 0.2s ease;
 }
 
 :deep(.el-input__wrapper.is-focus),
 :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px var(--accent-blue) inset !important;
+  background: rgba(125, 211, 252, 0.1) !important;
+  box-shadow: 0 0 0 1px rgba(57, 169, 246, 0.42) inset !important;
 }
 
 :deep(.el-range-editor.el-input__inner) {
-  border-radius: 8px !important;
-  border: 1px solid var(--border-color) !important;
+  border-radius: 10px !important;
+  border: none !important;
+  background: rgba(125, 211, 252, 0.07) !important;
 }
 
 :deep(.el-range-editor.is-active) {
-  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 1px rgba(57, 169, 246, 0.42) inset !important;
 }
 
 .activity-head {
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  padding: 0 0 14px;
+  border-bottom: 1px solid rgba(148, 213, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: var(--dashboard-activity-head-bg);
-  backdrop-filter: blur(8px);
+  background: transparent;
+  backdrop-filter: none;
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
 .panel-pagination {
-  padding: 12px 20px;
-  background: var(--surface-color);
-  border-top: 1px solid var(--border-color);
+  padding: 14px 0 0;
+  background: transparent;
+  border-top: 1px solid rgba(148, 213, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2036,17 +2059,17 @@ onBeforeUnmount(() => {
 
 .metric-sparkline-shell {
   position: relative;
-  flex: 0 0 24px;
-  height: 24px;
+  flex: 0 0 30px;
+  height: 30px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: none;
   background:
-    linear-gradient(180deg, rgba(59, 130, 246, 0.04), rgba(59, 130, 246, 0)),
+    linear-gradient(180deg, rgba(57, 169, 246, 0.08), rgba(57, 169, 246, 0)),
     repeating-linear-gradient(
       to top,
-      rgba(148, 163, 184, 0.08),
-      rgba(148, 163, 184, 0.08) 1px,
+      rgba(148, 213, 255, 0.08),
+      rgba(148, 213, 255, 0.08) 1px,
       transparent 1px,
       transparent 12px
     );
@@ -2055,7 +2078,7 @@ onBeforeUnmount(() => {
 .metric-sparkline-shell--system {
   flex: none;
   height: auto;
-  min-height: 64px;
+  min-height: 92px;
 }
 
 .metric-sparkline-svg {
@@ -2083,9 +2106,10 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 22px 22px 16px;
   border-radius: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: var(--bg-secondary);
+  border: none;
+  background: rgba(125, 211, 252, 0.035);
   box-shadow: var(--dashboard-panel-shadow);
 }
 
@@ -2093,11 +2117,14 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 16px 20px 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  gap: 22px;
+  padding: 0 0 20px;
+  border-bottom: 1px solid rgba(148, 213, 255, 0.08);
   flex-shrink: 0;
-  background: var(--dashboard-activity-head-bg);
+  background: transparent;
+  position: static;
+  top: auto;
+  z-index: auto;
 }
 
 .panel-tabs {
@@ -2105,15 +2132,15 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   padding: 4px;
-  border-radius: 18px;
-  background: rgba(148, 163, 184, 0.06);
+  border-radius: 999px;
+  background: rgba(125, 211, 252, 0.08);
 }
 
 .panel-tab {
-  min-height: 42px;
-  padding: 0 20px;
+  min-height: 44px;
+  padding: 0 28px;
   border: none;
-  border-radius: 14px;
+  border-radius: 999px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 14px;
@@ -2127,15 +2154,15 @@ onBeforeUnmount(() => {
 }
 
 .panel-tab.active {
-  background: linear-gradient(135deg, #3b82f6, #60a5fa);
+  background: var(--active-gradient);
   color: #fff;
-  box-shadow: 0 10px 22px rgba(59, 130, 246, 0.22);
+  box-shadow: none;
 }
 
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
   flex-shrink: 0;
 }
@@ -2167,9 +2194,9 @@ onBeforeUnmount(() => {
   gap: 10px;
   min-height: 40px;
   padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(59, 130, 246, 0.16);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(96, 165, 250, 0.14));
+  border-radius: 999px;
+  border: none;
+  background: rgba(125, 211, 252, 0.08);
 }
 
 .panel-summary-kicker {
@@ -2189,7 +2216,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 14px 18px 18px;
+  padding: 18px 0 0;
 }
 
 .panel-scroll::-webkit-scrollbar {
@@ -2208,16 +2235,16 @@ onBeforeUnmount(() => {
 
 .panel-empty {
   height: 100%;
-  min-height: 220px;
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
   padding: 20px;
-  border-radius: 18px;
-  border: 1px dashed rgba(148, 163, 184, 0.2);
-  background: rgba(148, 163, 184, 0.05);
+  border-radius: 0;
+  border: none;
+  background: transparent;
   color: var(--text-muted);
   text-align: center;
 }
@@ -2230,9 +2257,9 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 14px;
   padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(148, 163, 184, 0.05);
+  border-radius: 0;
+  border: none;
+  background: rgba(125, 211, 252, 0.035);
 }
 
 .event-entry + .event-entry {
@@ -2366,9 +2393,7 @@ onBeforeUnmount(() => {
 }
 
 .log-scroll {
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 80%),
-    var(--bg-secondary);
+  background: transparent;
 }
 
 .log-toolbar-note {
@@ -2387,8 +2412,8 @@ onBeforeUnmount(() => {
 .log-line {
   display: flex;
   gap: 12px;
-  padding: 6px 12px;
-  border-radius: 8px;
+  padding: 7px 18px;
+  border-radius: 0;
   transition: background 0.18s ease;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
@@ -2396,11 +2421,11 @@ onBeforeUnmount(() => {
 }
 
 .log-line:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: rgba(125, 211, 252, 0.07);
 }
 
 .log-line.is-info {
-  background: rgba(59, 130, 246, 0.03);
+  background: transparent;
 }
 
 .log-line.is-warn {
@@ -2533,9 +2558,9 @@ onBeforeUnmount(() => {
 
 .log-search-input :deep(.el-input__wrapper) {
   min-height: 38px;
-  border-radius: 12px;
-  background: rgba(148, 163, 184, 0.06) !important;
-  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  border-radius: 10px;
+  background: rgba(125, 211, 252, 0.07) !important;
+  border: none !important;
   box-shadow: none !important;
 }
 
@@ -2556,9 +2581,9 @@ onBeforeUnmount(() => {
 
 :deep(.panel-select .el-select__wrapper) {
   min-height: 38px;
-  border-radius: 12px;
-  background: rgba(148, 163, 184, 0.06) !important;
-  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  border-radius: 10px;
+  background: rgba(125, 211, 252, 0.07) !important;
+  border: none !important;
   box-shadow: none !important;
 }
 
