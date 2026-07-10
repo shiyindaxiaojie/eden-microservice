@@ -64,6 +64,10 @@ func (r *consulRegistry) Discovery(serviceName string) ([]*sdk.ServiceInstance, 
 	return instances, nil
 }
 
+func (r *consulRegistry) DiscoveryGroup(serviceName, _ string) ([]*sdk.ServiceInstance, error) {
+	return r.Discovery(serviceName)
+}
+
 func (r *consulRegistry) Subscribe(serviceName string, callback func([]*sdk.ServiceInstance)) error {
 	// Simple polling for now
 	go func() {
@@ -85,6 +89,10 @@ func (r *consulRegistry) Subscribe(serviceName string, callback func([]*sdk.Serv
 		}
 	}()
 	return nil
+}
+
+func (r *consulRegistry) SubscribeGroup(serviceName, _ string, callback func([]*sdk.ServiceInstance)) error {
+	return r.Subscribe(serviceName, callback)
 }
 
 func (r *consulRegistry) Heartbeat(inst *sdk.ServiceInstance) error {

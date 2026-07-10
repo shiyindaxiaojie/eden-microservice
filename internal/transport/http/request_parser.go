@@ -49,7 +49,7 @@ func (h *Handler) serviceNames(namespace string) ([]string, error) {
 		if !ok {
 			continue
 		}
-		name, _ := service["name"].(string)
+		name, _ := service["qualified_name"].(string)
 		if name != "" {
 			names = append(names, name)
 		}

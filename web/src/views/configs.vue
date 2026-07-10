@@ -11,14 +11,14 @@ import {
   Upload,
 } from '@element-plus/icons-vue'
 import {
-  deleteMockConfig,
-  listMockConfigHistory,
-  listMockConfigs,
-  saveMockConfig,
+  deleteConfig,
+  listConfigHistory,
+  listConfigs,
+  publishConfig,
   type ConfigContentType,
   type ConfigHistoryEntry,
   type ConfigResource,
-} from '../api/mock/control-plane'
+} from '../api/config'
 import { useI18n } from '../utils/i18n'
 
 type ConfigFilter = 'all' | ConfigContentType
@@ -31,6 +31,7 @@ interface ConfigForm {
   description: string
   tagsText: string
   content: string
+  expected_md5?: string
 }
 
 const { text, elementLocale } = useI18n()
@@ -134,12 +135,8 @@ function actionLabel(action: ConfigHistoryEntry['action']) {
 async function fetchConfigs() {
   loading.value = true
   try {
-    const [configRows, historyRows] = await Promise.all([
-      listMockConfigs(),
-      listMockConfigHistory(),
-    ])
-    configs.value = configRows.sort((left, right) => right.updated_at.localeCompare(left.updated_at))
-    history.value = historyRows.sort((left, right) => right.created_at.localeCompare(left.created_at))
+    const result = await listConfigs({ page: 1, page_size: 500 })
+    configs.value = result.data.sort((left, right) => right.updated_at.localeCompare(left.updated_at))
 
     if (!selectedKey.value || !configs.value.find((item) => configKey(item) === selectedKey.value)) {
       selectedKey.value = configs.value[0] ? configKey(configs.value[0]) : ''
@@ -166,6 +163,7 @@ function openCreate() {
     description: '',
     tagsText: '',
     content: 'server:\n  port: 8080\nfeature:\n  enabled: true\n',
+    expected_md5: undefined,
   }
   editorVisible.value = true
 }
@@ -180,6 +178,7 @@ function openEdit(item: ConfigResource) {
     description: item.description,
     tagsText: item.tags.join(', '),
     content: item.content,
+    expected_md5: item.md5,
   }
   editorVisible.value = true
 }
@@ -207,7 +206,7 @@ async function submitConfig() {
     )
 
     submitting.value = true
-    const saved = await saveMockConfig({
+    const saved = await publishConfig({
       namespace: payload.namespace,
       group: payload.group,
       data_id: payload.data_id,
@@ -215,6 +214,7 @@ async function submitConfig() {
       description: payload.description,
       tags: payload.tagsText.split(','),
       content: payload.content,
+      expected_md5: payload.expected_md5,
     })
     selectedKey.value = configKey(saved)
     editorVisible.value = false
@@ -222,7 +222,8 @@ async function submitConfig() {
     await fetchConfigs()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error(error)
+      const message = (error as any)?.response?.data?.error || (error as Error)?.message
+      ElMessage.error(message || text('配置发布失败', 'Failed to publish config'))
     }
   } finally {
     submitting.value = false
@@ -240,19 +241,26 @@ async function handleDelete(item: ConfigResource) {
         type: 'warning',
       },
     )
-    await deleteMockConfig(item)
+    await deleteConfig(item)
     ElMessage.success(text('配置已删除', 'Config deleted'))
     await fetchConfigs()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error(error)
+      const message = (error as any)?.response?.data?.error || (error as Error)?.message
+      ElMessage.error(message || text('配置删除失败', 'Failed to delete config'))
     }
   }
 }
 
-function showHistory(item: ConfigResource) {
+async function showHistory(item: ConfigResource) {
   selectedKey.value = configKey(item)
   historyVisible.value = true
+  try {
+    history.value = (await listConfigHistory(item)).sort((left, right) => right.created_at.localeCompare(left.created_at))
+  } catch (error) {
+    const message = (error as any)?.response?.data?.error || (error as Error)?.message
+    ElMessage.error(message || text('配置历史加载失败', 'Failed to load config history'))
+  }
 }
 
 watch([query, namespaceFilter, typeFilter], () => {
@@ -331,10 +339,11 @@ onMounted(fetchConfigs)
               <template #default="{ row }">
                 <div class="primary-cell">
                   <strong>{{ row.data_id }}</strong>
-                  <span>{{ row.namespace }} / {{ row.group }}</span>
+                  <span>{{ row.group }}</span>
                 </div>
               </template>
             </el-table-column>
+            <el-table-column :label="text('命名空间', 'Namespace')" min-width="110" prop="namespace" />
             <el-table-column :label="text('类型', 'Type')" width="120">
               <template #default="{ row }">
                 <el-tag :type="typeTag(row.type)" effect="plain">{{ row.type }}</el-tag>
@@ -657,6 +666,20 @@ onMounted(fetchConfigs)
 
 :deep(.el-table__inner-wrapper::before) {
   display: none;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background: transparent !important;
+}
+
+:deep(.el-table td.el-table__cell) {
+  background: transparent;
+}
+
+:deep(.el-table__fixed-right),
+:deep(.el-table__fixed-right-patch) {
+  background: transparent;
+  box-shadow: none;
 }
 
 :deep(.el-table__inner-wrapper) {

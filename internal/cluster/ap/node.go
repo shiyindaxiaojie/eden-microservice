@@ -161,9 +161,16 @@ func (n *Node) Apply(cmdType string, data interface{}, isReplicate bool) error {
 		}
 	case "set_instance_status":
 		if d, ok := data.(map[string]string); ok {
-			status := catalog.HealthCritical
-			if d["status"] == "online" {
+			var status catalog.HealthStatus
+			switch d["status"] {
+			case "online":
 				status = catalog.HealthPassing
+			case "offline":
+				status = catalog.HealthOffline
+			case "critical":
+				status = catalog.HealthCritical
+			default:
+				return fmt.Errorf("invalid instance status: %s", d["status"])
 			}
 			inst, _ := n.State.SetInstanceStatus(d["namespace"], d["service_name"], d["instance_id"], status)
 			if inst == nil {

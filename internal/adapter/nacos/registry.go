@@ -69,6 +69,7 @@ func (r *nacosRegistry) Register(inst *sdk.ServiceInstance) error {
 		Ip:          inst.Host,
 		Port:        uint64(inst.Port),
 		ServiceName: inst.ServiceName,
+		GroupName:   inst.Group,
 		Weight:      float64(inst.Weight),
 		Metadata:    inst.Metadata,
 	})
@@ -80,13 +81,19 @@ func (r *nacosRegistry) Deregister(inst *sdk.ServiceInstance) error {
 		Ip:          inst.Host,
 		Port:        uint64(inst.Port),
 		ServiceName: inst.ServiceName,
+		GroupName:   inst.Group,
 	})
 	return err
 }
 
 func (r *nacosRegistry) Discovery(serviceName string) ([]*sdk.ServiceInstance, error) {
+	return r.DiscoveryGroup(serviceName, "")
+}
+
+func (r *nacosRegistry) DiscoveryGroup(serviceName, group string) ([]*sdk.ServiceInstance, error) {
 	hosts, err := r.client.SelectInstances(vo.SelectInstancesParam{
 		ServiceName: serviceName,
+		GroupName:   group,
 		HealthyOnly: true,
 	})
 	if err != nil {
@@ -98,6 +105,7 @@ func (r *nacosRegistry) Discovery(serviceName string) ([]*sdk.ServiceInstance, e
 		instances = append(instances, &sdk.ServiceInstance{
 			ID:          h.InstanceId,
 			ServiceName: h.ServiceName,
+			Group:       group,
 			Host:        h.Ip,
 			Port:        int(h.Port),
 			Weight:      int(h.Weight),
@@ -109,8 +117,13 @@ func (r *nacosRegistry) Discovery(serviceName string) ([]*sdk.ServiceInstance, e
 }
 
 func (r *nacosRegistry) Subscribe(serviceName string, callback func([]*sdk.ServiceInstance)) error {
+	return r.SubscribeGroup(serviceName, "", callback)
+}
+
+func (r *nacosRegistry) SubscribeGroup(serviceName, group string, callback func([]*sdk.ServiceInstance)) error {
 	return r.client.Subscribe(&vo.SubscribeParam{
 		ServiceName: serviceName,
+		GroupName:   group,
 		SubscribeCallback: func(services []model.Instance, err error) {
 			if err == nil {
 				instances := make([]*sdk.ServiceInstance, 0, len(services))
@@ -118,6 +131,7 @@ func (r *nacosRegistry) Subscribe(serviceName string, callback func([]*sdk.Servi
 					instances = append(instances, &sdk.ServiceInstance{
 						ID:          h.InstanceId,
 						ServiceName: h.ServiceName,
+						Group:       group,
 						Host:        h.Ip,
 						Port:        int(h.Port),
 						Weight:      int(h.Weight),

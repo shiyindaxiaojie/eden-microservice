@@ -8,6 +8,8 @@ export interface Namespace {
 }
 export interface ServiceSummary {
   name: string
+  group: string
+  qualified_name: string
   instance_count: number
   healthy_count: number
   subscriber_count?: number
@@ -17,13 +19,14 @@ export interface TopologyInstance {
   id: string
   host: string
   port: number
-  status: 'passing' | 'critical'
+  status: 'passing' | 'critical' | 'offline'
   datacenter?: string
 }
 
 export interface TopologyNode {
   id: string
   name: string
+  group: string
   namespace: string
   instance_count: number
   healthy_count: number
@@ -46,6 +49,7 @@ export interface TopologyGraph {
 export interface Instance {
   id: string
   service_name: string
+  group: string
   namespace?: string
   host: string
   port: number
@@ -166,12 +170,12 @@ export interface RbacUser {
 }
 
 export const getServices = (namespace = '') => api.get<ServiceSummary[]>(`/v1/catalog/services${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
-export const getServiceInstances = (name: string, namespace = '') =>
-  api.get<Instance[]>(`/v1/catalog/service/${encodeURIComponent(name)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
-export const setInstanceStatus = (namespace: string, serviceName: string, instanceId: string, status: string) =>
-  api.post('/v1/catalog/instance/status', { namespace, service_name: serviceName, instance_id: instanceId, status })
-export const getSubscribers = (name: string, namespace = '') =>
-  api.get<string[]>(`/v1/catalog/service/${encodeURIComponent(name)}/subscribers${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)
+export const getServiceInstances = (name: string, namespace = '', group = 'default') =>
+  api.get<Instance[]>(`/v1/catalog/service/${encodeURIComponent(name)}`, { params: { namespace, group } })
+export const setInstanceStatus = (namespace: string, serviceName: string, group: string, instanceId: string, status: string) =>
+  api.post('/v1/catalog/instance/status', { namespace, service_name: serviceName, group, instance_id: instanceId, status })
+export const getSubscribers = (name: string, namespace = '', group = 'default') =>
+  api.get<string[]>(`/v1/catalog/service/${encodeURIComponent(name)}/subscribers`, { params: { namespace, group } })
 export const getDependencyGraph = (namespace: string) => api.get<any>(`/v1/catalog/dependency-graph?namespace=${namespace}`)
 export const getTopology = (namespace = '') =>
   api.get<TopologyGraph>(`/v1/catalog/topology${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)

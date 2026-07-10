@@ -36,6 +36,7 @@ const (
 type Instance struct {
 	ID            string            `json:"id"`
 	ServiceName   string            `json:"service_name"`
+	Group         string            `json:"group"`
 	Namespace     string            `json:"namespace,omitempty"`
 	Host          string            `json:"host"`
 	Port          int               `json:"port"`

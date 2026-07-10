@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,6 +99,10 @@ func namespaceKey(namespace string) string {
 }
 
 func (s *registry) Register(inst *Instance) error {
+	inst.NormalizeIdentity()
+	if inst.ServiceName == "" {
+		return fmt.Errorf("service_name required")
+	}
 	if !s.state.Namespaces.Exists(inst.Namespace) {
 		return fmt.Errorf("namespace not found: %s", inst.EffectiveNamespace())
 	}
@@ -149,6 +154,7 @@ func toReplicatedInstance(inst *Instance) *replication.Instance {
 	return &replication.Instance{
 		ID:            inst.ID,
 		ServiceName:   inst.ServiceName,
+		Group:         inst.Group,
 		Namespace:     inst.Namespace,
 		Host:          inst.Host,
 		Port:          inst.Port,
@@ -168,6 +174,8 @@ func (s *registry) SetInstanceStatus(namespace, serviceName, instanceID string, 
 	case "online":
 		healthStatus = HealthPassing
 	case "offline":
+		healthStatus = HealthOffline
+	case "critical":
 		healthStatus = HealthCritical
 	default:
 		return fmt.Errorf("invalid status: %s, must be 'online' or 'offline'", status)
@@ -205,6 +213,9 @@ func (s *registry) SetInstanceStatus(namespace, serviceName, instanceID string, 
 	resolvedService := inst.ServiceName
 	eventType := EventTypeServiceOffline
 	message := "Instance taken offline"
+	if status == "critical" {
+		message = "Instance marked critical"
+	}
 	if status == "online" {
 		eventType = EventTypeServiceOnline
 		message = "Instance restored online"
@@ -247,9 +258,11 @@ func (s *registry) ListServices(namespace string) ([]interface{}, error) {
 	services := s.state.Instances.ListServicesNS(ns)
 	result := make([]interface{}, len(services))
 	for i, svc := range services {
-		subCount := len(s.GetSubscribers(ns, svc.Name))
+		subCount := len(s.GetSubscribers(ns, svc.QualifiedName))
 		result[i] = map[string]interface{}{
 			"name":             svc.Name,
+			"group":            svc.Group,
+			"qualified_name":   svc.QualifiedName,
 			"instance_count":   svc.InstanceCount,
 			"healthy_count":    svc.HealthyCount,
 			"subscriber_count": subCount,
@@ -271,10 +284,15 @@ func (s *registry) GetService(namespace, name string, healthyOnly bool) ([]*Inst
 }
 
 func (s *registry) Subscribe(namespace, serviceName, consumerService string, ch chan WatchEvent) {
+	ns := namespaceKey(namespace)
+	serviceName = s.resolveServiceIdentity(ns, serviceName)
+	if consumerService != "" {
+		consumerService = s.resolveServiceIdentity(ns, consumerService)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	ns := namespaceKey(namespace)
 	if s.subs[ns] == nil {
 		s.subs[ns] = make(map[string][]subscription)
 	}
@@ -288,10 +306,11 @@ func (s *registry) Subscribe(namespace, serviceName, consumerService string, ch 
 }
 
 func (s *registry) Unsubscribe(namespace, serviceName string, ch chan WatchEvent) {
+	ns := namespaceKey(namespace)
+	serviceName = s.resolveServiceIdentity(ns, serviceName)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	ns := namespaceKey(namespace)
 	subs := s.subs[ns][serviceName]
 	for i, subscriber := range subs {
 		if subscriber.ch == ch {
@@ -303,6 +322,7 @@ func (s *registry) Unsubscribe(namespace, serviceName string, ch chan WatchEvent
 
 func (s *registry) GetSubscribers(namespace, serviceName string) []string {
 	ns := namespaceKey(namespace)
+	serviceName = s.resolveServiceIdentity(ns, serviceName)
 	seen := make(map[string]bool)
 	combined := make([]string, 0)
 
@@ -339,9 +359,10 @@ func (s *registry) getSubscribersNoLock(namespace, serviceName string) []string 
 }
 
 func (s *registry) getTopologySubscribers(namespace, serviceName string) []string {
+	s.normalizeTopologyReportIdentities(namespace)
 	activeServices := make(map[string]bool)
 	for _, summary := range s.state.Instances.ListServicesNS(namespace) {
-		activeServices[summary.Name] = true
+		activeServices[summary.QualifiedName] = true
 	}
 	if len(activeServices) == 0 || !activeServices[serviceName] {
 		return []string{}
@@ -366,18 +387,20 @@ func (s *registry) getTopologySubscribers(namespace, serviceName string) []strin
 
 func (s *registry) GetDependencyGraph(namespace string) map[string]interface{} {
 	ns := namespaceKey(namespace)
+	s.normalizeTopologyReportIdentities(ns)
 	services := s.state.Instances.ListServicesNS(ns)
 	nodeSet := make(map[string]bool)
 	for _, svc := range services {
-		nodeSet[svc.Name] = true
+		nodeSet[svc.QualifiedName] = true
 	}
 	s.state.Topology.Prune(ns, nodeSet)
 
 	nodes := make([]map[string]interface{}, 0)
 	for _, svc := range services {
 		nodes = append(nodes, map[string]interface{}{
-			"id":             svc.Name,
+			"id":             svc.QualifiedName,
 			"name":           svc.Name,
+			"group":          svc.Group,
 			"instance_count": svc.InstanceCount,
 			"healthy_count":  svc.HealthyCount,
 		})
@@ -400,13 +423,16 @@ func (s *registry) GetDependencyGraph(namespace string) map[string]interface{} {
 }
 
 func (s *registry) RecordDependency(namespace, consumerService, providerService string) {
+	ns := namespaceKey(namespace)
+	consumerService = s.resolveServiceIdentity(ns, consumerService)
+	providerService = s.resolveServiceIdentity(ns, providerService)
 	if consumerService == "" || providerService == "" || consumerService == providerService {
 		return
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.recordDependencyNoLock(namespaceKey(namespace), consumerService, providerService)
+	s.recordDependencyNoLock(ns, consumerService, providerService)
 }
 
 func (s *registry) recordDependencyNoLock(namespace, consumerService, providerService string) {
@@ -490,6 +516,12 @@ func sameStringSlices(left, right []string) bool {
 
 func (s *registry) ReportTopology(namespace, consumerService string, providers []string, checksum string) bool {
 	ns := namespaceKey(namespace)
+	consumerService = s.resolveServiceIdentity(ns, consumerService)
+	resolvedProviders := make([]string, 0, len(providers))
+	for _, provider := range providers {
+		resolvedProviders = append(resolvedProviders, s.resolveServiceIdentity(ns, provider))
+	}
+	providers = uniqueSortedServices(resolvedProviders)
 	changed := s.state.Topology.Report(ns, consumerService, providers, checksum)
 
 	s.mu.Lock()
@@ -500,12 +532,13 @@ func (s *registry) ReportTopology(namespace, consumerService string, providers [
 
 func (s *registry) GetTopology(namespace string) *TopologyGraph {
 	ns := namespaceKey(namespace)
+	s.normalizeTopologyReportIdentities(ns)
 	serviceNames := make(map[string]bool)
 	serviceSummaries := s.state.Instances.ListServicesNS(ns)
 	nodes := make([]TopologyNode, 0)
 
 	for _, summary := range serviceSummaries {
-		serviceNames[summary.Name] = true
+		serviceNames[summary.QualifiedName] = true
 	}
 	s.state.Topology.Prune(ns, serviceNames)
 	names := make([]string, 0, len(serviceNames))
@@ -514,8 +547,8 @@ func (s *registry) GetTopology(namespace string) *TopologyGraph {
 	}
 	sort.Strings(names)
 
-	for _, name := range names {
-		instances := s.state.Instances.GetServiceNS(ns, name)
+	for _, qualifiedName := range names {
+		instances := s.state.Instances.GetServiceNS(ns, qualifiedName)
 		topologyInstances := make([]TopologyInstance, 0, len(instances))
 		healthyCount := 0
 		for _, instance := range instances {
@@ -531,8 +564,9 @@ func (s *registry) GetTopology(namespace string) *TopologyGraph {
 			})
 		}
 		nodes = append(nodes, TopologyNode{
-			ID:            name,
-			Name:          name,
+			ID:            qualifiedName,
+			Name:          instances[0].ServiceName,
+			Group:         instances[0].EffectiveGroup(),
 			Namespace:     ns,
 			InstanceCount: len(instances),
 			HealthyCount:  healthyCount,
@@ -546,6 +580,60 @@ func (s *registry) GetTopology(namespace string) *TopologyGraph {
 		Namespace: ns,
 		Nodes:     nodes,
 		Edges:     edges,
+	}
+}
+
+func (s *registry) resolveServiceIdentity(namespace, serviceName string) string {
+	wasQualified := strings.Contains(strings.TrimSpace(serviceName), ServiceGroupSeparator)
+	name, group := NormalizeServiceIdentity(serviceName, "")
+	if name == "" {
+		return ""
+	}
+
+	qualifiedName := QualifiedServiceName(group, name)
+	summaries := s.state.Instances.ListServicesNS(namespace)
+	for _, summary := range summaries {
+		if summary.QualifiedName == qualifiedName {
+			return qualifiedName
+		}
+	}
+	if wasQualified {
+		return qualifiedName
+	}
+
+	matched := ""
+	for _, summary := range summaries {
+		if summary.Name != name {
+			continue
+		}
+		if matched != "" {
+			return qualifiedName
+		}
+		matched = summary.QualifiedName
+	}
+	if matched != "" {
+		return matched
+	}
+	return qualifiedName
+}
+
+func (s *registry) normalizeTopologyReportIdentities(namespace string) {
+	reports := s.state.Topology.Reports(namespace)
+	for storedConsumer, report := range reports {
+		consumer := s.resolveServiceIdentity(namespace, storedConsumer)
+		providers := make([]string, 0, len(report.Providers))
+		for _, provider := range report.Providers {
+			providers = append(providers, s.resolveServiceIdentity(namespace, provider))
+		}
+		providers = uniqueSortedServices(providers)
+		if consumer == storedConsumer && sameStringSlices(providers, report.Providers) {
+			continue
+		}
+
+		s.state.Topology.Report(namespace, storedConsumer, nil, "")
+		if consumer != "" && len(providers) > 0 {
+			s.state.Topology.Report(namespace, consumer, providers, report.Checksum)
+		}
 	}
 }
 
@@ -664,6 +752,7 @@ func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, i
 			Instance: &grpc_registry.ServiceInstance{
 				Id:          inst.ID,
 				ServiceName: inst.ServiceName,
+				Group:       inst.Group,
 				Namespace:   inst.Namespace,
 				Host:        inst.Host,
 				Port:        int32(inst.Port),
@@ -676,12 +765,14 @@ func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, i
 		_, err = client.Deregister(ctx, &grpc_registry.DeregisterRequest{
 			Namespace:   inst.Namespace,
 			ServiceName: serviceName,
+			Group:       inst.Group,
 			InstanceId:  instanceID,
 		})
 	case "set_instance_status":
 		_, err = client.SetInstanceStatus(ctx, &grpc_registry.SetInstanceStatusRequest{
 			Namespace:   inst.Namespace,
 			ServiceName: serviceName,
+			Group:       inst.Group,
 			InstanceId:  instanceID,
 			Status:      status,
 		})
@@ -689,6 +780,7 @@ func (s *registry) forwardToLeader(action string, inst *Instance, serviceName, i
 		_, err = client.Heartbeat(ctx, &grpc_registry.HeartbeatRequest{
 			Namespace:   inst.Namespace,
 			ServiceName: serviceName,
+			Group:       inst.Group,
 			InstanceId:  instanceID,
 		})
 	}

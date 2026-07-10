@@ -7,6 +7,8 @@ import (
 // ServiceSummary holds counts for a single service.
 type ServiceSummary struct {
 	Name          string `json:"name"`
+	Group         string `json:"group"`
+	QualifiedName string `json:"qualified_name"`
 	InstanceCount int    `json:"instance_count"`
 	HealthyCount  int    `json:"healthy_count"`
 }

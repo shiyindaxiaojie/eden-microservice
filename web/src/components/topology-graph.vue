@@ -27,6 +27,7 @@ const STATUS_LINE_HEIGHT = 18
 const STATUS_BADGE_WIDTH = 52
 const STATUS_TITLE_GAP = 8
 const TITLE_LINE_HEIGHT = 18
+const GROUP_LINE_HEIGHT = 16
 const TITLE_MAX_CHARS = 20
 const TITLE_MAX_LINES = 3
 const INSTANCE_ICON_SIZE = 16
@@ -44,6 +45,7 @@ const INSTANCE_HEX_SYMBOL = 'path://M0 -1L0.866 -0.5L0.866 0.5L0 1L-0.866 0.5L-0
 const { locale, text } = useI18n()
 
 const currentZoom = ref(1)
+const themeVersion = ref(0)
 
 const props = defineProps<{
   graph: TopologyGraph
@@ -59,9 +61,14 @@ const chartEl = ref<HTMLElement | null>(null)
 let chart: echarts.ECharts | null = null
 let renderVersion = 0
 let resizeObserver: ResizeObserver | null = null
+let themeObserver: MutationObserver | null = null
 let edgeLayoutFrame = 0
 
 const graphData = computed(() => props.graph || { namespace: 'default', nodes: [], edges: [] })
+const isDarkTheme = computed(() => {
+  themeVersion.value
+  return typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
+})
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -141,6 +148,56 @@ function nodeStatusLabel(state: NodeHealthState) {
 
 function nodeTone(node: TopologyNode) {
   const state = serviceHealthState(node)
+  const isDark = isDarkTheme.value
+
+  if (isDark) {
+    if (state === 'empty') {
+      return {
+        border: '#64788c',
+        fillTop: '#10243a',
+        fillBottom: '#0b1b2d',
+        title: '#b7c6d5',
+        badgeText: '#91a5b8',
+        badgeBg: 'rgba(145, 165, 184, 0.14)',
+        glow: 'rgba(86, 117, 143, 0.12)',
+      }
+    }
+
+    if (state === 'healthy') {
+      return {
+        border: '#51a987',
+        fillTop: '#102a36',
+        fillBottom: '#0b202b',
+        title: '#e4f0ef',
+        badgeText: '#82c3a5',
+        badgeBg: 'rgba(81, 169, 135, 0.14)',
+        glow: 'rgba(81, 169, 135, 0.12)',
+      }
+    }
+
+    if (state === 'partial') {
+      return {
+        border: '#d0a24b',
+        fillTop: '#2a2317',
+        fillBottom: '#1d1a16',
+        title: '#f1e7d1',
+        badgeText: '#dfbe78',
+        badgeBg: 'rgba(208, 162, 75, 0.15)',
+        glow: 'rgba(208, 162, 75, 0.12)',
+      }
+    }
+
+    return {
+      border: '#bc7177',
+      fillTop: '#2a1b24',
+      fillBottom: '#1d151c',
+      title: '#f0dfe2',
+      badgeText: '#d9969b',
+      badgeBg: 'rgba(188, 113, 119, 0.15)',
+      glow: 'rgba(188, 113, 119, 0.12)',
+    }
+  }
+
   if (state === 'empty') {
     return {
       border: '#94a3b8',
@@ -255,7 +312,8 @@ function serviceMetrics(node: TopologyNode): ServiceNodeMetrics {
   const iconRows = node.instances.length ? Math.ceil(node.instances.length / iconColumns) : 0
   const headerHeight = Math.max(STATUS_LINE_HEIGHT, TITLE_LINE_HEIGHT)
   const titleExtraHeight = Math.max(0, wrappedTitle.lines - 1) * TITLE_LINE_HEIGHT
-  const iconTop = CARD_PADDING_TOP + headerHeight + titleExtraHeight + INSTANCE_TOP_GAP
+  const groupHeight = node.group ? GROUP_LINE_HEIGHT : 0
+  const iconTop = CARD_PADDING_TOP + headerHeight + titleExtraHeight + groupHeight + INSTANCE_TOP_GAP
   const iconsHeight = iconRows ? iconRows * INSTANCE_ICON_SIZE + (iconRows - 1) * INSTANCE_ICON_GAP : 0
   const height = Math.max(SERVICE_CARD_MIN_HEIGHT, iconTop + iconsHeight + CARD_PADDING_BOTTOM)
 
@@ -539,6 +597,17 @@ function instanceTone(instance: TopologyInstance, selected: boolean) {
 }
 
 function buildOption(width: number, height: number): echarts.EChartsOption {
+  const isDark = isDarkTheme.value
+  const selectedFillTop = isDark ? '#122d47' : '#f8fbff'
+  const selectedFillBottom = isDark ? '#0d2237' : '#eef5ff'
+  const selectedBorder = isDark ? '#77a8cc' : '#2563eb'
+  const selectedShadow = isDark ? 'rgba(109, 158, 193, 0.18)' : 'rgba(37, 99, 235, 0.22)'
+  const edgeColor = isDark ? 'rgba(109, 158, 193, 0.38)' : 'rgba(59, 130, 246, 0.42)'
+  const edgeSelectedColor = isDark ? 'rgba(122, 174, 208, 0.78)' : 'rgba(37, 99, 235, 0.86)'
+  const tooltipBackground = isDark ? '#102238' : '#ffffff'
+  const tooltipBorder = isDark ? '#29445f' : '#dbe4f0'
+  const tooltipText = isDark ? '#e5eef7' : '#0f172a'
+  const tooltipMuted = isDark ? '#9eb2c6' : '#64748b'
   const metricsMap = new Map(graphData.value.nodes.map((node) => [node.id, serviceMetrics(node)] as const))
   const positions = computeLayout(width, height, metricsMap)
 
@@ -553,6 +622,7 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
     const titleFormatter = [
       `{titleLead|${escapeRichText(titleLines[0] || node.name)}}{status|${escapeRichText(nodeStatusLabel(state))}}`, 
       ...titleLines.slice(1).map((line) => `{title|${escapeRichText(line)}}`),
+      ...(node.group ? [`{group|${escapeRichText(node.group)}}`] : []),
     ].join('\n')
     const pos = positions.get(node.id) || { x: width / 2, y: height / 2 }
 
@@ -565,6 +635,7 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
       healthyCount: node.healthy_count,
       instanceCount: node.instance_count,
       namespace: node.namespace,
+      group: node.group,
       x: pos.x,
       y: pos.y,
       symbol: 'rect',
@@ -573,13 +644,13 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
       z: 2,
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
-          { offset: 0, color: isSelected ? '#f8fbff' : tone.fillTop },
-          { offset: 1, color: isSelected ? '#eef5ff' : tone.fillBottom },
+          { offset: 0, color: isSelected ? selectedFillTop : tone.fillTop },
+          { offset: 1, color: isSelected ? selectedFillBottom : tone.fillBottom },
         ]),
-        borderColor: isSelected ? '#2563eb' : tone.border,
+        borderColor: isSelected ? selectedBorder : tone.border,
         borderWidth: isSelected ? 2.4 : 1.4,
         borderRadius: 0,
-        shadowColor: isSelected ? 'rgba(37, 99, 235, 0.22)' : tone.glow,
+        shadowColor: isSelected ? selectedShadow : tone.glow,
         shadowBlur: isSelected ? 22 : 14,
         shadowOffsetY: 8,
       },
@@ -618,6 +689,15 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
             fontWeight: 700,
             color: tone.title,
             lineHeight: TITLE_LINE_HEIGHT,
+          },
+          group: {
+            width: contentWidth,
+            align: 'left' as const,
+            fontSize: 11,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontWeight: 500,
+            color: isDark ? '#8fa7bd' : '#64748b',
+            lineHeight: GROUP_LINE_HEIGHT,
           },
         },
       },
@@ -704,7 +784,7 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
       symbol: ['none', 'arrow'],
       symbolSize: [0, relatedToSelection ? EDGE_ARROW_SIZE + 1 : EDGE_ARROW_SIZE],
       lineStyle: {
-        color: relatedToSelection ? 'rgba(37, 99, 235, 0.86)' : 'rgba(59, 130, 246, 0.42)',
+        color: relatedToSelection ? edgeSelectedColor : edgeColor,
         curveness: curve,
         width: relatedToSelection ? 2.8 : 1.9,
         opacity: relatedToSelection ? 1 : 0.94,
@@ -718,16 +798,18 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
     animationEasing: 'cubicOut',
     tooltip: {
       trigger: 'item',
-      backgroundColor: '#ffffff',
-      borderColor: '#dbe4f0',
+      backgroundColor: tooltipBackground,
+      borderColor: tooltipBorder,
       borderWidth: 1,
       padding: [10, 14],
       textStyle: {
-        color: '#0f172a',
+        color: tooltipText,
         fontSize: 12,
         fontFamily: 'Inter, system-ui, sans-serif',
       },
-      extraCssText: 'border-radius: 12px; box-shadow: 0 12px 32px rgba(15,23,42,0.12);',
+      extraCssText: isDark
+        ? 'border-radius: 12px; box-shadow: 0 16px 34px rgba(0,0,0,0.28);'
+        : 'border-radius: 12px; box-shadow: 0 12px 32px rgba(15,23,42,0.12);',
       position(point: [number, number], _params: any, _el: any, _rect: any, size: any) {
         const [viewWidth, viewHeight] = size.viewSize as [number, number]
         const [contentWidth, contentHeight] = size.contentSize as [number, number]
@@ -748,18 +830,18 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
       },
       formatter(params: any) {
         if (params.dataType === 'edge') {
-          return `<span style="color:#64748b">${escapeHtml(params.data.source)}</span> &rarr; <span style="color:#64748b">${escapeHtml(params.data.target)}</span>`
+          return `<span style="color:${tooltipMuted}">${escapeHtml(params.data.source)}</span> &rarr; <span style="color:${tooltipMuted}">${escapeHtml(params.data.target)}</span>`
         }
 
         const data = params.data || {}
         if (data.kind === 'instance' && data.instance) {
           const instance = data.instance as TopologyInstance
           const status = instance.status === 'passing' ? text('在线', 'Online') : text('异常', 'Critical')
-          const tone = instance.status === 'passing' ? '#16a34a' : '#dc2626'
+          const tone = instance.status === 'passing' ? (isDark ? '#82c3a5' : '#16a34a') : (isDark ? '#d9969b' : '#dc2626')
           return `
             <div style="display:flex;flex-direction:column;gap:4px;min-width:160px">
-              <div style="font-size:12px;color:#64748b">${escapeHtml(data.parentName || '')}</div>
-              <div style="font-weight:700;font-size:13px;color:#0f172a">${escapeHtml(instance.host)}:${instance.port}</div>
+              <div style="font-size:12px;color:${tooltipMuted}">${escapeHtml(data.parentName || '')}</div>
+              <div style="font-weight:700;font-size:13px;color:${tooltipText}">${escapeHtml(instance.host)}:${instance.port}</div>
               <div style="font-size:11px;color:${tone};font-weight:600">${status}</div>
             </div>
           `
@@ -768,9 +850,9 @@ function buildOption(width: number, height: number): echarts.EChartsOption {
         if (data.kind === 'service') {
           return `
             <div style="display:flex;flex-direction:column;gap:4px;min-width:168px">
-              <div style="font-weight:700;font-size:13px;color:#0f172a">${escapeHtml(data.name || '')}</div>
-              <div style="font-size:11px;color:#64748b">${escapeHtml(data.statusLabel || '')}</div>
-              <div style="font-size:11px;color:#64748b">${data.healthyCount ?? 0}/${data.instanceCount ?? 0} ${text('健康实例', 'healthy instances')}</div>
+              <div style="font-weight:700;font-size:13px;color:${tooltipText}">${escapeHtml(data.name || '')}</div>
+              <div style="font-size:11px;color:${tooltipMuted}">${escapeHtml(data.statusLabel || '')}</div>
+              <div style="font-size:11px;color:${tooltipMuted}">${data.healthyCount ?? 0}/${data.instanceCount ?? 0} ${text('健康实例', 'healthy instances')}</div>
             </div>
           `
         }
@@ -882,8 +964,14 @@ watch(graphData, render, { deep: true, flush: 'post' })
 watch(() => props.selectedNode, render, { flush: 'post' })
 watch(() => props.loading, render, { flush: 'post' })
 watch(locale, render, { flush: 'post' })
+watch(themeVersion, render, { flush: 'post' })
 
 onMounted(async () => {
+  themeObserver = new MutationObserver(() => {
+    themeVersion.value += 1
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
   if (typeof ResizeObserver !== 'undefined' && chartEl.value) {
     resizeObserver = new ResizeObserver(() => {
       render()
@@ -903,6 +991,8 @@ onBeforeUnmount(() => {
   }
   resizeObserver?.disconnect()
   resizeObserver = null
+  themeObserver?.disconnect()
+  themeObserver = null
   window.removeEventListener('resize', resize)
   chart?.dispose()
   chart = null

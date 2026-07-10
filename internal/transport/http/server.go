@@ -11,6 +11,7 @@ import (
 	"github.com/shiyindaxiaojie/eden-registry/internal/catalog"
 	"github.com/shiyindaxiaojie/eden-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/configcenter"
 	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
 	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
 )
@@ -19,6 +20,7 @@ import (
 type Handler struct {
 	config         *config.Config
 	catalog        catalog.Registry
+	configs        configcenter.Service
 	auth           auth.Authenticator
 	settings       settings.Controller
 	cluster        cluster.Membership
@@ -28,6 +30,7 @@ type Handler struct {
 	alertEvaluator *alert.Evaluator
 	consul         *consuladapter.HTTPAdapter
 	nacos          *nacosadapter.HTTPAdapter
+	nacosConfig    *nacosadapter.ConfigHTTPAdapter
 	nodeCache      sync.Map // map[string]config.Config
 	mux            *http.ServeMux
 }
@@ -36,6 +39,7 @@ type Handler struct {
 func NewHandler(cfg *config.Config,
 	eventState *catalog.State,
 	catalogRegistry catalog.Registry,
+	configService configcenter.Service,
 	authenticator auth.Authenticator,
 	settingsController settings.Controller,
 	clusterMembership cluster.Membership) *Handler {
@@ -47,6 +51,7 @@ func NewHandler(cfg *config.Config,
 	h := &Handler{
 		config:         cfg,
 		catalog:        catalogRegistry,
+		configs:        configService,
 		auth:           authenticator,
 		settings:       settingsController,
 		cluster:        clusterMembership,
@@ -56,6 +61,7 @@ func NewHandler(cfg *config.Config,
 		alertEvaluator: alertEvaluator,
 		consul:         consuladapter.NewHTTPAdapter(cfg, catalogRegistry),
 		nacos:          nacosadapter.NewHTTPAdapter(catalogRegistry),
+		nacosConfig:    nacosadapter.NewConfigHTTPAdapter(configService),
 		nodeCache:      sync.Map{},
 		mux:            http.NewServeMux(),
 	}
@@ -97,11 +103,19 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("/v1/health/service/", h.consul.GetHealthService)
 	h.nacos.RegisterRoutes(h.mux, "", h.APIKey)
 	h.nacos.RegisterRoutes(h.mux, "/nacos", h.APIKey)
+	h.nacosConfig.RegisterRoutes(h.mux, "", h.APIKey)
+	h.nacosConfig.RegisterRoutes(h.mux, "/nacos", h.APIKey)
 	h.mux.HandleFunc("/v1/catalog/dependency-graph", h.getDependencyGraph)
 	h.mux.HandleFunc("/v1/catalog/topology", h.getTopology)
 
-	// --- Namespace API ---
+	// --- Config Center API ---
 	adminOrDev := h.RBAC("admin", "developer")
+	h.mux.Handle("/v1/config", h.Auth(adminOrDev(http.HandlerFunc(h.configResource))))
+	h.mux.Handle("/v1/configs", h.Auth(adminOrDev(http.HandlerFunc(h.listConfigs))))
+	h.mux.Handle("/v1/config/history", h.Auth(adminOrDev(http.HandlerFunc(h.configHistory))))
+	h.mux.Handle("/v1/config/listener", h.APIKey(http.HandlerFunc(h.configListener)))
+
+	// --- Namespace API ---
 	h.mux.Handle("/v1/namespaces", h.Auth(adminOrDev(http.HandlerFunc(h.listNamespaces))))
 	h.mux.Handle("/v1/namespace", h.Auth(adminOrDev(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

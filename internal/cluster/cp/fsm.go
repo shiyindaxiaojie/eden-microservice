@@ -44,6 +44,8 @@ func (f *FSM) Apply(l *hraft.Log) interface{} {
 		case "online":
 			healthStatus = catalog.HealthPassing
 		case "offline":
+			healthStatus = catalog.HealthOffline
+		case "critical":
 			healthStatus = catalog.HealthCritical
 		default:
 			return fmt.Errorf("invalid status: %s", cmd.Status)
@@ -171,6 +173,7 @@ func fromReplicatedInstance(inst *replication.Instance) *catalog.Instance {
 	return &catalog.Instance{
 		ID:            inst.ID,
 		ServiceName:   inst.ServiceName,
+		Group:         inst.Group,
 		Namespace:     inst.Namespace,
 		Host:          inst.Host,
 		Port:          inst.Port,

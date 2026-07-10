@@ -21,6 +21,7 @@ type TopologyInstance struct {
 type TopologyNode struct {
 	ID            string             `json:"id"`
 	Name          string             `json:"name"`
+	Group         string             `json:"group"`
 	Namespace     string             `json:"namespace"`
 	InstanceCount int                `json:"instance_count"`
 	HealthyCount  int                `json:"healthy_count"`

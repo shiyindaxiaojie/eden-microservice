@@ -581,6 +581,7 @@ func (c *Client) Register(instance *ServiceInstance) error {
 		body := map[string]interface{}{
 			"id":           instance.ID,
 			"service_name": instance.ServiceName,
+			"group":        instance.Group,
 			"namespace":    c.namespace,
 			"host":         instance.Host,
 			"port":         instance.Port,
@@ -610,7 +611,7 @@ func (c *Client) Register(instance *ServiceInstance) error {
 	if err == nil {
 		c.identityMu.Lock()
 		if c.consumerService == "" {
-			c.consumerService = instance.ServiceName
+			c.consumerService = serviceCacheKey(instance.Group, instance.ServiceName)
 		}
 		c.identityMu.Unlock()
 		go c.reportTopology()
@@ -631,6 +632,7 @@ func (c *Client) Deregister(instance *ServiceInstance) error {
 			resp, err := client.SetInstanceStatus(ctx, &pb.SetInstanceStatusRequest{
 				Namespace:   c.namespace,
 				ServiceName: instance.ServiceName,
+				Group:       instance.Group,
 				InstanceId:  instance.ID,
 				Status:      "offline",
 			})
@@ -647,6 +649,7 @@ func (c *Client) Deregister(instance *ServiceInstance) error {
 		body := map[string]string{
 			"namespace":    c.namespace,
 			"service_name": instance.ServiceName,
+			"group":        instance.Group,
 			"instance_id":  instance.ID,
 			"status":       "offline",
 		}
@@ -672,6 +675,11 @@ func (c *Client) Deregister(instance *ServiceInstance) error {
 }
 
 func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
+	return c.DiscoveryGroup(serviceName, DefaultServiceGroup)
+}
+
+// DiscoveryGroup discovers healthy instances in a specific service group.
+func (c *Client) DiscoveryGroup(serviceName, group string) ([]*ServiceInstance, error) {
 	var instances []*ServiceInstance
 	err := c.executeWithFailover("Discovery", func(node *registryNode) error {
 		if c.transport == "grpc" || c.transport == "quic" {
@@ -686,6 +694,7 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 			resp, err := client.Discover(ctx, &pb.DiscoverRequest{
 				Namespace:   c.namespace,
 				ServiceName: serviceName,
+				Group:       group,
 				HealthyOnly: true,
 				Datacenter:  c.datacenter,
 			})
@@ -700,6 +709,7 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 		if c.namespace != "" {
 			reqURL += "&namespace=" + c.namespace
 		}
+		reqURL += "&group=" + neturl.QueryEscape(normalizeServiceGroup(group))
 		if consumerService := c.getConsumerService(); consumerService != "" {
 			reqURL += "&consumer_service=" + neturl.QueryEscape(consumerService)
 		}
@@ -721,6 +731,7 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 		var serviceRows []struct {
 			ID          string            `json:"id"`
 			ServiceName string            `json:"service_name"`
+			Group       string            `json:"group"`
 			Host        string            `json:"host"`
 			Port        int               `json:"port"`
 			Weight      int               `json:"weight"`
@@ -737,6 +748,7 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 			result = append(result, &ServiceInstance{
 				ID:          ei.ID,
 				ServiceName: ei.ServiceName,
+				Group:       ei.Group,
 				Host:        ei.Host,
 				Port:        ei.Port,
 				Weight:      ei.Weight,
@@ -749,14 +761,15 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 		return nil
 	})
 
+	cacheKey := serviceCacheKey(group, serviceName)
 	if err != nil {
 		// Fallback to cache if discovery fails
-		if cachedInstances, ok := c.cache.Get(serviceName); ok {
+		if cachedInstances, ok := c.cache.Get(cacheKey); ok {
 			logger.Warn("[Registry SDK] Discovery failed, using local cache for %s", serviceName)
 			return cachedInstances, nil
 		}
 	} else if len(instances) > 0 {
-		c.cache.Update(serviceName, instances)
+		c.cache.Update(cacheKey, instances)
 	}
 
 	return instances, err
@@ -765,7 +778,13 @@ func (c *Client) Discovery(serviceName string) ([]*ServiceInstance, error) {
 // Subscribe watches for service changes using gRPC Watch with auto-reconnect.
 // Falls back to polling if gRPC Watch is unavailable.
 func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)) error {
-	c.rememberSubscription(serviceName)
+	return c.SubscribeGroup(serviceName, DefaultServiceGroup, callback)
+}
+
+// SubscribeGroup watches a service in a specific group.
+func (c *Client) SubscribeGroup(serviceName, group string, callback func([]*ServiceInstance)) error {
+	cacheKey := serviceCacheKey(group, serviceName)
+	c.rememberSubscription(cacheKey)
 	go c.reportTopology()
 
 	c.wg.Add(1)
@@ -780,7 +799,7 @@ func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)
 
 			// 1. Try establishing gRPC Watch (Real-time)
 			if c.transport == "grpc" || c.transport == "quic" {
-				if c.tryWatch(serviceName, callback) {
+				if c.tryWatch(serviceName, group, callback) {
 					// tryWatch returns true if it successfully connected and then disconnected.
 					// We loop back to try reconnecting Watch.
 					time.Sleep(1 * time.Second) // Avoid tight loop
@@ -790,7 +809,7 @@ func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)
 
 			// 2. Fallback to Polling (If Watch fails or transport is HTTP)
 			// pollSubscribe will now run for a few cycles and then exit to let us try Watch again.
-			c.pollSubscribeThenRetry(serviceName, callback)
+			c.pollSubscribeThenRetry(serviceName, group, callback)
 		}
 	}()
 	return nil
@@ -798,7 +817,7 @@ func (c *Client) Subscribe(serviceName string, callback func([]*ServiceInstance)
 
 // tryWatch attempts to establish a gRPC Watch stream. Returns true if it connected
 // (and the stream ended), false if it could not connect at all.
-func (c *Client) tryWatch(serviceName string, callback func([]*ServiceInstance)) bool {
+func (c *Client) tryWatch(serviceName, group string, callback func([]*ServiceInstance)) bool {
 	nodes := c.sortedNodes()
 	for _, node := range nodes {
 		logger.Debug("[Registry Subscribe] Attempting for service '%s' via node %s", serviceName, node.ID)
@@ -822,6 +841,7 @@ func (c *Client) tryWatch(serviceName string, callback func([]*ServiceInstance))
 		stream, err := client.Watch(ctx, &pb.WatchRequest{
 			Namespace:   c.namespace,
 			ServiceName: serviceName,
+			Group:       group,
 		})
 		if err != nil {
 			logger.Warn("[Registry Subscribe] Failed to establish stream on node %s: %v", node.ID, err)
@@ -843,7 +863,7 @@ func (c *Client) tryWatch(serviceName string, callback func([]*ServiceInstance))
 				break
 			}
 			insts := fromProtoInstances(resp.Instances)
-			c.cache.Update(serviceName, insts)
+			c.cache.Update(serviceCacheKey(group, serviceName), insts)
 			callback(insts)
 		}
 		return true
@@ -852,7 +872,7 @@ func (c *Client) tryWatch(serviceName string, callback func([]*ServiceInstance))
 }
 
 // pollSubscribeThenRetry polls Discovery for a while, then returns to allow attempting Watch upgrade.
-func (c *Client) pollSubscribeThenRetry(serviceName string, callback func([]*ServiceInstance)) {
+func (c *Client) pollSubscribeThenRetry(serviceName, group string, callback func([]*ServiceInstance)) {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 
@@ -868,7 +888,7 @@ func (c *Client) pollSubscribeThenRetry(serviceName string, callback func([]*Ser
 		case <-retryWatchTimer.C:
 			return // Time to try gRPC Watch again
 		case <-ticker.C:
-			instances, err := c.Discovery(serviceName)
+			instances, err := c.DiscoveryGroup(serviceName, group)
 			if err != nil {
 				continue
 			}
@@ -894,6 +914,7 @@ func (c *Client) Heartbeat(instance *ServiceInstance) error {
 			resp, err := client.Heartbeat(ctx, &pb.HeartbeatRequest{
 				Namespace:   c.namespace,
 				ServiceName: instance.ServiceName,
+				Group:       instance.Group,
 				InstanceId:  instance.ID,
 			})
 			if err != nil {
@@ -908,6 +929,7 @@ func (c *Client) Heartbeat(instance *ServiceInstance) error {
 		body := map[string]string{
 			"namespace":    c.namespace,
 			"service_name": instance.ServiceName,
+			"group":        instance.Group,
 			"instance_id":  instance.ID,
 		}
 		data, _ := json.Marshal(body)
@@ -950,7 +972,8 @@ func (c *Client) startCacheRefresh() {
 	c.cache.StartBackgroundSyncer(30*time.Second, func() map[string][]*ServiceInstance {
 		result := make(map[string][]*ServiceInstance)
 		for _, serviceName := range c.cache.ServiceNames() {
-			instances, err := c.Discovery(serviceName)
+			name, group := splitServiceCacheKey(serviceName)
+			instances, err := c.DiscoveryGroup(name, group)
 			if err == nil {
 				result[serviceName] = instances
 			}
@@ -1156,10 +1179,35 @@ func (c *Client) pickHttpAddr() string {
 	return addr
 }
 
+func normalizeServiceGroup(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return DefaultServiceGroup
+	}
+	return group
+}
+
+func serviceCacheKey(group, serviceName string) string {
+	name := strings.TrimSpace(serviceName)
+	normalizedGroup := normalizeServiceGroup(group)
+	if normalizedGroup == DefaultServiceGroup {
+		return name
+	}
+	return normalizedGroup + "@@" + name
+}
+
+func splitServiceCacheKey(key string) (string, string) {
+	if index := strings.Index(key, "@@"); index > 0 {
+		return key[index+2:], key[:index]
+	}
+	return key, DefaultServiceGroup
+}
+
 func toProtoInstance(inst *ServiceInstance) *pb.ServiceInstance {
 	return &pb.ServiceInstance{
 		Id:          inst.ID,
 		ServiceName: inst.ServiceName,
+		Group:       inst.Group,
 		Host:        inst.Host,
 		Port:        int32(inst.Port),
 		Weight:      int32(inst.Weight),
@@ -1174,6 +1222,7 @@ func fromProtoInstances(pbList []*pb.ServiceInstance) []*ServiceInstance {
 		result = append(result, &ServiceInstance{
 			ID:          pbi.Id,
 			ServiceName: pbi.ServiceName,
+			Group:       pbi.Group,
 			Host:        pbi.Host,
 			Port:        int(pbi.Port),
 			Weight:      int(pbi.Weight),

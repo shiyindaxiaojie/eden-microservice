@@ -60,7 +60,8 @@ func (a *HTTPAdapter) registerInstance(w http.ResponseWriter, r *http.Request) {
 
 	inst := &catalog.Instance{
 		ID:          req.InstanceID,
-		ServiceName: req.Service.FullName,
+		ServiceName: req.Service.Name,
+		Group:       req.Service.GroupName,
 		Namespace:   req.Namespace,
 		Host:        req.Address,
 		Port:        req.Port,
@@ -73,7 +74,7 @@ func (a *HTTPAdapter) registerInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !req.Healthy || !req.Enable {
-		if err := a.catalog.SetInstanceStatus(req.Namespace, inst.ServiceName, inst.ID, "offline"); err != nil {
+		if err := a.catalog.SetInstanceStatus(req.Namespace, inst.QualifiedServiceName(), inst.ID, "offline"); err != nil {
 			httpError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -100,7 +101,7 @@ func (a *HTTPAdapter) deregisterInstance(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := a.catalog.Deregister(req.Namespace, inst.ServiceName, inst.ID); err != nil {
+	if err := a.catalog.Deregister(req.Namespace, inst.QualifiedServiceName(), inst.ID); err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -128,7 +129,8 @@ func (a *HTTPAdapter) beat(w http.ResponseWriter, r *http.Request) {
 	if findErr != nil {
 		registerInst := &catalog.Instance{
 			ID:          req.InstanceID,
-			ServiceName: req.Service.FullName,
+			ServiceName: req.Service.Name,
+			Group:       req.Service.GroupName,
 			Namespace:   req.Namespace,
 			Host:        req.Address,
 			Port:        req.Port,
@@ -143,7 +145,7 @@ func (a *HTTPAdapter) beat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.catalog.Heartbeat(req.Namespace, inst.ServiceName, inst.ID); err != nil {
+	if err := a.catalog.Heartbeat(req.Namespace, inst.QualifiedServiceName(), inst.ID); err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -258,7 +260,7 @@ func (a *HTTPAdapter) serviceNames(namespace string) ([]string, error) {
 		if !ok {
 			continue
 		}
-		name, _ := service["name"].(string)
+		name, _ := service["qualified_name"].(string)
 		if name != "" {
 			names = append(names, name)
 		}

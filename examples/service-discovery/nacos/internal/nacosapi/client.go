@@ -109,7 +109,7 @@ func (c *Client) Register(inst *ServiceInstance) error {
 	}
 
 	c.mu.Lock()
-	c.consumerService = inst.ServiceName
+	c.consumerService = qualifiedServiceName(c.groupName, inst.ServiceName)
 	c.mu.Unlock()
 
 	return retryLeaderAction(func() error {
@@ -216,7 +216,7 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) rememberProvider(serviceName string) {
-	serviceName = strings.TrimSpace(serviceName)
+	serviceName = qualifiedServiceName(c.groupName, serviceName)
 	if serviceName == "" {
 		return
 	}
@@ -227,6 +227,18 @@ func (c *Client) rememberProvider(serviceName string) {
 		return
 	}
 	c.providers[serviceName] = struct{}{}
+}
+
+func qualifiedServiceName(group, serviceName string) string {
+	serviceName = strings.TrimSpace(serviceName)
+	group = strings.TrimSpace(group)
+	if serviceName == "" || group == "" {
+		return serviceName
+	}
+	if strings.Contains(serviceName, "@@") {
+		return serviceName
+	}
+	return group + "@@" + serviceName
 }
 
 func (c *Client) reportTopology() {

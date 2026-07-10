@@ -32,6 +32,7 @@ type ServiceInstance struct {
 	Datacenter    string                 `protobuf:"bytes,7,opt,name=datacenter,proto3" json:"datacenter,omitempty"`
 	Metadata      map[string]string      `protobuf:"bytes,8,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Namespace     string                 `protobuf:"bytes,9,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Group         string                 `protobuf:"bytes,10,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -129,6 +130,13 @@ func (x *ServiceInstance) GetNamespace() string {
 	return ""
 }
 
+func (x *ServiceInstance) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Instance      *ServiceInstance       `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
@@ -222,6 +230,7 @@ type DeregisterRequest struct {
 	ServiceName   string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	InstanceId    string                 `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Group         string                 `protobuf:"bytes,4,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -277,6 +286,13 @@ func (x *DeregisterRequest) GetNamespace() string {
 	return ""
 }
 
+func (x *DeregisterRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
 type DeregisterResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -327,6 +343,7 @@ type SetInstanceStatusRequest struct {
 	ServiceName   string                 `protobuf:"bytes,2,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	InstanceId    string                 `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"` // "online" or "offline"
+	Group         string                 `protobuf:"bytes,5,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -389,6 +406,13 @@ func (x *SetInstanceStatusRequest) GetStatus() string {
 	return ""
 }
 
+func (x *SetInstanceStatusRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
 type SetInstanceStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -438,6 +462,7 @@ type HeartbeatRequest struct {
 	ServiceName   string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	InstanceId    string                 `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Group         string                 `protobuf:"bytes,4,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -493,6 +518,13 @@ func (x *HeartbeatRequest) GetNamespace() string {
 	return ""
 }
 
+func (x *HeartbeatRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
 type HeartbeatResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -543,6 +575,7 @@ type DiscoverRequest struct {
 	HealthyOnly   bool                   `protobuf:"varint,2,opt,name=healthy_only,json=healthyOnly,proto3" json:"healthy_only,omitempty"`
 	Datacenter    string                 `protobuf:"bytes,3,opt,name=datacenter,proto3" json:"datacenter,omitempty"`
 	Namespace     string                 `protobuf:"bytes,4,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Group         string                 `protobuf:"bytes,5,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -605,6 +638,13 @@ func (x *DiscoverRequest) GetNamespace() string {
 	return ""
 }
 
+func (x *DiscoverRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
 type DiscoverResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Instances     []*ServiceInstance     `protobuf:"bytes,1,rep,name=instances,proto3" json:"instances,omitempty"`
@@ -653,6 +693,7 @@ type WatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ServiceName   string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	Namespace     string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Group         string                 `protobuf:"bytes,3,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -697,6 +738,13 @@ func (x *WatchRequest) GetServiceName() string {
 func (x *WatchRequest) GetNamespace() string {
 	if x != nil {
 		return x.Namespace
+	}
+	return ""
+}
+
+func (x *WatchRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
 	}
 	return ""
 }
@@ -1065,7 +1113,7 @@ var File_api_proto_registry_v1_registry_proto protoreflect.FileDescriptor
 
 const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"\n" +
-	"$api/proto/registry/v1/registry.proto\x12\x0fsdk.registry.v1\"\xe3\x02\n" +
+	"$api/proto/registry/v1/registry.proto\x12\x0fsdk.registry.v1\"\xf9\x02\n" +
 	"\x0fServiceInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fservice_name\x18\x02 \x01(\tR\vserviceName\x12\x12\n" +
@@ -1077,48 +1125,55 @@ const file_api_proto_registry_v1_registry_proto_rawDesc = "" +
 	"datacenter\x18\a \x01(\tR\n" +
 	"datacenter\x12J\n" +
 	"\bmetadata\x18\b \x03(\v2..sdk.registry.v1.ServiceInstance.MetadataEntryR\bmetadata\x12\x1c\n" +
-	"\tnamespace\x18\t \x01(\tR\tnamespace\x1a;\n" +
+	"\tnamespace\x18\t \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05group\x18\n" +
+	" \x01(\tR\x05group\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"O\n" +
 	"\x0fRegisterRequest\x12<\n" +
 	"\binstance\x18\x01 \x01(\v2 .sdk.registry.v1.ServiceInstanceR\binstance\",\n" +
 	"\x10RegisterResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"u\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x8b\x01\n" +
 	"\x11DeregisterRequest\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
 	"instanceId\x12\x1c\n" +
-	"\tnamespace\x18\x03 \x01(\tR\tnamespace\".\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05group\x18\x04 \x01(\tR\x05group\".\n" +
 	"\x12DeregisterResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x94\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xaa\x01\n" +
 	"\x18SetInstanceStatusRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12!\n" +
 	"\fservice_name\x18\x02 \x01(\tR\vserviceName\x12\x1f\n" +
 	"\vinstance_id\x18\x03 \x01(\tR\n" +
 	"instanceId\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status\"5\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x14\n" +
+	"\x05group\x18\x05 \x01(\tR\x05group\"5\n" +
 	"\x19SetInstanceStatusResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"t\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x8a\x01\n" +
 	"\x10HeartbeatRequest\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
 	"instanceId\x12\x1c\n" +
-	"\tnamespace\x18\x03 \x01(\tR\tnamespace\"-\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05group\x18\x04 \x01(\tR\x05group\"-\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x95\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xab\x01\n" +
 	"\x0fDiscoverRequest\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12!\n" +
 	"\fhealthy_only\x18\x02 \x01(\bR\vhealthyOnly\x12\x1e\n" +
 	"\n" +
 	"datacenter\x18\x03 \x01(\tR\n" +
 	"datacenter\x12\x1c\n" +
-	"\tnamespace\x18\x04 \x01(\tR\tnamespace\"R\n" +
+	"\tnamespace\x18\x04 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05group\x18\x05 \x01(\tR\x05group\"R\n" +
 	"\x10DiscoverResponse\x12>\n" +
-	"\tinstances\x18\x01 \x03(\v2 .sdk.registry.v1.ServiceInstanceR\tinstances\"O\n" +
+	"\tinstances\x18\x01 \x03(\v2 .sdk.registry.v1.ServiceInstanceR\tinstances\"e\n" +
 	"\fWatchRequest\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x1c\n" +
-	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"g\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05group\x18\x03 \x01(\tR\x05group\"g\n" +
 	"\rWatchResponse\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12>\n" +
 	"\tinstances\x18\x02 \x03(\v2 .sdk.registry.v1.ServiceInstanceR\tinstances\"\x13\n" +

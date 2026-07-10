@@ -19,6 +19,7 @@ const (
 type Instance struct {
 	ID          string
 	ServiceName string
+	Group       string
 	Namespace   string
 	Node        string
 	Address     string
@@ -27,14 +28,16 @@ type Instance struct {
 	Metadata    map[string]string
 	Tags        []string
 	CheckID     string
-	Status      string
-	Datacenter  string
+	Status        string
+	ManualOffline bool
+	Datacenter    string
 }
 
 // Deregistration captures the minimum data needed to take an instance offline.
 type Deregistration struct {
 	Namespace   string
 	ServiceName string
+	Group       string
 	InstanceID  string
 }
 
@@ -44,13 +47,15 @@ type CatalogServiceEnvelope struct {
 
 	LegacyID          string            `json:"id,omitempty"`
 	LegacyServiceName string            `json:"service_name,omitempty"`
+	LegacyGroup       string            `json:"group,omitempty"`
 	LegacyNamespace   string            `json:"namespace,omitempty"`
 	LegacyHost        string            `json:"host,omitempty"`
 	LegacyPort        int               `json:"port,omitempty"`
 	LegacyWeight      int               `json:"weight,omitempty"`
 	LegacyMetadata    map[string]string `json:"metadata,omitempty"`
-	LegacyStatus      string            `json:"status,omitempty"`
-	LegacyDatacenter  string            `json:"datacenter,omitempty"`
+	LegacyStatus        string            `json:"status,omitempty"`
+	LegacyManualOffline bool              `json:"manual_offline,omitempty"`
+	LegacyDatacenter    string            `json:"datacenter,omitempty"`
 	LegacyDC          string            `json:"dc,omitempty"`
 	LegacyTags        []string          `json:"tags,omitempty"`
 }
@@ -58,6 +63,7 @@ type CatalogServiceEnvelope struct {
 type legacyCatalogInstance struct {
 	ID          string            `json:"id"`
 	ServiceName string            `json:"service_name"`
+	Group       string            `json:"group,omitempty"`
 	Namespace   string            `json:"namespace,omitempty"`
 	Host        string            `json:"host"`
 	Port        int               `json:"port"`
@@ -65,7 +71,8 @@ type legacyCatalogInstance struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 	Datacenter  string            `json:"datacenter,omitempty"`
 	DC          string            `json:"dc,omitempty"`
-	Status      string            `json:"status,omitempty"`
+	Status        string            `json:"status,omitempty"`
+	ManualOffline bool              `json:"manual_offline,omitempty"`
 }
 
 type catalogServiceWire struct {
@@ -74,6 +81,7 @@ type catalogServiceWire struct {
 	ServiceID        string            `json:"ServiceID"`
 	ServiceName      string            `json:"ServiceName"`
 	LegacyName       string            `json:"service_name"`
+	LegacyGroup      string            `json:"group"`
 	Address          string            `json:"Address"`
 	ServiceAddress   string            `json:"ServiceAddress"`
 	LegacyHost       string            `json:"host"`
@@ -89,6 +97,7 @@ type catalogServiceWire struct {
 	Namespace        string            `json:"Namespace"`
 	LegacyNamespace  string            `json:"namespace"`
 	Status           string            `json:"status"`
+	ManualOffline    bool              `json:"manual_offline"`
 	ServiceWeights   struct {
 		Passing int `json:"Passing"`
 		Warning int `json:"Warning"`
@@ -119,6 +128,7 @@ func DecodeDeregisterRequest(body []byte, defaultNamespace string) (*Deregistrat
 	var legacy struct {
 		Namespace   string `json:"namespace"`
 		ServiceName string `json:"service_name"`
+		Group       string `json:"group"`
 		InstanceID  string `json:"instance_id"`
 	}
 	if err := json.Unmarshal(body, &legacy); err == nil && (legacy.ServiceName != "" || legacy.InstanceID != "") {
@@ -128,6 +138,7 @@ func DecodeDeregisterRequest(body []byte, defaultNamespace string) (*Deregistrat
 		return &Deregistration{
 			Namespace:   legacy.Namespace,
 			ServiceName: legacy.ServiceName,
+			Group:       legacy.Group,
 			InstanceID:  legacy.InstanceID,
 		}, nil
 	}
@@ -194,13 +205,15 @@ func DecodeCatalogInstances(body []byte) ([]Instance, error) {
 			result = append(result, normalizeInstance(&Instance{
 				ID:          firstNonEmpty(row.ServiceID, row.ID, row.LegacyID),
 				ServiceName: name,
+				Group:       row.LegacyGroup,
 				Namespace:   firstNonEmpty(row.Namespace, row.LegacyNamespace),
 				Address:     address,
 				Port:        firstNonZero(row.ServicePort, row.LegacyPort),
 				Weight:      weight,
 				Metadata:    meta,
 				Tags:        tags,
-				Status:      row.Status,
+				Status:        row.Status,
+				ManualOffline: row.ManualOffline,
 				Datacenter:  firstNonEmpty(row.Datacenter, row.LegacyDatacenter, row.LegacyDC),
 			}))
 		}
@@ -214,12 +227,14 @@ func DecodeCatalogInstances(body []byte) ([]Instance, error) {
 			result = append(result, normalizeInstance(&Instance{
 				ID:          row.ID,
 				ServiceName: row.ServiceName,
+				Group:       row.Group,
 				Namespace:   row.Namespace,
 				Address:     row.Host,
 				Port:        row.Port,
 				Weight:      row.Weight,
 				Metadata:    copyMap(row.Metadata),
-				Status:      row.Status,
+				Status:        row.Status,
+				ManualOffline: row.ManualOffline,
 				Datacenter:  firstNonEmpty(row.Datacenter, row.DC),
 			}))
 		}
@@ -266,12 +281,14 @@ func BuildCatalogServiceEnvelopes(instances []Instance, requiredTags []string) [
 			},
 			LegacyID:          inst.ID,
 			LegacyServiceName: inst.ServiceName,
+			LegacyGroup:       inst.Group,
 			LegacyNamespace:   inst.Namespace,
 			LegacyHost:        inst.Address,
 			LegacyPort:        inst.Port,
 			LegacyWeight:      weight,
 			LegacyMetadata:    meta,
 			LegacyStatus:      inst.Status,
+			LegacyManualOffline: inst.ManualOffline,
 			LegacyDatacenter:  inst.Datacenter,
 			LegacyDC:          inst.Datacenter,
 			LegacyTags:        tags,
@@ -409,6 +426,7 @@ func decodeLegacyRegister(body []byte, defaultDatacenter, defaultNamespace strin
 	return &Instance{
 		ID:          legacy.ID,
 		ServiceName: legacy.ServiceName,
+		Group:       legacy.Group,
 		Namespace:   firstNonEmpty(legacy.Namespace, defaultNamespace),
 		Address:     legacy.Host,
 		Port:        legacy.Port,
@@ -493,6 +511,9 @@ func normalizeInstance(inst *Instance) Instance {
 	}
 	if out.Status == "" {
 		out.Status = consulapi.HealthPassing
+	}
+	if out.Status == "offline" {
+		out.ManualOffline = true
 	}
 	if len(out.Tags) == 0 {
 		out.Tags = StoredTags(out.Metadata)

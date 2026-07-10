@@ -889,13 +889,13 @@ onBeforeUnmount(() => {
               <path
                 v-if="memoryTrendAreaPath"
                 :d="memoryTrendAreaPath"
-                fill="rgba(59, 130, 246, 0.12)"
+                fill="rgba(109, 158, 193, 0.12)"
               />
               <polyline
                 v-if="memoryTrendPolyline"
                 :points="memoryTrendPolyline"
                 fill="none"
-                stroke="#2563eb"
+                stroke="#6d9ec1"
                 stroke-width="3"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -905,8 +905,8 @@ onBeforeUnmount(() => {
                 :cx="memoryTrendLastPoint.x"
                 :cy="memoryTrendLastPoint.y"
                 r="4.5"
-                fill="#ffffff"
-                stroke="#2563eb"
+                fill="#0c1d30"
+                stroke="#6d9ec1"
                 stroke-width="3"
               />
             </svg>
@@ -1207,8 +1207,8 @@ onBeforeUnmount(() => {
             <!-- 娓愬彉濉厖 -->
             <defs>
               <linearGradient id="fullAreaGradient" x1="0" y2="1">
-                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.2" />
-                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+                <stop offset="0%" stop-color="#6d9ec1" stop-opacity="0.2" />
+                <stop offset="100%" stop-color="#6d9ec1" stop-opacity="0" />
               </linearGradient>
             </defs>
 
@@ -1223,7 +1223,7 @@ onBeforeUnmount(() => {
                 v-if="fullChartModel.polyline"
                 :points="fullChartModel.polyline"
                 fill="none"
-                stroke="#2563eb"
+                stroke="#6d9ec1"
                 stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -1234,8 +1234,8 @@ onBeforeUnmount(() => {
                 :cx="point.x"
                 :cy="point.y"
                 r="3.5"
-                fill="#fff"
-                stroke="#2563eb"
+                fill="var(--dashboard-chart-bg)"
+                stroke="#6d9ec1"
                 stroke-width="2"
               >
                 <title>{{ `${formatTimeLabel(point.timestamp)} / ${formatMemory(point.value)}` }}</title>
@@ -1245,8 +1245,8 @@ onBeforeUnmount(() => {
                 :cx="fullChartModel.lastPoint.x"
                 :cy="fullChartModel.lastPoint.y"
                 r="4"
-                fill="#fff"
-                stroke="#2563eb"
+                fill="var(--dashboard-chart-bg)"
+                stroke="#6d9ec1"
                 stroke-width="2.5"
               >
                 <title>{{ `${formatTimeLabel(fullChartModel.lastPoint.timestamp)} / ${formatMemory(fullChartModel.lastPoint.value)}` }}</title>
@@ -1270,6 +1270,11 @@ onBeforeUnmount(() => {
   --dashboard-card-shadow: none;
   --dashboard-card-hover-shadow: none;
   --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --dashboard-card-bg: #ffffff;
+  --dashboard-card-hover-bg: #f8fafc;
+  --dashboard-card-border: rgba(15, 23, 42, 0.08);
+  --dashboard-activity-bg: #ffffff;
+  --dashboard-activity-border: rgba(15, 23, 42, 0.08);
   --dashboard-system-bg:
     radial-gradient(circle at 100% 0%, rgba(191, 219, 254, 0.35), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
@@ -1280,30 +1285,35 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 18px;
   overflow: hidden;
 }
 
 :global(html[data-theme="dark"] .dashboard-shell) {
-  --dashboard-panel-shadow: none;
-  --dashboard-card-shadow: none;
-  --dashboard-card-hover-shadow: none;
-  --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  --dashboard-system-bg: var(--bg-card);
+  --dashboard-panel-shadow: 0 18px 42px rgba(0, 0, 0, 0.12);
+  --dashboard-card-shadow: 0 14px 34px rgba(0, 0, 0, 0.11);
+  --dashboard-card-hover-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
+  --dashboard-icon-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --dashboard-card-bg: rgba(12, 29, 48, 0.82);
+  --dashboard-card-hover-bg: rgba(14, 33, 54, 0.9);
+  --dashboard-card-border: rgba(154, 181, 207, 0.1);
+  --dashboard-activity-bg: rgba(10, 25, 42, 0.82);
+  --dashboard-activity-border: rgba(154, 181, 207, 0.09);
+  --dashboard-system-bg: rgba(12, 29, 48, 0.88);
   --dashboard-activity-head-bg: transparent;
-  --dashboard-chart-bg: rgba(10, 33, 56, 0.7);
-  --dashboard-event-dot-bg: var(--bg-secondary);
+  --dashboard-chart-bg: rgba(8, 24, 41, 0.86);
+  --dashboard-event-dot-bg: #0a192a;
 }
 
 .metric-grid {
   flex: 0 0 auto;
-  min-height: 178px;
+  min-height: 206px;
   max-height: none;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  align-items: center;
-  padding: 30px 8px 34px;
+  gap: 14px;
+  align-items: stretch;
+  padding: 0;
   background: transparent;
 }
 
@@ -1311,17 +1321,17 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   min-height: 0;
   height: 100%;
-  justify-content: center;
-  padding: 0 42px 14px;
-  overflow: visible;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+  justify-content: flex-start;
+  padding: 20px 20px 18px;
+  overflow: hidden;
+  border: 1px solid var(--dashboard-card-border);
+  border-radius: 16px;
+  background: var(--dashboard-card-bg);
   box-shadow: var(--dashboard-card-shadow);
-  transition: background 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .metric-card + .metric-card {
@@ -1331,11 +1341,11 @@ onBeforeUnmount(() => {
 .metric-card::before {
   content: '';
   position: absolute;
-  inset: auto auto 0 24px;
-  width: 64px;
-  height: 3px;
-  border-radius: 999px;
-  opacity: 0.9;
+  inset: 0 auto auto 20px;
+  width: 56px;
+  height: 2px;
+  border-radius: 0 0 999px 999px;
+  opacity: 0.82;
 }
 
 .metric-card::after {
@@ -1348,22 +1358,22 @@ onBeforeUnmount(() => {
   top: 10px;
   bottom: 18px;
   left: 0;
-  display: block;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, rgba(148, 213, 255, 0.12), transparent);
+  display: none;
 }
 
 .metric-card:hover {
-  background: transparent;
+  transform: translateY(-2px);
+  border-color: rgba(189, 206, 222, 0.16);
+  background: var(--dashboard-card-hover-bg);
   box-shadow: var(--dashboard-card-hover-shadow);
 }
 
 .metric-card.is-blue::before {
-  background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+  background: #d7a541;
 }
 
 .metric-card.is-cyan::before {
-  background: linear-gradient(90deg, var(--accent-cyan), #2dd4bf);
+  background: #6d9ec1;
 }
 
 .metric-card.is-purple::before {
@@ -1375,7 +1385,7 @@ onBeforeUnmount(() => {
 }
 
 .metric-card.is-slate::before {
-  background: linear-gradient(90deg, #475569, #94a3b8);
+  background: #7f91a4;
 }
 
 .metric-card-head {
@@ -1383,7 +1393,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 38px;
+  min-height: 36px;
 }
 
 .metric-card-title {
@@ -1394,9 +1404,9 @@ onBeforeUnmount(() => {
 }
 
 .metric-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1407,8 +1417,9 @@ onBeforeUnmount(() => {
 .metric-heading {
   margin: 0;
   min-width: 0;
-  font-size: 17px;
-  font-weight: 800;
+  font-family: 'Microsoft YaHei', 'PingFang SC', Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1.2;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1417,13 +1428,13 @@ onBeforeUnmount(() => {
 }
 
 .metric-card.is-blue .metric-icon {
-  color: var(--accent-blue);
-  background: rgba(57, 169, 246, 0.13);
+  color: #dfb45e;
+  background: rgba(215, 165, 65, 0.1);
 }
 
 .metric-card.is-cyan .metric-icon {
-  color: var(--accent-cyan);
-  background: rgba(34, 211, 238, 0.13);
+  color: #80abc9;
+  background: rgba(109, 158, 193, 0.1);
 }
 
 .metric-card.is-purple .metric-icon {
@@ -1437,8 +1448,8 @@ onBeforeUnmount(() => {
 }
 
 .metric-card.is-slate .metric-icon {
-  color: #475569;
-  background: rgba(100, 116, 139, 0.12);
+  color: #93a5b6;
+  background: rgba(127, 145, 164, 0.1);
 }
 
 .metric-main {
@@ -1446,13 +1457,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 11px;
+  gap: 10px;
   flex: 1;
 }
 
 .metric-main--system {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 172px;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, 0.72fr);
   align-items: stretch;
   gap: 10px 20px;
 }
@@ -1472,8 +1483,8 @@ onBeforeUnmount(() => {
 }
 
 .metric-value {
-  font-size: clamp(32px, 2.3vw, 42px);
-  font-weight: 800;
+  font-size: clamp(30px, 2.1vw, 38px);
+  font-weight: 720;
   line-height: 1;
   letter-spacing: -0.03em;
   color: var(--text-primary);
@@ -1481,7 +1492,7 @@ onBeforeUnmount(() => {
 }
 
 .metric-value--memory {
-  font-size: clamp(28px, 2vw, 38px);
+  font-size: clamp(26px, 1.8vw, 34px);
 }
 
 .metric-unit {
@@ -1581,7 +1592,8 @@ onBeforeUnmount(() => {
   max-width: 44%;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(125, 211, 252, 0.08);
+  border: 1px solid rgba(154, 181, 207, 0.08);
+  background: rgba(154, 181, 207, 0.055);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
@@ -1602,7 +1614,7 @@ onBeforeUnmount(() => {
   min-height: 24px;
   padding: 0 9px;
   border-radius: 999px;
-  background: rgba(125, 211, 252, 0.07);
+  background: rgba(154, 181, 207, 0.055);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
@@ -1628,7 +1640,7 @@ onBeforeUnmount(() => {
 .metric-progress-track {
   position: relative;
   width: 100%;
-  height: 8px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.16);
@@ -1638,8 +1650,8 @@ onBeforeUnmount(() => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
-  box-shadow: 0 6px 14px rgba(34, 211, 238, 0.18);
+  background: linear-gradient(90deg, #6d9ec1, #62a692);
+  box-shadow: none;
 }
 
 .metric-progress-text {
@@ -1752,30 +1764,30 @@ onBeforeUnmount(() => {
 :deep(.el-input__wrapper),
 :deep(.el-select__wrapper) {
   border-radius: 10px !important;
-  background: rgba(125, 211, 252, 0.07) !important;
+  background: var(--control-bg) !important;
   box-shadow: none !important;
   transition: all 0.2s ease;
 }
 
 :deep(.el-input__wrapper.is-focus),
 :deep(.el-select__wrapper.is-focused) {
-  background: rgba(125, 211, 252, 0.1) !important;
-  box-shadow: 0 0 0 1px rgba(57, 169, 246, 0.42) inset !important;
+  background: var(--control-hover-bg) !important;
+  box-shadow: 0 0 0 1px rgba(109, 158, 193, 0.32) inset !important;
 }
 
 :deep(.el-range-editor.el-input__inner) {
   border-radius: 10px !important;
   border: none !important;
-  background: rgba(125, 211, 252, 0.07) !important;
+  background: var(--control-bg) !important;
 }
 
 :deep(.el-range-editor.is-active) {
-  box-shadow: 0 0 0 1px rgba(57, 169, 246, 0.42) inset !important;
+  box-shadow: 0 0 0 1px rgba(109, 158, 193, 0.32) inset !important;
 }
 
 .activity-head {
   padding: 0 0 14px;
-  border-bottom: 1px solid rgba(148, 213, 255, 0.08);
+  border-bottom: 1px solid rgba(154, 181, 207, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1790,7 +1802,7 @@ onBeforeUnmount(() => {
 .panel-pagination {
   padding: 14px 0 0;
   background: transparent;
-  border-top: 1px solid rgba(148, 213, 255, 0.06);
+  border-top: 1px solid rgba(154, 181, 207, 0.06);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1813,6 +1825,19 @@ onBeforeUnmount(() => {
 :deep(.el-pagination__jump-prev),
 :deep(.el-pagination__jump-next) {
   display: none !important;
+}
+
+:deep(.el-pagination) {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-bg-color: var(--control-bg);
+  --el-pagination-hover-color: #d7a541;
+  --el-pagination-text-color: var(--text-muted);
+}
+
+:deep(.el-pager li.is-active) {
+  background: rgba(215, 165, 65, 0.12) !important;
+  color: #e7bd68 !important;
+  box-shadow: inset 0 0 0 1px rgba(215, 165, 65, 0.12);
 }
 
 :deep(.el-pagination__goto) {
@@ -1928,13 +1953,13 @@ onBeforeUnmount(() => {
 
 .event-node-dot.is-green { color: #10b981; }
 .event-node-dot.is-red { color: #ef4444; }
-.event-node-dot.is-blue { color: #3b82f6; }
+.event-node-dot.is-blue { color: #6d9ec1; }
 .event-node-dot.is-orange { color: #f59e0b; }
 .event-node-dot.is-cyan { color: #06b6d4; }
 
 .event-node-type.is-green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
 .event-node-type.is-red { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
-.event-node-type.is-blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.event-node-type.is-blue { background: rgba(109, 158, 193, 0.1); color: #80abc9; }
 .event-node-type.is-orange { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 .event-node-type.is-cyan { background: rgba(6, 182, 212, 0.1); color: #06b6d4; }
 
@@ -2019,7 +2044,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background:
-    linear-gradient(180deg, rgba(59, 130, 246, 0.03), rgba(59, 130, 246, 0)),
+    linear-gradient(180deg, rgba(109, 158, 193, 0.03), rgba(109, 158, 193, 0)),
     repeating-linear-gradient(
       to top,
       rgba(148, 163, 184, 0.08),
@@ -2065,11 +2090,11 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: none;
   background:
-    linear-gradient(180deg, rgba(57, 169, 246, 0.08), rgba(57, 169, 246, 0)),
+    linear-gradient(180deg, rgba(109, 158, 193, 0.07), rgba(109, 158, 193, 0)),
     repeating-linear-gradient(
       to top,
-      rgba(148, 213, 255, 0.08),
-      rgba(148, 213, 255, 0.08) 1px,
+      rgba(154, 181, 207, 0.065),
+      rgba(154, 181, 207, 0.065) 1px,
       transparent 1px,
       transparent 12px
     );
@@ -2106,10 +2131,10 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 22px 22px 16px;
-  border-radius: 24px;
-  border: none;
-  background: rgba(125, 211, 252, 0.035);
+  padding: 20px 20px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--dashboard-activity-border);
+  background: var(--dashboard-activity-bg);
   box-shadow: var(--dashboard-panel-shadow);
 }
 
@@ -2119,7 +2144,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 22px;
   padding: 0 0 20px;
-  border-bottom: 1px solid rgba(148, 213, 255, 0.08);
+  border-bottom: 1px solid rgba(154, 181, 207, 0.08);
   flex-shrink: 0;
   background: transparent;
   position: static;
@@ -2130,21 +2155,22 @@ onBeforeUnmount(() => {
 .panel-tabs {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(125, 211, 252, 0.08);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(154, 181, 207, 0.08);
+  border-radius: 10px;
+  background: rgba(154, 181, 207, 0.045);
 }
 
 .panel-tab {
-  min-height: 44px;
-  padding: 0 28px;
+  min-height: 36px;
+  padding: 0 22px;
   border: none;
-  border-radius: 999px;
+  border-radius: 7px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -2154,8 +2180,9 @@ onBeforeUnmount(() => {
 }
 
 .panel-tab.active {
-  background: var(--active-gradient);
-  color: #fff;
+  background: rgba(215, 165, 65, 0.12);
+  color: #e7bd68;
+  box-shadow: inset 0 0 0 1px rgba(215, 165, 65, 0.12);
   box-shadow: none;
 }
 
@@ -2196,13 +2223,13 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-radius: 999px;
   border: none;
-  background: rgba(125, 211, 252, 0.08);
+  background: rgba(154, 181, 207, 0.055);
 }
 
 .panel-summary-kicker {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent-blue);
+  color: #d7a541;
 }
 
 .panel-summary-value {
@@ -2259,7 +2286,7 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   border-radius: 0;
   border: none;
-  background: rgba(125, 211, 252, 0.035);
+  background: var(--control-muted-bg);
 }
 
 .event-entry + .event-entry {
@@ -2273,7 +2300,7 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   flex-shrink: 0;
   background: var(--accent-blue);
-  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.08);
+  box-shadow: 0 0 0 5px rgba(109, 158, 193, 0.08);
 }
 
 .event-dot.is-green {
@@ -2328,8 +2355,8 @@ onBeforeUnmount(() => {
 }
 
 .event-type.is-blue {
-  background: rgba(59, 130, 246, 0.08);
-  color: #2563eb;
+  background: rgba(109, 158, 193, 0.08);
+  color: #80abc9;
 }
 
 .event-type.is-green {
@@ -2421,7 +2448,7 @@ onBeforeUnmount(() => {
 }
 
 .log-line:hover {
-  background: rgba(125, 211, 252, 0.07);
+  background: var(--control-bg);
 }
 
 .log-line.is-info {
@@ -2487,8 +2514,8 @@ onBeforeUnmount(() => {
 }
 
 .log-level.is-info {
-  color: #1d4ed8;
-  background: rgba(59, 130, 246, 0.12);
+  color: #80abc9;
+  background: rgba(109, 158, 193, 0.12);
 }
 
 .log-level.is-warn {
@@ -2559,7 +2586,7 @@ onBeforeUnmount(() => {
 .log-search-input :deep(.el-input__wrapper) {
   min-height: 38px;
   border-radius: 10px;
-  background: rgba(125, 211, 252, 0.07) !important;
+  background: var(--control-bg) !important;
   border: none !important;
   box-shadow: none !important;
 }
@@ -2582,7 +2609,7 @@ onBeforeUnmount(() => {
 :deep(.panel-select .el-select__wrapper) {
   min-height: 38px;
   border-radius: 10px;
-  background: rgba(125, 211, 252, 0.07) !important;
+  background: var(--control-bg) !important;
   border: none !important;
   box-shadow: none !important;
 }
@@ -2594,11 +2621,11 @@ onBeforeUnmount(() => {
 }
 
 :deep(.log-scroll-toggle .el-switch) {
-  --el-switch-on-color: #3b82f6;
+  --el-switch-on-color: #6d9ec1;
   --el-switch-off-color: rgba(148, 163, 184, 0.3);
 }
 
-@media (max-width: 1360px) {
+@media (max-width: 1180px) {
   .metric-grid {
     flex: none;
     max-height: none;
@@ -2606,7 +2633,11 @@ onBeforeUnmount(() => {
   }
 
   .metric-main--system {
-    grid-template-columns: minmax(0, 1fr) 108px;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 1fr);
+  }
+
+  .metric-card.is-slate {
+    grid-column: 1 / -1;
   }
 
   .system-panel {

@@ -29,6 +29,7 @@ import (
 	"github.com/shiyindaxiaojie/eden-registry/internal/cluster/ap"
 	cp "github.com/shiyindaxiaojie/eden-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-registry/internal/config"
+	"github.com/shiyindaxiaojie/eden-registry/internal/configcenter"
 	"github.com/shiyindaxiaojie/eden-registry/internal/pkg/crypto"
 	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
 	httpapi "github.com/shiyindaxiaojie/eden-registry/internal/transport/http"
@@ -97,6 +98,16 @@ func main() {
 		cfg.Server.Raft = strings.ToLower(strings.TrimSpace(*raftFlag))
 	}
 	cfg.Mode, cfg.Consistency = normalizeRuntimeSelection(cfg.Mode, cfg.Consistency)
+
+	configService, err := configcenter.Open(cfg.DataDir)
+	if err != nil {
+		logger.Fatal("Failed to open config center storage: %v", err)
+	}
+	defer func() {
+		if err := configService.Close(); err != nil {
+			logger.Error("Failed to close config center storage: %v", err)
+		}
+	}()
 
 	// 2. Create runtime state
 	runtimeState := platformcluster.NewRuntimeState(cfg.DataDir)
@@ -331,7 +342,7 @@ func main() {
 	clsSvc := platformcluster.NewMembership(runtimeState.Catalog, membershipCPNode)
 
 	// 6. Start HTTP API
-	h := httpapi.NewHandler(cfg, runtimeState.Catalog, catSvc, authSvc, setSvc, clsSvc)
+	h := httpapi.NewHandler(cfg, runtimeState.Catalog, catSvc, configService, authSvc, setSvc, clsSvc)
 
 	var grpcServer *grpc.Server
 	if grpcEnabled || quicEnabled {

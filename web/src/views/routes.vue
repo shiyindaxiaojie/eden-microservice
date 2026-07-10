@@ -453,10 +453,11 @@ onMounted(fetchRoutes)
               <template #default="{ row }">
                 <div class="route-cell">
                   <strong>{{ row.name }}</strong>
-                  <span>{{ row.namespace }} / {{ row.id }}</span>
+                  <span>{{ row.id }}</span>
                 </div>
               </template>
             </el-table-column>
+            <el-table-column :label="text('命名空间', 'Namespace')" min-width="110" prop="namespace" />
             <el-table-column :label="text('匹配路径', 'Path')" min-width="190">
               <template #default="{ row }">
                 <code class="path-chip">{{ row.match.path_prefix }}</code>
@@ -838,6 +839,20 @@ onMounted(fetchRoutes)
 
 :deep(.el-table__inner-wrapper::before) {
   display: none;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background: transparent !important;
+}
+
+:deep(.el-table td.el-table__cell) {
+  background: transparent;
+}
+
+:deep(.el-table__fixed-right),
+:deep(.el-table__fixed-right-patch) {
+  background: transparent;
+  box-shadow: none;
 }
 
 :deep(.el-table__inner-wrapper) {

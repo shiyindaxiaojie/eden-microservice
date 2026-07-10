@@ -20,7 +20,7 @@ type SubscriberInfo struct {
 // InstanceRegistry tracks service instances and their health state.
 type InstanceRegistry struct {
 	mu sync.RWMutex
-	// namespace -> serviceName -> instanceID -> Instance
+	// namespace -> qualified service name -> instanceID -> Instance
 	services        map[string]map[string]map[string]*Instance
 	dataPath        string
 	persistenceMode string
@@ -59,6 +59,7 @@ func normalizeRegistryFlushInterval(interval time.Duration) time.Duration {
 
 // effectiveNS returns the effective namespace, defaulting to "default".
 func effectiveNS(ns string) string {
+	ns = strings.TrimSpace(ns)
 	if ns == "" {
 		return DefaultNamespace
 	}
@@ -70,12 +71,14 @@ func (s *InstanceRegistry) Register(inst *Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	inst.NormalizeIdentity()
 	ns := effectiveNS(inst.Namespace)
+	qualifiedName := inst.QualifiedServiceName()
 	if _, ok := s.services[ns]; !ok {
 		s.services[ns] = make(map[string]map[string]*Instance)
 	}
-	if _, ok := s.services[ns][inst.ServiceName]; !ok {
-		s.services[ns][inst.ServiceName] = make(map[string]*Instance)
+	if _, ok := s.services[ns][qualifiedName]; !ok {
+		s.services[ns][qualifiedName] = make(map[string]*Instance)
 	}
 
 	inst.Status = HealthPassing
@@ -88,10 +91,10 @@ func (s *InstanceRegistry) Register(inst *Instance) {
 		inst.Weight = 1
 	}
 
-	s.services[ns][inst.ServiceName][inst.ID] = inst
+	s.services[ns][qualifiedName][inst.ID] = inst
 
 	s.schedulePersistNoLock()
-	s.notifyNoLock(ns, inst.ServiceName, "online")
+	s.notifyNoLock(ns, qualifiedName, "online")
 }
 
 // Deregister removes an instance.
@@ -141,16 +144,12 @@ func (s *InstanceRegistry) SetInstanceStatus(namespace, serviceName, instanceID 
 	}
 
 	inst.Status = status
-	if status == HealthCritical {
-		inst.ManualOffline = true // Mark as manually offline
-	} else if status == HealthPassing {
-		inst.ManualOffline = false // Manual restore
-	}
+	inst.ManualOffline = status == HealthOffline
 
 	action := "update"
 	if status == HealthPassing {
 		action = "online"
-	} else if status == HealthCritical {
+	} else if status == HealthOffline {
 		action = "offline"
 	}
 	s.schedulePersistNoLock()
@@ -196,9 +195,10 @@ func (s *InstanceRegistry) resolveInstanceNoLock(namespace, serviceName, instanc
 	}
 
 	if serviceName != "" {
-		if instances, ok := nsSvcs[serviceName]; ok {
+		qualifiedName := QualifiedServiceName("", serviceName)
+		if instances, ok := nsSvcs[qualifiedName]; ok {
 			if inst, exists := instances[instanceID]; exists {
-				return serviceName, instances, inst, true
+				return qualifiedName, instances, inst, true
 			}
 		}
 	}
@@ -229,7 +229,7 @@ func (s *InstanceRegistry) getServiceNoLock(namespace, name string) []*Instance 
 	if !ok {
 		return nil
 	}
-	instances, ok := nsSvcs[name]
+	instances, ok := nsSvcs[QualifiedServiceName("", name)]
 	if !ok {
 		return nil
 	}
@@ -256,7 +256,7 @@ func (s *InstanceRegistry) GetServiceHealthyNS(namespace, name string) []*Instan
 	if !ok {
 		return nil
 	}
-	instances, ok := nsSvcs[name]
+	instances, ok := nsSvcs[QualifiedServiceName("", name)]
 	if !ok {
 		return nil
 	}
@@ -287,15 +287,20 @@ func (s *InstanceRegistry) ListServicesNS(namespace string) []ServiceSummary {
 	}
 
 	result := make([]ServiceSummary, 0, len(nsSvcs))
-	for name, instances := range nsSvcs {
+	for qualifiedName, instances := range nsSvcs {
 		healthy := 0
+		name, group := NormalizeServiceIdentity(qualifiedName, "")
 		for _, inst := range instances {
+			name = inst.ServiceName
+			group = inst.EffectiveGroup()
 			if inst.Status == HealthPassing {
 				healthy++
 			}
 		}
 		result = append(result, ServiceSummary{
 			Name:          name,
+			Group:         group,
+			QualifiedName: qualifiedName,
 			InstanceCount: len(instances),
 			HealthyCount:  healthy,
 		})
@@ -434,11 +439,13 @@ func (s *InstanceRegistry) Merge(remote map[string]map[string]*Instance) {
 		s.services[ns] = make(map[string]map[string]*Instance)
 	}
 	for svcName, remoteInsts := range remote {
-		if _, ok := s.services[ns][svcName]; !ok {
-			s.services[ns][svcName] = make(map[string]*Instance)
-		}
-		localInsts := s.services[ns][svcName]
 		for id, rInst := range remoteInsts {
+			normalizeStoredInstance(rInst, svcName, ns)
+			qualifiedName := rInst.QualifiedServiceName()
+			if _, ok := s.services[ns][qualifiedName]; !ok {
+				s.services[ns][qualifiedName] = make(map[string]*Instance)
+			}
+			localInsts := s.services[ns][qualifiedName]
 			if lInst, ok := localInsts[id]; ok {
 				// Keep the one with later heartbeat
 				if rInst.LastHeartbeat.After(lInst.LastHeartbeat) {
@@ -464,15 +471,18 @@ func (s *InstanceRegistry) MergeNS(remote map[string]map[string]map[string]*Inst
 
 	changed := false
 	for ns, remoteServices := range remote {
+		ns = effectiveNS(ns)
 		if _, ok := s.services[ns]; !ok {
 			s.services[ns] = make(map[string]map[string]*Instance)
 		}
 		for svcName, remoteInsts := range remoteServices {
-			if _, ok := s.services[ns][svcName]; !ok {
-				s.services[ns][svcName] = make(map[string]*Instance)
-			}
-			localInsts := s.services[ns][svcName]
 			for id, rInst := range remoteInsts {
+				normalizeStoredInstance(rInst, svcName, ns)
+				qualifiedName := rInst.QualifiedServiceName()
+				if _, ok := s.services[ns][qualifiedName]; !ok {
+					s.services[ns][qualifiedName] = make(map[string]*Instance)
+				}
+				localInsts := s.services[ns][qualifiedName]
 				if lInst, ok := localInsts[id]; ok {
 					if rInst.LastHeartbeat.After(lInst.LastHeartbeat) {
 						localInsts[id] = rInst
@@ -495,9 +505,8 @@ func (s *InstanceRegistry) MergeNS(remote map[string]map[string]map[string]*Inst
 func (s *InstanceRegistry) Restore(services map[string]map[string]*Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.services = map[string]map[string]map[string]*Instance{
-		DefaultNamespace: services,
-	}
+	s.services = make(map[string]map[string]map[string]*Instance)
+	s.restoreNamespaceNoLock(DefaultNamespace, services)
 	s.saveNoLock()
 }
 
@@ -505,8 +514,28 @@ func (s *InstanceRegistry) Restore(services map[string]map[string]*Instance) {
 func (s *InstanceRegistry) RestoreNS(services map[string]map[string]map[string]*Instance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.services = services
+	s.services = make(map[string]map[string]map[string]*Instance)
+	for namespace, namespaceServices := range services {
+		s.restoreNamespaceNoLock(namespace, namespaceServices)
+	}
 	s.saveNoLock()
+}
+
+func (s *InstanceRegistry) restoreNamespaceNoLock(namespace string, services map[string]map[string]*Instance) {
+	ns := effectiveNS(namespace)
+	if s.services[ns] == nil {
+		s.services[ns] = make(map[string]map[string]*Instance)
+	}
+	for storedName, instances := range services {
+		for id, inst := range instances {
+			normalizeStoredInstance(inst, storedName, ns)
+			qualifiedName := inst.QualifiedServiceName()
+			if s.services[ns][qualifiedName] == nil {
+				s.services[ns][qualifiedName] = make(map[string]*Instance)
+			}
+			s.services[ns][qualifiedName][id] = inst
+		}
+	}
 }
 
 func (s *InstanceRegistry) Load() {
@@ -522,19 +551,36 @@ func (s *InstanceRegistry) Load() {
 			m := make(map[string]map[string]map[string]*Instance)
 			for name, list := range services {
 				for _, inst := range list {
+					normalizeStoredInstance(inst, name, inst.Namespace)
 					ns := effectiveNS(inst.Namespace)
+					qualifiedName := inst.QualifiedServiceName()
 					if _, ok := m[ns]; !ok {
 						m[ns] = make(map[string]map[string]*Instance)
 					}
-					if _, ok := m[ns][name]; !ok {
-						m[ns][name] = make(map[string]*Instance)
+					if _, ok := m[ns][qualifiedName]; !ok {
+						m[ns][qualifiedName] = make(map[string]*Instance)
 					}
-					m[ns][name][inst.ID] = inst
+					m[ns][qualifiedName][inst.ID] = inst
 				}
 			}
 			s.services = m
 		}
 	}
+}
+
+func normalizeStoredInstance(inst *Instance, storedName, namespace string) {
+	if inst == nil {
+		return
+	}
+	if strings.TrimSpace(inst.ServiceName) == "" {
+		inst.ServiceName = storedName
+	} else if strings.TrimSpace(inst.Group) == "" && strings.Contains(storedName, ServiceGroupSeparator) {
+		inst.ServiceName = storedName
+	}
+	if strings.TrimSpace(inst.Namespace) == "" {
+		inst.Namespace = namespace
+	}
+	inst.NormalizeIdentity()
 }
 
 func (s *InstanceRegistry) Save() {

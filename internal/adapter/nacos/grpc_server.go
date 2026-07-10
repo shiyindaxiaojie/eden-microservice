@@ -172,7 +172,8 @@ func (s *NacosNamingServer) handleInstanceRequest(req *rpcrequest.InstanceReques
 	case "registerInstance":
 		inst := &catalog.Instance{
 			ID:          instanceID,
-			ServiceName: ref.FullName,
+			ServiceName: ref.Name,
+			Group:       ref.GroupName,
 			Namespace:   namespace,
 			Host:        req.Instance.Ip,
 			Port:        int(req.Instance.Port),
@@ -183,14 +184,14 @@ func (s *NacosNamingServer) handleInstanceRequest(req *rpcrequest.InstanceReques
 			return errorResponse(requestID, err)
 		}
 		if !req.Instance.Healthy || !req.Instance.Enable {
-			if err := s.catalog.SetInstanceStatus(namespace, inst.ServiceName, inst.ID, "offline"); err != nil {
+			if err := s.catalog.SetInstanceStatus(namespace, inst.QualifiedServiceName(), inst.ID, "offline"); err != nil {
 				return errorResponse(requestID, err)
 			}
 		}
 	case "deregisterInstance":
 		inst, err := s.findNacosInstance(namespace, ref, clusterName, req.Instance.Ip, int(req.Instance.Port))
 		if err == nil {
-			if err := s.catalog.Deregister(namespace, inst.ServiceName, inst.ID); err != nil {
+			if err := s.catalog.Deregister(namespace, inst.QualifiedServiceName(), inst.ID); err != nil {
 				return errorResponse(requestID, err)
 			}
 		}
@@ -466,7 +467,7 @@ func (s *NacosNamingServer) serviceNames(namespace string) ([]string, error) {
 		if !ok {
 			continue
 		}
-		name, _ := service["name"].(string)
+		name, _ := service["qualified_name"].(string)
 		if name != "" {
 			names = append(names, name)
 		}

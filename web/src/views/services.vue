@@ -37,6 +37,7 @@ interface ServiceEntry extends ServiceSummary {
 }
 
 const autoRefreshSeconds = 15
+const defaultServiceGroup = 'default'
 
 const { text, elementLocale } = useI18n()
 const route = useRoute()
@@ -131,13 +132,70 @@ function serviceHealthTextByState(state: ServiceHealthState) {
   }
 }
 
+function parseServiceIdentity(value: string, fallbackGroup = '') {
+  const separator = value.indexOf('@@')
+  if (separator > 0) {
+    const embeddedGroup = value.slice(0, separator)
+    return {
+      name: value.slice(separator + 2),
+      group: !fallbackGroup || fallbackGroup === defaultServiceGroup ? embeddedGroup : fallbackGroup,
+    }
+  }
+  return { name: value, group: fallbackGroup || defaultServiceGroup }
+}
+
+function qualifiedServiceName(name: string, group: string) {
+  return group === defaultServiceGroup ? name : `${group}@@${name}`
+}
+
+function topologyServiceLabel(qualifiedName: string) {
+  return topologyNodeMap.value[qualifiedName]?.name || parseServiceIdentity(qualifiedName).name
+}
+
+function normalizeTopologyGraph(graph: TopologyGraph): TopologyGraph {
+  const sourceNodes = graph.nodes || []
+  const nodes = sourceNodes.map((node) => {
+    const identity = parseServiceIdentity(node.name, node.group)
+    const idIdentity = parseServiceIdentity(node.id, identity.group)
+    return {
+      ...node,
+      id: qualifiedServiceName(idIdentity.name || identity.name, idIdentity.group),
+      name: identity.name,
+      group: identity.group,
+    }
+  })
+
+  const resolveEndpoint = (endpoint: string) => {
+    const directIndex = sourceNodes.findIndex((node) => node.id === endpoint)
+    if (directIndex >= 0) return nodes[directIndex]!.id
+
+    const identity = parseServiceIdentity(endpoint)
+    const matches = nodes.filter((node) => node.name === identity.name)
+    if (matches.length === 1) return matches[0]!.id
+    return qualifiedServiceName(identity.name, identity.group)
+  }
+
+  return {
+    ...graph,
+    nodes,
+    edges: (graph.edges || []).map((edge) => ({
+      ...edge,
+      source: resolveEndpoint(edge.source),
+      target: resolveEndpoint(edge.target),
+    })),
+  }
+}
 
 function normalizeServicesPayload(payload: unknown, graph: TopologyGraph): ServiceSummary[] {
   const summaries = new Map<string, ServiceSummary>()
 
   for (const node of graph.nodes || []) {
-    summaries.set(node.name, {
-      name: node.name,
+    const identity = parseServiceIdentity(node.name, node.group)
+    const qualifiedName = node.id || qualifiedServiceName(identity.name, identity.group)
+    summaries.set(qualifiedName, {
+      name: identity.name,
+      group: identity.group,
+      qualified_name: qualifiedName,
       instance_count: node.instance_count || 0,
       healthy_count: node.healthy_count || 0,
     })
@@ -148,23 +206,32 @@ function normalizeServicesPayload(payload: unknown, graph: TopologyGraph): Servi
       if (!item || typeof item !== 'object') continue
 
       const row = item as Partial<ServiceSummary>
-      const name = typeof row.name === 'string' ? row.name : ''
-      if (!name) continue
+      const rawName = typeof row.name === 'string' ? row.name : ''
+      if (!rawName) continue
+      const identity = parseServiceIdentity(rawName, typeof row.group === 'string' ? row.group : '')
+      const qualifiedName = typeof row.qualified_name === 'string' && row.qualified_name
+        ? row.qualified_name
+        : qualifiedServiceName(identity.name, identity.group)
 
-      const existing = summaries.get(name)
-      summaries.set(name, {
-        name,
+      const existing = summaries.get(qualifiedName)
+      summaries.set(qualifiedName, {
+        name: identity.name,
+        group: identity.group,
+        qualified_name: qualifiedName,
         instance_count: typeof row.instance_count === 'number' ? row.instance_count : existing?.instance_count || 0,
         healthy_count: typeof row.healthy_count === 'number' ? row.healthy_count : existing?.healthy_count || 0,
         subscriber_count: typeof row.subscriber_count === 'number' ? row.subscriber_count : existing?.subscriber_count,
       })
     }
   } else if (payload && typeof payload === 'object') {
-    for (const name of Object.keys(payload as Record<string, unknown>)) {
-      if (!name) continue
-      const existing = summaries.get(name)
-      summaries.set(name, {
-        name,
+    for (const qualifiedName of Object.keys(payload as Record<string, unknown>)) {
+      if (!qualifiedName) continue
+      const identity = parseServiceIdentity(qualifiedName)
+      const existing = summaries.get(qualifiedName)
+      summaries.set(qualifiedName, {
+        name: existing?.name || identity.name,
+        group: existing?.group || identity.group,
+        qualified_name: qualifiedName,
         instance_count: existing?.instance_count || 0,
         healthy_count: existing?.healthy_count || 0,
         subscriber_count: existing?.subscriber_count,
@@ -172,11 +239,13 @@ function normalizeServicesPayload(payload: unknown, graph: TopologyGraph): Servi
     }
   }
 
-  return [...summaries.values()].sort((left, right) => left.name.localeCompare(right.name))
+  return [...summaries.values()].sort((left, right) =>
+    left.name.localeCompare(right.name) || left.group.localeCompare(right.group),
+  )
 }
 const serviceEntries = computed<ServiceEntry[]>(() =>
   services.value.map((service) => {
-    const topologyNode = topologyNodeMap.value[service.name]
+    const topologyNode = topologyNodeMap.value[service.qualified_name]
     const instances = topologyNode?.instances || []
     const state = serviceHealthState(service)
     const theme = serviceHealthTheme(state)
@@ -186,9 +255,9 @@ const serviceEntries = computed<ServiceEntry[]>(() =>
       ...service,
       instances,
       primaryAddress: primary ? `${primary.host}:${primary.port}${instances.length > 1 ? ` (+${instances.length - 1})` : ''}` : text('暂无实例', 'No instance'),
-      subscribers: subscribersMap.value[service.name]?.length || 0,
-      upstreamCount: topologyMeta.value.upstream[service.name]?.length || 0,
-      downstreamCount: topologyMeta.value.downstream[service.name]?.length || 0,
+      subscribers: subscribersMap.value[service.qualified_name]?.length || 0,
+      upstreamCount: topologyMeta.value.upstream[service.qualified_name]?.length || 0,
+      downstreamCount: topologyMeta.value.downstream[service.qualified_name]?.length || 0,
       healthState: state,
       healthText: serviceHealthTextByState(state),
       healthTone: theme.tone,
@@ -205,7 +274,7 @@ const filteredServices = computed(() => {
   const ipQuery = searchIP.value.trim().toLowerCase()
 
   return serviceEntries.value.filter((service) => {
-    const matchesSearch = !query || service.name.toLowerCase().includes(query)
+    const matchesSearch = !query || service.name.toLowerCase().includes(query) || service.group.toLowerCase().includes(query)
     const matchesIP = !ipQuery || service.instances.some((instance) => `${instance.host}:${instance.port}`.toLowerCase().includes(ipQuery))
 
     const matchesHealth =
@@ -234,27 +303,27 @@ const selectedNodeDetail = computed<TopologyNode | null>(() => topologyNodeMap.v
 const serviceEntryMap = computed(() => {
   const map: Record<string, (typeof serviceEntries.value)[0]> = {}
   serviceEntries.value.forEach((s) => {
-    map[s.name] = s
+    map[s.qualified_name] = s
   })
   return map
 })
 const selectedServiceEntry = computed(() =>
-  selectedNodeDetail.value ? serviceEntryMap.value[selectedNodeDetail.value.name] || null : null,
+  selectedNodeDetail.value ? serviceEntryMap.value[selectedNodeDetail.value.id] || null : null,
 )
 const selectedUpstream = computed(() => topologyMeta.value.upstream[selectedTopologyNode.value] || [])
 const selectedDownstream = computed(() => topologyMeta.value.downstream[selectedTopologyNode.value] || [])
 
 // selectedNodeHealth removed
 
-function openService(serviceName: string) {
+function openService(service: Pick<ServiceSummary, 'name' | 'group'>) {
   router.push({
-    path: `/services/${encodeURIComponent(serviceName)}`,
-    query: { namespace: currentNamespace.value },
+    path: `/services/${encodeURIComponent(service.name)}`,
+    query: { namespace: currentNamespace.value, group: service.group },
   })
 }
 
-function openTopology(serviceName: string) {
-  selectedTopologyNode.value = serviceName
+function openTopology(qualifiedName: string) {
+  selectedTopologyNode.value = qualifiedName
   activePanel.value = 'topology'
 }
 
@@ -290,16 +359,18 @@ async function fetchWorkspace(showLoading = true) {
       getTopology(currentNamespace.value),
     ])
 
-    topology.value = topologyRes.data || { namespace: currentNamespace.value, nodes: [], edges: [] }
+    topology.value = normalizeTopologyGraph(
+      topologyRes.data || { namespace: currentNamespace.value, nodes: [], edges: [] },
+    )
     services.value = normalizeServicesPayload(servicesRes.data, topology.value)
 
     const subscribersEntries = await Promise.all(
       services.value.map(async (service) => {
         try {
-          const response = await getSubscribers(service.name, currentNamespace.value)
-          return [service.name, response.data || []] as const
+          const response = await getSubscribers(service.name, currentNamespace.value, service.group)
+          return [service.qualified_name, response.data || []] as const
         } catch {
-          return [service.name, []] as const
+          return [service.qualified_name, []] as const
         }
       }),
     )
@@ -500,13 +571,16 @@ onBeforeUnmount(() => {
           <div v-if="catalogMode === 'grid'" class="card-grid">
             <article
               v-for="service in pagedServices"
-              :key="service.name"
+              :key="service.qualified_name"
               class="svc-card"
               :style="{ '--svc-tone': service.healthTone, '--svc-surface': service.healthSurface, '--svc-border': service.healthBorder }"
-              @click="openService(service.name)"
+              @click="openService(service)"
             >
               <div class="card-head">
-                <strong class="card-name">{{ service.name }}</strong>
+                <div class="service-identity">
+                  <strong class="card-name">{{ service.name }}</strong>
+                  <span class="service-group">{{ service.group }}</span>
+                </div>
                 <div class="status-wrap">
                   <span class="status-label" :style="{ color: service.healthTone }">{{ service.healthText }}</span>
                   <span class="health-dot" :style="{ background: service.healthTone, boxShadow: `0 0 6px ${service.healthTone}` }"></span>
@@ -561,7 +635,7 @@ onBeforeUnmount(() => {
                     </div>
                   </el-tooltip>
                 </div>
-                <button type="button" class="topo-btn" @click.stop="openTopology(service.name)">
+                <button type="button" class="topo-btn" @click.stop="openTopology(service.qualified_name)">
                   <el-icon><Share /></el-icon>
                 </button>
               </div>
@@ -575,13 +649,35 @@ onBeforeUnmount(() => {
           <div v-if="catalogMode === 'list'" class="table-wrap">
             <el-table :data="pagedServices" height="100%" style="width: 100%; font-size: 14px;">
               <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
-              <el-table-column :label="text('服务', 'Service')" min-width="150" prop="name" />
+              <el-table-column :label="text('服务', 'Service')" min-width="170">
+                <template #default="{ row }">
+                  <div class="service-identity table-service-identity">
+                    <strong class="table-service-name">{{ row.name }}</strong>
+                    <span class="service-group">{{ row.group }}</span>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column :label="text('命名空间', 'Namespace')" min-width="80" prop="namespace" />
 
               <el-table-column :label="text('地址', 'Address')" min-width="110">
                 <template #default="{ row }">
-                  <code class="cell-addr" style="font-family: inherit; font-size: 14px;">{{ row.instances[0] ? `${row.instances[0].host}:${row.instances[0].port}` : '-' }}</code>
-                  <span v-if="row.instances.length > 1" style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">+{{ row.instances.length - 1 }}</span>
+                  <div v-if="row.instances.length" class="address-preview">
+                    <code v-for="instance in row.instances.slice(0, 3)" :key="instance.id" class="cell-addr">
+                      {{ instance.host }}:{{ instance.port }}
+                    </code>
+                    <el-popover v-if="row.instances.length > 3" placement="bottom-start" :width="260" trigger="click">
+                      <template #reference>
+                        <button type="button" class="more-addresses">
+                          {{ text('更多', 'More') }} +{{ row.instances.length - 3 }}
+                        </button>
+                      </template>
+                      <div class="address-popover">
+                        <span class="address-popover-title">{{ text('全部实例地址', 'All instance addresses') }}</span>
+                        <code v-for="instance in row.instances" :key="instance.id">{{ instance.host }}:{{ instance.port }}</code>
+                      </div>
+                    </el-popover>
+                  </div>
+                  <span v-else class="empty-address">-</span>
                 </template>
               </el-table-column>
 
@@ -609,7 +705,7 @@ onBeforeUnmount(() => {
                       </span>
                     </template>
                     <div style="font-size: 13px;">
-                      <div v-for="sn in topologyMeta?.upstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
+                      <div v-for="sn in topologyMeta?.upstream[row.qualified_name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ topologyServiceLabel(sn) }}</div>
                     </div>
                   </el-popover>
                 </template>
@@ -624,7 +720,7 @@ onBeforeUnmount(() => {
                       </span>
                     </template>
                     <div style="font-size: 13px;">
-                      <div v-for="sn in topologyMeta?.downstream[row.name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ sn }}</div>
+                      <div v-for="sn in topologyMeta?.downstream[row.qualified_name] || []" :key="sn" @click="openTopology(sn)" style="cursor: pointer; color: var(--accent-blue); padding: 4px 0; border-bottom: 1px dashed var(--border-color);">{{ topologyServiceLabel(sn) }}</div>
                     </div>
                   </el-popover>
                 </template>
@@ -633,8 +729,8 @@ onBeforeUnmount(() => {
               <el-table-column :label="text('操作', 'Actions')" width="180" fixed="right">
                 <template #default="{ row }">
                   <div class="cell-actions" style="display: flex; gap: 8px;">
-                    <el-button link :icon="Share" @click="openTopology(row.name)">{{ text('拓扑', 'Topo') }}</el-button>
-                    <el-button link :icon="Grid" @click="openService(row.name)">{{ text('详情', 'Detail') }}</el-button>
+                    <el-button link :icon="Share" @click="openTopology(row.qualified_name)">{{ text('拓扑', 'Topo') }}</el-button>
+                    <el-button link :icon="Grid" @click="openService(row)">{{ text('详情', 'Detail') }}</el-button>
                   </div>
                 </template>
               </el-table-column>
@@ -684,9 +780,10 @@ onBeforeUnmount(() => {
               <div class="side-header-row">
                 <h3 class="side-title">
                   {{ selectedNodeDetail.name }}
+                  <el-tag size="small" type="info" class="ns-tag">{{ selectedNodeDetail.group }}</el-tag>
                   <el-tag size="small" type="info" class="ns-tag">{{ selectedNodeDetail.namespace }}</el-tag>
                 </h3>
-                <a class="detail-link" @click="openService(selectedNodeDetail.name)">
+                <a class="detail-link" @click="openService(selectedNodeDetail)">
                   <el-icon><Monitor /></el-icon> {{ text('查看详情', 'View detail') }}
                 </a>
               </div>
@@ -752,7 +849,7 @@ onBeforeUnmount(() => {
                     class="dep-item"
                   >
                     <div class="dep-copy">
-                      <span class="dep-name">{{ sn }}</span>
+                      <span class="dep-name">{{ topologyServiceLabel(sn) }}</span>
                       <span class="dep-caption">{{ text('依赖服务', 'Dependency service') }}</span>
                     </div>
                     <div v-if="serviceEntryMap[sn]" class="dep-info">
@@ -785,7 +882,7 @@ onBeforeUnmount(() => {
                     class="dep-item"
                   >
                     <div class="dep-copy">
-                      <span class="dep-name">{{ sn }}</span>
+                      <span class="dep-name">{{ topologyServiceLabel(sn) }}</span>
                       <span class="dep-caption">{{ text('依赖当前服务', 'Dependent service') }}</span>
                     </div>
                     <div v-if="serviceEntryMap[sn]" class="dep-info">
@@ -1095,9 +1192,17 @@ onBeforeUnmount(() => {
 
 .card-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 10px;
+}
+
+.service-identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
 }
 
 .card-name {
@@ -1105,6 +1210,24 @@ onBeforeUnmount(() => {
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0;
+}
+
+.service-group {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.table-service-identity {
+  padding: 2px 0;
+}
+
+.table-service-name {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .status-wrap {
@@ -1326,6 +1449,57 @@ onBeforeUnmount(() => {
   background: none;
   padding: 0;
   border: none;
+}
+
+.address-preview {
+  display: flex;
+  min-width: 120px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.address-preview .cell-addr {
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.more-addresses {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-blue);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.more-addresses:hover {
+  color: var(--text-primary);
+}
+
+.address-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.address-popover-title {
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.address-popover code {
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.empty-address {
+  color: var(--text-muted);
 }
 
 .cell-health {

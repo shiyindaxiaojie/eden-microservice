@@ -33,6 +33,7 @@ func (h *Handler) registerService(w http.ResponseWriter, r *http.Request) {
 	inst := catalog.Instance{
 		ID:          compatInst.ID,
 		ServiceName: compatInst.ServiceName,
+		Group:       compatInst.Group,
 		Namespace:   compatInst.Namespace,
 		Host:        compatInst.Address,
 		Port:        compatInst.Port,
@@ -63,6 +64,7 @@ func (h *Handler) setInstanceStatus(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Namespace   string `json:"namespace"`
 		ServiceName string `json:"service_name"`
+		Group       string `json:"group"`
 		InstanceID  string `json:"instance_id"`
 		Status      string `json:"status"` // "online" or "offline"
 	}
@@ -79,7 +81,8 @@ func (h *Handler) setInstanceStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.catalog.SetInstanceStatus(req.Namespace, req.ServiceName, req.InstanceID, req.Status); err != nil {
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
+	if err := h.catalog.SetInstanceStatus(req.Namespace, qualifiedName, req.InstanceID, req.Status); err != nil {
 		httpError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -94,13 +97,15 @@ func (h *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Namespace   string `json:"namespace"`
 		ServiceName string `json:"service_name"`
+		Group       string `json:"group"`
 		InstanceID  string `json:"instance_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return
 	}
 
-	if err := h.catalog.Heartbeat(req.Namespace, req.ServiceName, req.InstanceID); err != nil {
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
+	if err := h.catalog.Heartbeat(req.Namespace, qualifiedName, req.InstanceID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			httpError(w, http.StatusNotFound, err.Error())
 			return
@@ -153,7 +158,7 @@ func (h *Handler) listServices(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		name, _ := service["name"].(string)
+		name, _ := service["qualified_name"].(string)
 		if name != "" {
 			names = append(names, name)
 		}
@@ -172,12 +177,13 @@ func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
 	}
 	healthy := r.URL.Query().Get("passing") == "true" || r.URL.Query().Get("passing") == "1"
 	namespace := h.requestNamespace(r)
+	qualifiedName := catalog.QualifiedServiceName(r.URL.Query().Get("group"), name)
 	consumerService := r.URL.Query().Get("consumer_service")
 	if consumerService != "" {
-		h.catalog.RecordDependency(namespace, consumerService, name)
+		h.catalog.RecordDependency(namespace, consumerService, qualifiedName)
 	}
 
-	instances, err := h.catalog.GetService(namespace, name, healthy)
+	instances, err := h.catalog.GetService(namespace, qualifiedName, healthy)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -206,13 +212,15 @@ func (h *Handler) getService(w http.ResponseWriter, r *http.Request) {
 		compatInstances = append(compatInstances, consulcompat.Instance{
 			ID:          inst.ID,
 			ServiceName: inst.ServiceName,
+			Group:       inst.Group,
 			Namespace:   inst.Namespace,
 			Address:     inst.Host,
 			Port:        inst.Port,
 			Weight:      inst.Weight,
 			Metadata:    inst.Metadata,
-			Status:      string(inst.Status),
-			Datacenter:  inst.Datacenter,
+			Status:        string(inst.Status),
+			ManualOffline: inst.ManualOffline,
+			Datacenter:    inst.Datacenter,
 		})
 	}
 
@@ -224,8 +232,9 @@ func (h *Handler) getSubscribers(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[len("/v1/catalog/service/"):]
 	name := strings.TrimSuffix(path, "/subscribers")
 	namespace := r.URL.Query().Get("namespace")
+	qualifiedName := catalog.QualifiedServiceName(r.URL.Query().Get("group"), name)
 
-	subscribers := h.catalog.GetSubscribers(namespace, name)
+	subscribers := h.catalog.GetSubscribers(namespace, qualifiedName)
 	if subscribers == nil {
 		subscribers = []string{}
 	}

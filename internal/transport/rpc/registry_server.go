@@ -38,6 +38,7 @@ func (s *RegistryServer) Register(ctx context.Context, req *pb.RegisterRequest) 
 	inst := &catalog.Instance{
 		ID:          pbi.Id,
 		ServiceName: pbi.ServiceName,
+		Group:       pbi.Group,
 		Namespace:   pbi.Namespace,
 		Host:        pbi.Host,
 		Port:        int(pbi.Port),
@@ -55,7 +56,8 @@ func (s *RegistryServer) Register(ctx context.Context, req *pb.RegisterRequest) 
 }
 
 func (s *RegistryServer) Deregister(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	err := s.catalog.Deregister(req.Namespace, req.ServiceName, req.InstanceId)
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
+	err := s.catalog.Deregister(req.Namespace, qualifiedName, req.InstanceId)
 	success := err == nil
 
 	logger.Info("[gRPC] Deregistered instance: %s (%s) namespace=%s success=%v", req.ServiceName, req.InstanceId, req.Namespace, success)
@@ -66,7 +68,8 @@ func (s *RegistryServer) Deregister(ctx context.Context, req *pb.DeregisterReque
 }
 
 func (s *RegistryServer) SetInstanceStatus(ctx context.Context, req *pb.SetInstanceStatusRequest) (*pb.SetInstanceStatusResponse, error) {
-	err := s.catalog.SetInstanceStatus(req.Namespace, req.ServiceName, req.InstanceId, req.Status)
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
+	err := s.catalog.SetInstanceStatus(req.Namespace, qualifiedName, req.InstanceId, req.Status)
 	success := err == nil
 
 	logger.Info("[gRPC] Set instance status %s: %s (%s) namespace=%s success=%v", req.Status, req.ServiceName, req.InstanceId, req.Namespace, success)
@@ -77,7 +80,8 @@ func (s *RegistryServer) SetInstanceStatus(ctx context.Context, req *pb.SetInsta
 }
 
 func (s *RegistryServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
-	err := s.catalog.Heartbeat(req.Namespace, req.ServiceName, req.InstanceId)
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
+	err := s.catalog.Heartbeat(req.Namespace, qualifiedName, req.InstanceId)
 	if err != nil {
 		return &pb.HeartbeatResponse{Success: false}, err
 	}
@@ -85,11 +89,12 @@ func (s *RegistryServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 }
 
 func (s *RegistryServer) Discover(ctx context.Context, req *pb.DiscoverRequest) (*pb.DiscoverResponse, error) {
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
 	if consumer := consumerServiceFromContext(ctx); consumer != "" {
-		s.catalog.RecordDependency(req.Namespace, consumer, req.ServiceName)
+		s.catalog.RecordDependency(req.Namespace, consumer, qualifiedName)
 	}
 
-	instances, err := s.catalog.GetService(req.Namespace, req.ServiceName, req.HealthyOnly)
+	instances, err := s.catalog.GetService(req.Namespace, qualifiedName, req.HealthyOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -100,11 +105,12 @@ func (s *RegistryServer) Discover(ctx context.Context, req *pb.DiscoverRequest) 
 func (s *RegistryServer) Watch(req *pb.WatchRequest, stream pb.RegistryService_WatchServer) error {
 	ch := make(chan catalog.WatchEvent, 10)
 	consumerService := consumerServiceFromContext(stream.Context())
+	qualifiedName := catalog.QualifiedServiceName(req.Group, req.ServiceName)
 
-	s.catalog.Subscribe(req.Namespace, req.ServiceName, consumerService, ch)
-	defer s.catalog.Unsubscribe(req.Namespace, req.ServiceName, ch)
+	s.catalog.Subscribe(req.Namespace, qualifiedName, consumerService, ch)
+	defer s.catalog.Unsubscribe(req.Namespace, qualifiedName, ch)
 
-	initial, _ := s.catalog.GetService(req.Namespace, req.ServiceName, false)
+	initial, _ := s.catalog.GetService(req.Namespace, qualifiedName, false)
 	if err := stream.Send(&pb.WatchResponse{Action: "update", Instances: toProtoInstances(initial)}); err != nil {
 		return err
 	}
@@ -170,6 +176,7 @@ func toProtoInstances(instances []*catalog.Instance) []*pb.ServiceInstance {
 		pbInstances = append(pbInstances, &pb.ServiceInstance{
 			Id:          inst.ID,
 			ServiceName: inst.ServiceName,
+			Group:       inst.Group,
 			Namespace:   inst.Namespace,
 			Host:        inst.Host,
 			Port:        int32(inst.Port),

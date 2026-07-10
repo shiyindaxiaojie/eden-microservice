@@ -10,7 +10,7 @@ namespace -> domain -> resource identity
 
 | 领域 | 身份 |
 | --- | --- |
-| Naming | `namespace -> serviceName -> instanceId` |
+| Naming | `namespace -> group -> serviceName -> instanceId` |
 | Config | `namespace -> group -> dataId` |
 | Gateway Route | `namespace -> routeId` |
 
@@ -34,7 +34,8 @@ namespace -> domain -> resource identity
 ## 3. 命名规则
 
 - `namespace` 不为空，默认 `default`。
-- `group` 不为空，默认 `DEFAULT_GROUP`。
+- Naming 的 `group` 不为空；不支持分组的注册协议和客户端归一化为 `default`，Nacos Naming 保留其 `DEFAULT_GROUP` 语义。
+- Config 的 `group` 不为空，默认 `DEFAULT_GROUP`。
 - `dataId` 不为空，允许点号和短横线，不能包含路径穿越语义。
 - `routeId` 不为空，只允许字母、数字、点号、短横线和下划线。
 - 所有用户输入在进入存储前必须 trim；兼容 API 中允许的历史字段应在适配层归一化。
@@ -42,4 +43,3 @@ namespace -> domain -> resource identity
 ## 4. 资源事件
 
 配置发布、配置删除、路由创建、路由更新、路由删除和路由启停都应产生审计事件。事件不得记录完整配置内容，也不得记录敏感请求头、认证 token 或上游密钥。
-

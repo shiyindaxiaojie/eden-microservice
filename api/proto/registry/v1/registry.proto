@@ -34,6 +34,7 @@ message ServiceInstance {
   string datacenter = 7;
   map<string, string> metadata = 8;
   string namespace = 9;
+  string group = 10;
 }
 
 message RegisterRequest {
@@ -48,6 +49,7 @@ message DeregisterRequest {
   string service_name = 1;
   string instance_id = 2;
   string namespace = 3;
+  string group = 4;
 }
 
 message DeregisterResponse {
@@ -59,6 +61,7 @@ message SetInstanceStatusRequest {
   string service_name = 2;
   string instance_id = 3;
   string status = 4; // "online" or "offline"
+  string group = 5;
 }
 
 message SetInstanceStatusResponse {
@@ -69,6 +72,7 @@ message HeartbeatRequest {
   string service_name = 1;
   string instance_id = 2;
   string namespace = 3;
+  string group = 4;
 }
 
 message HeartbeatResponse {
@@ -80,6 +84,7 @@ message DiscoverRequest {
   bool   healthy_only = 2;
   string datacenter = 3;
   string namespace = 4;
+  string group = 5;
 }
 
 message DiscoverResponse {
@@ -89,6 +94,7 @@ message DiscoverResponse {
 message WatchRequest {
   string service_name = 1;
   string namespace = 2;
+  string group = 3;
 }
 
 message WatchResponse {
