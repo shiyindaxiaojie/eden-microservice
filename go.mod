@@ -7,6 +7,7 @@ require (
 	github.com/hashicorp/consul/api v1.33.7
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb/v2 v2.3.1
+	github.com/nacos-group/nacos-sdk-go v1.1.6
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
 	github.com/quic-go/quic-go v0.59.0
 	github.com/shiyindaxiaojie/eden-go-logger v1.0.2
@@ -49,6 +50,7 @@ require (
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

@@ -51,6 +51,22 @@ server:
   raft: "auto"
 
 ############################################################
+# Gateway data plane
+############################################################
+
+# Gateway routes are managed from the control plane but proxy traffic is served
+# from a dedicated listener. Keep this address different from server.http.
+gateway:
+  enabled: false
+  http: ":8080"
+
+  # Only these reverse-proxy networks may provide X-Eden-User-ID and
+  # X-Eden-Tenant-ID for stable BETA routing. Configure production ingress CIDRs.
+  trusted_proxy_cidrs:
+    - "127.0.0.1/32"
+    - "::1/128"
+
+############################################################
 # Authentication
 ############################################################
 auth:

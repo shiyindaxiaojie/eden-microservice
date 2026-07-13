@@ -23,6 +23,8 @@
 
 Native API 使用 JSON 响应，错误使用当前 HTTP 层的错误格式。Compatibility API 必须优先匹配对应生态客户端的返回格式。
 
+Gateway 原生 API 使用 `/v1/gateway/routes`、`/v1/gateway/route`、`/v1/gateway/route/status`、`/v1/gateway/history` 和 `/v1/gateway/runtime`。创建使用 `POST`，更新使用 `PUT` 并携带 `expected_revision`，删除使用 `DELETE`；路由启停属于动作，使用 `POST`。路由列表支持 `namespace`、`query`、`enabled=true|false`、`page` 和 `page_size`；运行时状态中的 `data_plane_enabled` 表示本节点数据面监听器是否实际配置为启用。路由资源遵循 Gateway 路由和流量发布规范。
+
 Naming 原生注册、发现、心跳和实例状态请求使用独立的 `group` 字段。调用方不提供 `group` 时，服务端在进入存储前将其归一化为 `default`；Nacos Naming 适配层将 `groupName` 映射到该字段，并继续按 Nacos 约定使用 `DEFAULT_GROUP` 作为默认值。服务名本身不得向原生 API 或控制台暴露 `group@@serviceName` 形式。
 
 拓扑依赖来自运行时发现、订阅或 `/v1/catalog/topology/report` 主动上报，单独注册服务不会推断依赖。兼容客户端上报未携带 group 的服务名时，服务端先按 `default` 分组解析；该分组不存在且名称在命名空间内只对应一个分组时，再解析为唯一的分组服务身份。存在多个无法消歧的同名分组时，调用方必须提供带分组的服务身份。

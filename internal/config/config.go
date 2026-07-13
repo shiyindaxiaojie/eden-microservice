@@ -22,6 +22,7 @@ type Config struct {
 	Log         LogConfig      `mapstructure:"log" json:"log"`
 	Storage     StorageConfig  `mapstructure:"storage" json:"storage"`
 	Registry    RegistryConfig `mapstructure:"registry" json:"registry"`
+	Gateway     GatewayConfig  `mapstructure:"gateway" json:"gateway"`
 }
 
 type ServerConfig struct {
@@ -35,6 +36,13 @@ type RegistryConfig struct {
 	HeartbeatIntervalSeconds    int `mapstructure:"heartbeat_interval_seconds" json:"heartbeat_interval_seconds"`
 	HeartbeatMaxFailures        int `mapstructure:"heartbeat_max_failures" json:"heartbeat_max_failures"`
 	InstanceRemovalDelaySeconds int `mapstructure:"instance_removal_delay_seconds" json:"instance_removal_delay_seconds"`
+}
+
+// GatewayConfig controls the independent HTTP gateway data-plane listener.
+type GatewayConfig struct {
+	Enabled           bool     `mapstructure:"enabled" json:"enabled"`
+	HTTP              string   `mapstructure:"http" json:"http"`
+	TrustedProxyCIDRs []string `mapstructure:"trusted_proxy_cidrs" json:"trusted_proxy_cidrs"`
 }
 
 type StorageConfig struct {
@@ -157,6 +165,9 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetDefault("registry.heartbeat_interval_seconds", 10)
 	viper.SetDefault("registry.heartbeat_max_failures", 3)
 	viper.SetDefault("registry.instance_removal_delay_seconds", 600)
+	viper.SetDefault("gateway.enabled", false)
+	viper.SetDefault("gateway.http", ":8080")
+	viper.SetDefault("gateway.trusted_proxy_cidrs", []string{"127.0.0.1/32", "::1/128"})
 
 	// Default Log Configuration
 	viper.SetDefault("log.level", "INFO")
@@ -230,6 +241,20 @@ func (c *Config) normalizeRuntime() {
 	} else {
 		c.Consistency = normalizeConsistency(rawConsistency)
 	}
+	c.Gateway.HTTP = strings.TrimSpace(c.Gateway.HTTP)
+	if c.Gateway.HTTP == "" {
+		c.Gateway.HTTP = ":8080"
+	}
+	trusted := make([]string, 0, len(c.Gateway.TrustedProxyCIDRs))
+	for _, value := range c.Gateway.TrustedProxyCIDRs {
+		if value = strings.TrimSpace(value); value != "" {
+			trusted = append(trusted, value)
+		}
+	}
+	if len(trusted) == 0 {
+		trusted = []string{"127.0.0.1/32", "::1/128"}
+	}
+	c.Gateway.TrustedProxyCIDRs = trusted
 }
 
 func (c *Config) GRPCEnabled(mode string) bool {

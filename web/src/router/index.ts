@@ -29,7 +29,7 @@ const routes = [
     path: '/routes',
     name: 'Routes',
     component: () => import('../views/routes.vue'),
-    meta: { title: 'Routes' },
+    meta: { title: 'Gateway Routes' },
   },
   {
     path: '/cluster',

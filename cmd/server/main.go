@@ -30,6 +30,7 @@ import (
 	cp "github.com/shiyindaxiaojie/eden-registry/internal/cluster/cp"
 	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-registry/internal/configcenter"
+	"github.com/shiyindaxiaojie/eden-registry/internal/gateway"
 	"github.com/shiyindaxiaojie/eden-registry/internal/pkg/crypto"
 	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
 	httpapi "github.com/shiyindaxiaojie/eden-registry/internal/transport/http"
@@ -106,6 +107,16 @@ func main() {
 	defer func() {
 		if err := configService.Close(); err != nil {
 			logger.Error("Failed to close config center storage: %v", err)
+		}
+	}()
+
+	gatewayService, err := gateway.Open(cfg.DataDir)
+	if err != nil {
+		logger.Fatal("Failed to open gateway storage: %v", err)
+	}
+	defer func() {
+		if err := gatewayService.Close(); err != nil {
+			logger.Error("Failed to close gateway storage: %v", err)
 		}
 	}()
 
@@ -340,9 +351,18 @@ func main() {
 		RaftEnabled: raftEnabled,
 	})
 	clsSvc := platformcluster.NewMembership(runtimeState.Catalog, membershipCPNode)
+	gatewayRuntime, err := gateway.NewRuntime(gatewayService, catSvc, gatewayRuntimeConfig(cfg))
+	if err != nil {
+		logger.Fatal("Failed to initialize gateway runtime: %v", err)
+	}
+	defer gatewayRuntime.Close()
 
 	// 6. Start HTTP API
 	h := httpapi.NewHandler(cfg, runtimeState.Catalog, catSvc, configService, authSvc, setSvc, clsSvc)
+	h.SetGateway(gatewayService, gatewayRuntime)
+	if gatewayListenerEnabled(cfg) && gatewayListenerAddressesConflict(cfg.Server.HTTP, cfg.Gateway.HTTP) {
+		logger.Fatal("Gateway HTTP listener must use a non-overlapping address from the control-plane HTTP listener")
+	}
 
 	var grpcServer *grpc.Server
 	if grpcEnabled || quicEnabled {
@@ -400,6 +420,15 @@ func main() {
 			logger.Fatal("HTTP server error: %v", err)
 		}
 	}()
+
+	if gatewayListenerEnabled(cfg) {
+		logger.Info("Gateway data-plane server listening on %s", cfg.Gateway.HTTP)
+		go func() {
+			if err := http.ListenAndServe(cfg.Gateway.HTTP, gatewayRuntime); err != nil {
+				logger.Fatal("Gateway data-plane server error: %v", err)
+			}
+		}()
+	}
 
 	// 6. Wait for Shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -491,6 +520,36 @@ func displayListenAddr(addr string) string {
 		return net.JoinHostPort("127.0.0.1", port)
 	}
 	return addr
+}
+
+func gatewayListenerEnabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Gateway.Enabled && strings.TrimSpace(cfg.Gateway.HTTP) != ""
+}
+
+func gatewayListenerAddressesConflict(controlAddress, gatewayAddress string) bool {
+	control, controlErr := net.ResolveTCPAddr("tcp", strings.TrimSpace(controlAddress))
+	gateway, gatewayErr := net.ResolveTCPAddr("tcp", strings.TrimSpace(gatewayAddress))
+	if controlErr != nil || gatewayErr != nil {
+		return strings.EqualFold(strings.TrimSpace(controlAddress), strings.TrimSpace(gatewayAddress))
+	}
+	if control.Port != gateway.Port {
+		return false
+	}
+	return tcpAddressesOverlap(control.IP, gateway.IP)
+}
+
+func tcpAddressesOverlap(left, right net.IP) bool {
+	if len(left) == 0 || len(right) == 0 || left.IsUnspecified() || right.IsUnspecified() {
+		return true
+	}
+	return left.Equal(right)
+}
+
+func gatewayRuntimeConfig(cfg *config.Config) gateway.RuntimeConfig {
+	if cfg == nil {
+		return gateway.RuntimeConfig{}
+	}
+	return gateway.RuntimeConfig{TrustedProxyCIDRs: cfg.Gateway.TrustedProxyCIDRs}
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {

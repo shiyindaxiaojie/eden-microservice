@@ -12,6 +12,7 @@ import (
 	"github.com/shiyindaxiaojie/eden-registry/internal/cluster"
 	"github.com/shiyindaxiaojie/eden-registry/internal/config"
 	"github.com/shiyindaxiaojie/eden-registry/internal/configcenter"
+	"github.com/shiyindaxiaojie/eden-registry/internal/gateway"
 	"github.com/shiyindaxiaojie/eden-registry/internal/notify"
 	"github.com/shiyindaxiaojie/eden-registry/internal/settings"
 )
@@ -21,6 +22,8 @@ type Handler struct {
 	config         *config.Config
 	catalog        catalog.Registry
 	configs        configcenter.Service
+	gateway        gateway.Service
+	gatewayRuntime *gateway.Runtime
 	auth           auth.Authenticator
 	settings       settings.Controller
 	cluster        cluster.Membership
@@ -72,6 +75,13 @@ func NewHandler(cfg *config.Config,
 	return h
 }
 
+// SetGateway attaches the gateway control service and runtime after bootstrap
+// has created the catalog-backed data plane.
+func (h *Handler) SetGateway(service gateway.Service, runtime *gateway.Runtime) {
+	h.gateway = service
+	h.gatewayRuntime = runtime
+}
+
 // ServeHTTP implements http.Handler with CORS support.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -114,6 +124,21 @@ func (h *Handler) registerRoutes() {
 	h.mux.Handle("/v1/configs", h.Auth(adminOrDev(http.HandlerFunc(h.listConfigs))))
 	h.mux.Handle("/v1/config/history", h.Auth(adminOrDev(http.HandlerFunc(h.configHistory))))
 	h.mux.Handle("/v1/config/listener", h.APIKey(http.HandlerFunc(h.configListener)))
+
+	// --- Gateway API ---
+	gatewayRead := h.RBAC("admin", "developer", "viewer")
+	gatewayWrite := h.RBAC("admin")
+	h.mux.Handle("/v1/gateway/routes", h.Auth(gatewayRead(http.HandlerFunc(h.gatewayRoutes))))
+	h.mux.Handle("/v1/gateway/route", h.Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			gatewayRead(http.HandlerFunc(h.gatewayRoute)).ServeHTTP(w, r)
+			return
+		}
+		gatewayWrite(http.HandlerFunc(h.gatewayRoute)).ServeHTTP(w, r)
+	})))
+	h.mux.Handle("/v1/gateway/route/status", h.Auth(gatewayWrite(http.HandlerFunc(h.gatewayRouteStatus))))
+	h.mux.Handle("/v1/gateway/history", h.Auth(gatewayRead(http.HandlerFunc(h.gatewayHistory))))
+	h.mux.Handle("/v1/gateway/runtime", h.Auth(gatewayRead(http.HandlerFunc(h.gatewayRuntimeStatus))))
 
 	// --- Namespace API ---
 	h.mux.Handle("/v1/namespaces", h.Auth(adminOrDev(http.HandlerFunc(h.listNamespaces))))

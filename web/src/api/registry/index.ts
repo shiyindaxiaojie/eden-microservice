@@ -56,7 +56,7 @@ export interface Instance {
   weight: number
   datacenter: string
   metadata: Record<string, string>
-  status: 'passing' | 'critical'
+  status: 'passing' | 'critical' | 'offline'
   manual_offline?: boolean
   last_heartbeat: string
   registered_at: string

@@ -5,8 +5,9 @@
 ```text
 HTTP request
   -> route match
-  -> upstream resolve
-  -> load balance
+  -> beta / release target select
+  -> target resolve
+  -> target-internal load balance
   -> request filters
   -> reverse proxy
   -> response filters
@@ -19,7 +20,7 @@ HTTP request
 
 ## 3. 上游选择
 
-服务上游默认只选择健康实例。没有健康实例时返回 `503`，并记录路由 ID、服务名和命名空间。静态上游不可达时按反向代理错误处理。
+服务目标一期只选择健康实例。没有健康实例时返回 `503`，并记录路由 ID、服务名和命名空间。静态目标不可达时按反向代理错误处理。发布目标的选择规则由 [`gateway-traffic-release-spec.md`](gateway-traffic-release-spec.md) 定义；网关不会隐式回退到其他发布目标。
 
 ## 4. 超时与错误
 
@@ -33,5 +34,4 @@ HTTP request
 
 ## 5. 可观测性
 
-每次请求至少记录 routeId、method、path、status、duration、upstream、error。访问日志不得记录完整 Authorization、Cookie 或 API Key。
-
+每次请求至少记录 routeId、method、path、status、duration、upstream、error。访问日志只记录 path，不记录 query、Authorization、Cookie、API Key 或 BETA 身份 Header。
