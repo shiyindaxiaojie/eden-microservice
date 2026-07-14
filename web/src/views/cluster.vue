@@ -20,10 +20,11 @@ const showAddDialog = ref(false)
 const searchID = ref('')
 const searchIP = ref('')
 const addForms = ref([{ protocol: 'http://', host: '', port: '' }])
-const viewMode = ref<'grid' | 'list'>('list')
+const viewMode = ref<'grid' | 'list'>('grid')
 const filterMode = ref<'all' | 'online' | 'offline'>('all')
 const currentPage = ref(1)
 const pageSize = ref(8)
+const selectedMemberID = ref('')
 
 const nodeStats = computed(() => ({
   total: members.value.length,
@@ -421,9 +422,14 @@ onMounted(fetchCluster)
             :key="member.id"
             class="node-card"
             :title="getMemberDisplayAddress(member)"
+            tabindex="0"
+            @click="selectedMemberID = member.id"
+            @keydown.enter.prevent="selectedMemberID = member.id"
+            @keydown.space.prevent="selectedMemberID = member.id"
             :class="{
               'is-local': member.is_local,
               'is-offline': member.status !== 'Online',
+              'is-selected': selectedMemberID === member.id,
             }"
           >
             <div class="card-accent"></div>
@@ -494,7 +500,7 @@ onMounted(fetchCluster)
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
-                :page-sizes="[8, 12, 20, 50]"
+                :page-sizes="[8, 16, 32, 64]"
               :total="filteredMembers.length"
               layout="sizes, prev, pager, next"
               background
@@ -3258,8 +3264,8 @@ onMounted(fetchCluster)
 <style scoped lang="scss">
 /* Node card redesign override: final layer. */
 .card-grid.card-grid {
-  grid-template-columns: repeat(auto-fill, minmax(440px, 520px));
-  justify-content: start;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-content: stretch;
   align-content: start;
   gap: 14px;
   padding: 2px 0 12px;
@@ -3285,6 +3291,19 @@ onMounted(fetchCluster)
   border-color: rgba(59, 130, 246, 0.32);
   background: var(--bg-secondary);
   box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.node-card.node-card:focus-within,
+.node-card.node-card:active {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: rgba(59, 130, 246, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+}
+
+.node-card.node-card.is-selected {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: rgba(59, 130, 246, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
 }
 
 .node-card.node-card.is-local {
@@ -3546,6 +3565,14 @@ onMounted(fetchCluster)
   border: 0;
 }
 
+:deep(.card-actions .el-button) {
+  min-height: 24px;
+  padding: 2px 4px;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .node-card.node-card:has(.card-actions .el-button) .card-footer {
   display: flex;
 }
@@ -3556,7 +3583,7 @@ onMounted(fetchCluster)
 
 @media (max-width: 1180px) {
   .card-grid.card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     justify-content: stretch;
   }
 }

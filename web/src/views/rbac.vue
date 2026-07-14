@@ -62,10 +62,11 @@ const form = ref<UserForm>({
   remark: '',
   isBuiltIn: false,
 })
-const viewMode = ref<ViewMode>('list')
+const viewMode = ref<ViewMode>('grid')
 const filterMode = ref<FilterMode>('all')
 const currentPage = ref(1)
-const pageSize = ref(12)
+const pageSize = ref(8)
+const selectedUsername = ref('')
 
 const totalUsers = computed(() => rows.value.length)
 const adminCount = computed(() => rows.value.filter((row) => row.role === 'admin').length)
@@ -440,7 +441,11 @@ onMounted(() => {
               v-for="row in pagedRows"
               :key="row.username"
               class="info-card"
-              :class="{ 'builtin-card': row.isBuiltIn }"
+              tabindex="0"
+              @click="selectedUsername = row.username"
+              @keydown.enter.prevent="selectedUsername = row.username"
+              @keydown.space.prevent="selectedUsername = row.username"
+              :class="{ 'builtin-card': row.isBuiltIn, 'is-selected': selectedUsername === row.username }"
             >
               <div class="card-accent"></div>
 
@@ -499,7 +504,7 @@ onMounted(() => {
               <el-pagination
                 v-model:current-page="currentPage"
                 v-model:page-size="pageSize"
-                :page-sizes="[12, 20, 50]"
+                :page-sizes="[8, 16, 32, 64]"
                 :total="filteredRows.length"
                 layout="sizes, prev, pager, next"
                 background
@@ -857,9 +862,9 @@ onMounted(() => {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 272px));
-  justify-content: start;
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-content: stretch;
+  gap: 12px;
   align-content: start;
   padding: 0 0 8px;
 }
@@ -870,7 +875,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border-radius: 12px;
+  min-height: 160px;
+  border-radius: 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   box-shadow: none;
@@ -882,6 +888,19 @@ onMounted(() => {
   border-color: rgba(59, 130, 246, 0.28);
   background: rgba(59, 130, 246, 0.03);
   box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.info-card:focus-within,
+.info-card:active {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: rgba(59, 130, 246, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+}
+
+.info-card.is-selected {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: rgba(59, 130, 246, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
 }
 
 .card-accent {
@@ -1045,6 +1064,14 @@ onMounted(() => {
   gap: 6px;
 }
 
+:deep(.card-actions .el-button) {
+  min-height: 24px;
+  padding: 2px 4px;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 :deep(.account-tag.el-tag) {
   color: #c27a0a;
   border-color: rgba(245, 158, 11, 0.18);
@@ -1119,11 +1146,15 @@ onMounted(() => {
 
 @media (max-width: 1400px) {
   .card-grid {
-    grid-template-columns: repeat(3, minmax(0, 272px));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .toolbar-row {
     flex-wrap: wrap;
     gap: 8px;

@@ -44,10 +44,11 @@ const form = ref<NamespaceForm>({
   name: '',
   description: '',
 })
-const viewMode = ref<ViewMode>('list')
+const viewMode = ref<ViewMode>('grid')
 const filterMode = ref<FilterMode>('all')
 const currentPage = ref(1)
-const pageSize = ref(12)
+const pageSize = ref(8)
+const selectedNamespace = ref('')
 
 const namespaceType = (row: NamespaceRow): Exclude<FilterMode, 'all'> =>
   row.name === 'default' ? 'system' : 'custom'
@@ -352,7 +353,11 @@ onMounted(() => {
               v-for="row in pagedRows"
               :key="row.name"
               class="info-card"
-              :class="{ 'system-card': namespaceType(row) === 'system' }"
+              tabindex="0"
+              @click="selectedNamespace = row.name"
+              @keydown.enter.prevent="selectedNamespace = row.name"
+              @keydown.space.prevent="selectedNamespace = row.name"
+              :class="{ 'system-card': namespaceType(row) === 'system', 'is-selected': selectedNamespace === row.name }"
             >
               <div class="card-accent"></div>
 
@@ -406,7 +411,7 @@ onMounted(() => {
               <el-pagination
                 v-model:current-page="currentPage"
                 v-model:page-size="pageSize"
-                :page-sizes="[12, 20, 50]"
+                :page-sizes="[8, 16, 32, 64]"
                 :total="filteredRows.length"
                 layout="sizes, prev, pager, next"
                 background
@@ -710,9 +715,9 @@ onMounted(() => {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 292px));
-  justify-content: start;
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-content: stretch;
+  gap: 12px;
   align-content: start;
   padding: 2px 2px 8px;
 }
@@ -723,7 +728,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border-radius: 14px;
+  min-height: 160px;
+  border-radius: 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   box-shadow: none;
@@ -735,6 +741,19 @@ onMounted(() => {
   border-color: rgba(59, 130, 246, 0.32);
   background: rgba(59, 130, 246, 0.03);
   box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.info-card:focus-within,
+.info-card:active {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: rgba(59, 130, 246, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+}
+
+.info-card.is-selected {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: rgba(59, 130, 246, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
 }
 
 .card-accent {
@@ -865,6 +884,14 @@ onMounted(() => {
   margin-left: auto;
 }
 
+:deep(.card-actions .el-button) {
+  min-height: 24px;
+  padding: 2px 4px;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .svc-footer {
   display: flex;
   align-items: center;
@@ -890,6 +917,10 @@ onMounted(() => {
 }
 
 @media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .toolbar-row {
     flex-wrap: wrap;
     gap: 8px;
