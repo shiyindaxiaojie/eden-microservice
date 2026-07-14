@@ -1,0 +1,4 @@
+interface:
+  display_name: "eden-microservice-tdd"
+  short_description: "Focused engineering workflow"
+  default_prompt: "Use $eden-microservice-tdd for this repository task."

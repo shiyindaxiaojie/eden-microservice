@@ -1,0 +1,4 @@
+interface:
+  display_name: "eden-microservice-code-review"
+  short_description: "Focused engineering workflow"
+  default_prompt: "Use $eden-microservice-code-review for this repository task."

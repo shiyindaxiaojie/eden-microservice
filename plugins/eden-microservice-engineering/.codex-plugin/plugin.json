@@ -1,0 +1,24 @@
+{
+  "name": "eden-microservice-engineering",
+  "version": "0.1.0+codex.20260714024411",
+  "description": "Specification-first engineering guardrails for Eden Microservice.",
+  "author": {
+    "name": "Eden Microservice Team"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Eden Microservice Engineer",
+    "shortDescription": "Focused engineering workflow and checks",
+    "longDescription": "Repository workflow, pitfall search, and local validation tools.",
+    "developerName": "Eden Microservice Team",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Prepare a specification-first change for Eden Microservice."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "eden-engineering": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/plugins/eden-microservice-engineering/scripts/eden-engineering-mcp.mjs"
+      ]
+    }
+  }
+}

@@ -1,10 +1,21 @@
 # AGENTS.md
 
-This file guides Codex and other AI coding agents when working in the
-`eden-microservice` repository. Human-facing product docs live in `README.md`
-and `docs/`; behavior contracts for agents live in `specs/`.
+This file guides Codex, Claude Code, and compatible agents working in the
+`eden-microservice` repository. Human-facing product docs live in `README.md` and
+`docs/`; behavior contracts for agents live in `specs/`.
+`CLAUDE.md` references this file; do not create conflicting root-level instructions.
+Do not send optional process narration. Keep this file under 200 lines.
 
-DO NOT send optional commentary.
+## Start Every Task
+
+1. Read this file, the applicable specification, `skills/eden-microservice/SKILL.md`, and relevant
+   entries in `specs/zh-CN/engineering/agent-pitfalls.md`. Read `CONTEXT.md` only when
+   terminology is relevant or ambiguous.
+2. Run `git status --short`; preserve user changes outside the task.
+3. Read affected implementation and tests before proposing or editing.
+4. Keep explanation, review, and diagnosis read-only by default; start behavior changes with a
+   focused test.
+5. For failures, establish a stable reproduction and test one falsifiable hypothesis at a time.
 
 ## AI Contribution Guidelines
 
@@ -22,6 +33,8 @@ DO NOT send optional commentary.
 - Prefer tests before implementation for behavior changes. For Go, add focused
   tests near the package under change; for the web UI, run type checking and
   build when views or API contracts change.
+- Put temporary artifacts, screenshots, logs, and drafts in `.tmp/`; never commit secrets or
+  local runtime configuration.
 
 ## Product Boundary
 
@@ -144,3 +157,16 @@ Read the relevant spec before changing a domain:
 - HTTP APIs: [`specs/zh-CN/http-api/api-spec.md`](./specs/zh-CN/http-api/api-spec.md)
 - Console: [`specs/zh-CN/console/console-spec.md`](./specs/zh-CN/console/console-spec.md)
 
+## Focused Skills
+
+- [`eden-microservice-diagnose`](./skills/eden-microservice-diagnose/SKILL.md): reproduce and isolate failures before fixes.
+- [`eden-microservice-tdd`](./skills/eden-microservice-tdd/SKILL.md): implement behavior at a tested public seam.
+- [`eden-microservice-code-review`](./skills/eden-microservice-code-review/SKILL.md): review contract fidelity and engineering risk separately.
+- [`eden-microservice-domain-modeling`](./skills/eden-microservice-domain-modeling/SKILL.md): resolve ownership and terminology before cross-domain changes.
+
+## Specifications / 规范
+
+- Choose the specification language requested by the task; never infer it from the operating system.
+- [English index](./specs/en/README.md) · [简体中文索引](./specs/zh-CN/README.md)
+- Keep parallel contracts aligned when both exist. Current product contracts are Chinese-canonical; do
+  not introduce partial English translations in unrelated changes.

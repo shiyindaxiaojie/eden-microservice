@@ -1,0 +1,4 @@
+interface:
+  display_name: "eden-microservice-domain-modeling"
+  short_description: "Focused engineering workflow"
+  default_prompt: "Use $eden-microservice-domain-modeling for this repository task."

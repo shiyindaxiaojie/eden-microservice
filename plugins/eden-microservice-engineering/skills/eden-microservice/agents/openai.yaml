@@ -1,0 +1,4 @@
+interface:
+  display_name: "eden-microservice"
+  short_description: "Route focused engineering work"
+  default_prompt: "Use $eden-microservice to route this repository task."

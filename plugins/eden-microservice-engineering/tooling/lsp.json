@@ -1,0 +1,7 @@
+{
+  "servers": [
+    { "language": "go", "command": "gopls" },
+    { "language": "typescript", "command": "typescript-language-server", "args": ["--stdio"] },
+    { "language": "vue", "command": "vue-language-server", "args": ["--stdio"] }
+  ]
+}
