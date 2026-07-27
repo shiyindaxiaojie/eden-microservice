@@ -3,7 +3,7 @@ module eden-microservice/packages
 go 1.25.8
 
 require (
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/shiyindaxiaojie/eden-go-logger v1.0.2
 	github.com/spf13/viper v1.21.0
 )
