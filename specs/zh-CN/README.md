@@ -6,6 +6,7 @@
 
 - [Eden Microservice 设计规范](design/eden-microservice-design-spec.md)
 - [资源模型规范](design/resource-model-spec.md)
+- [模块边界规范](modules/README.md)
 
 ## 领域模型
 

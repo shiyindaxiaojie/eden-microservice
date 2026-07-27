@@ -258,7 +258,7 @@ sequenceDiagram
 Start the server:
 
 ```bash
-go run ./cmd/server/main.go
+go run ./apps/server/cmd/server
 ```
 
 Default API address:
@@ -270,13 +270,15 @@ http://127.0.0.1:8500
 Specify a configuration file explicitly:
 
 ```bash
-go run ./cmd/server/main.go -config config/config.yaml.example
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
 ```
 
 Run tests:
 
 ```bash
-go test ./...
+go work sync
+go test ./packages/...
+go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...
 ```
 
 ## Deployment Modes
@@ -333,68 +335,59 @@ For full deployment details, see [Deployment Guide](./docs/deployment.md).
 
 | Integration path | Best fit | Example |
 | --- | --- | --- |
-| Focalors SDK | Go services, primary integration path | [Native integration example](./examples/service-discovery/native/README.md) |
-| Nacos compatibility | Existing Nacos Naming systems with minimal business code changes | [Nacos migration example](./examples/service-discovery/nacos/README.md) |
-| Consul compatibility | Existing Consul HTTP / SDK systems while keeping the original call model | [Consul migration example](./examples/service-discovery/consul/README.md) |
-| Custom gRPC / HTTP | External systems that integrate directly through public protocols | [Custom protocol example](./examples/service-discovery/custom/README.md) |
+| Focalors SDK | Go services, primary integration path | [Native integration example](./apps/registry/examples/service-discovery/native/README.md) |
+| Nacos compatibility | Existing Nacos Naming systems with minimal business code changes | [Nacos migration example](./apps/registry/examples/service-discovery/nacos/README.md) |
+| Consul compatibility | Existing Consul HTTP / SDK systems while keeping the original call model | [Consul migration example](./apps/registry/examples/service-discovery/consul/README.md) |
+| Custom gRPC / HTTP | External systems that integrate directly through public protocols | [Custom protocol example](./apps/registry/examples/service-discovery/custom/README.md) |
 
 ## Development Guide
 
-When developing, first identify which layer you need to change. The main path is: `cmd/server` for bootstrap and composition, `internal` for server implementation, `pkg/sdk` for the public Go SDK, and `examples` for integration and migration validation.
+The backend is a `go.work` monorepo. Start in the owning `apps/<domain>` module; shared process and transport foundations live in `packages`.
 
 | Task | Entry directory |
 | --- | --- |
-| Server bootstrap and runtime composition | `cmd/server` |
-| Registration, discovery, health, topology core logic | `internal/catalog` |
-| AP / CP cluster runtime | `internal/cluster` |
-| HTTP / gRPC / QUIC interfaces | `internal/transport` |
-| Nacos / Consul compatibility adapters | `internal/adapter` |
-| Authentication, authorization, system settings | `internal/auth`, `internal/settings` |
-| Alerts and notifications | `internal/alert`, `internal/notify` |
-| Public Go SDK | `pkg/sdk` |
-| Protocol definition | `api/proto` |
-| Integration and migration validation | `examples` |
+| Aggregate runtime and transports | `apps/server` |
+| Registry, compatibility adapters, Go SDK | `apps/registry` |
+| Configuration center | `apps/config` |
+| Gateway control and data planes | `apps/gateway` |
+| Authentication, authorization, API keys | `apps/auth` |
+| AP/CP, membership, runtime settings | `apps/cluster` |
+| Shared process and transport foundations | `packages` |
+| Console | `apps/ui` |
 
 Repository structure:
 
 ```text
-eden-registry
-├─ cmd
-│  └─ server                 # server bootstrap and runtime composition
-├─ api
-│  └─ proto                  # gRPC / protobuf contracts
-├─ internal
-│  ├─ catalog                # registration, discovery, health, topology core logic
-│  ├─ cluster                # AP / CP cluster runtime
-│  ├─ transport
-│  │  ├─ http                # native HTTP interfaces
-│  │  ├─ rpc                 # gRPC interfaces
-│  │  └─ quic                # QUIC transport entry
-│  ├─ adapter                # Nacos / Consul compatibility adapters
-│  ├─ auth                   # authentication, users, API keys
-│  ├─ settings               # system settings and runtime control
-│  ├─ alert                  # alert rules and event evaluation
-│  └─ notify                 # notification delivery
-├─ pkg
-│  └─ sdk                    # public Go SDK
-├─ examples                  # integration and migration examples
-└─ docs                      # architecture, deployment, and integration docs
+eden-microservice
+├─ go.work                   # Go workspace
+├─ apps
+│  ├─ registry              # registry, compatibility, SDK
+│  ├─ config                # configuration center
+│  ├─ gateway               # gateway routes and proxy
+│  ├─ auth                  # permission control
+│  ├─ cluster               # cluster management
+│  ├─ server                # default aggregate process
+│  └─ ui                    # Vue console
+├─ packages                 # local shared packages
+├─ configs                  # runtime configuration examples
+└─ docs                     # architecture, deployment, integration
 ```
 
 Common development commands:
 
 ```bash
-go run ./cmd/server/main.go
-go run ./cmd/server/main.go -config config/config.yaml.example
-go test ./...
+go work sync
+go run ./apps/server/cmd/server
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go test ./apps/registry/... ./apps/config/... ./apps/gateway/... ./apps/auth/... ./apps/cluster/... ./apps/server/... ./packages/...
 ```
 
 Development notes:
 
-- For registry or discovery behavior, start from `internal/catalog` instead of the compatibility layer.
-- For AP / CP consistency and node coordination, start from `internal/cluster`.
-- For protocol changes, use `internal/transport` for native interfaces and `internal/adapter` for compatibility interfaces.
-- For SDK or developer experience changes, update `pkg/sdk` and `examples` together.
+- For registry or discovery behavior, start from `apps/registry/internal/catalog`.
+- For AP / CP consistency and node coordination, start from `apps/cluster/internal/cluster`.
+- For aggregate transport wiring, use `apps/server/internal/transport`; compatibility adapters stay with their domain.
+- For SDK or developer experience changes, update `apps/registry/pkg/sdk` and the module-owned examples together.
 
 ## Documentation
 

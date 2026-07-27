@@ -4,7 +4,7 @@
 
 For Go services, the primary entry point is:
 
-- [`pkg/sdk`](../pkg/sdk)
+- [`apps/registry/pkg/sdk`](../apps/registry/pkg/sdk)
 
 Other supported paths remain available for specific constraints:
 
@@ -13,7 +13,7 @@ Other supported paths remain available for specific constraints:
 - Consul-compatible access
 - Nacos-compatible access
 
-For new projects, `pkg/sdk` is the primary integration path. Compatibility adapters remain available for migration scenarios.
+For new projects, `eden-microservice/apps/registry/pkg/sdk` is the primary integration path. Compatibility adapters remain available for migration scenarios.
 
 ## Go SDK
 
@@ -72,7 +72,7 @@ Common endpoints:
 
 ## Native gRPC API
 
-- Proto: [`api/proto/registry/v1/registry.proto`](../api/proto/registry/v1/registry.proto)
+- Proto: [`apps/registry/api/proto/registry/v1/registry.proto`](../apps/registry/api/proto/registry/v1/registry.proto)
 - Service: `eden.registry.v1.RegistryService`
 
 Core RPCs:
@@ -97,8 +97,8 @@ Constraints:
 
 References:
 
-- [Consul example](../examples/service-discovery/consul/README.md)
-- [Service discovery example index](../examples/service-discovery/README.md)
+- [Consul example](../apps/registry/examples/service-discovery/consul/README.md)
+- [Service discovery example index](../apps/registry/examples/service-discovery/README.md)
 
 ### Nacos Compatibility
 
@@ -111,8 +111,8 @@ Constraints:
 
 References:
 
-- [Nacos example](../examples/service-discovery/nacos/README.md)
-- [Service discovery example index](../examples/service-discovery/README.md)
+- [Nacos example](../apps/registry/examples/service-discovery/nacos/README.md)
+- [Service discovery example index](../apps/registry/examples/service-discovery/README.md)
 
 ### Custom Protocol Access
 
@@ -120,16 +120,16 @@ Applicable when an external project integrates only through the published HTTP o
 
 Reading order:
 
-1. [Service discovery examples](../examples/service-discovery/README.md)
-2. [Custom protocol example](../examples/service-discovery/custom/README.md)
-3. [`api/proto/registry/v1/registry.proto`](../api/proto/registry/v1/registry.proto)
+1. [Service discovery examples](../apps/registry/examples/service-discovery/README.md)
+2. [Custom protocol example](../apps/registry/examples/service-discovery/custom/README.md)
+3. [`apps/registry/api/proto/registry/v1/registry.proto`](../apps/registry/api/proto/registry/v1/registry.proto)
 
 ## Selection Guidance
 
 | Scenario | Primary path |
 | --- | --- |
-| new Go services | `pkg/sdk + grpc` |
-| Go services with network constraints | `pkg/sdk + http` or `pkg/sdk + quic` |
+| new Go services | `apps/registry/pkg/sdk + grpc` |
+| Go services with network constraints | `apps/registry/pkg/sdk + http` or `apps/registry/pkg/sdk + quic` |
 | non-Go services | gRPC first, HTTP second |
 | stock system migration | Consul or Nacos compatibility |
 

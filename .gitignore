@@ -23,8 +23,9 @@
 logs/
 
 # 配置文件（排除示例配置）
+configs/*.yaml
+!configs/*.yaml.example
 config/config.yaml
-!config/config.yaml.example
 
 # 环境变量文件
 .env
@@ -48,7 +49,6 @@ temp/
 # Go特定文件
 *.test
 *.out
-go.work
 
 # 证书文件
 *.pem
@@ -67,29 +67,26 @@ charts/
 *.tmp
 
 # Frontend
-web/node_modules/
-web/dist/
-web/.env
-web/.env.*
-web/npm-debug.log*
-web/yarn-debug.log*
-web/yarn-error.log*
-web/yarn.lock
+apps/ui/node_modules/
+apps/ui/dist/
+apps/ui/.env
+apps/ui/.env.*
+apps/ui/npm-debug.log*
+apps/ui/yarn-debug.log*
+apps/ui/yarn-error.log*
+apps/ui/yarn.lock
 
 # TypeScript 编译生成的文件
-web/src/**/*.js
-web/src/**/*.js.map
-web/src/**/*.d.ts
-!web/src/**/*shims*.d.ts
-!web/src/**/vite-env.d.ts
-web/tsconfig.tsbuildinfo
-web/*.tsbuildinfo
+apps/ui/src/**/*.js
+apps/ui/src/**/*.js.map
+apps/ui/src/**/*.d.ts
+!apps/ui/src/**/*shims*.d.ts
+!apps/ui/src/**/vite-env.d.ts
+apps/ui/tsconfig.tsbuildinfo
+apps/ui/*.tsbuildinfo
 
 # Backend
 .env.*
-config/config.yaml
-config/config.*.yaml
-!config/config.yaml.example
 *.log
 logs/
 

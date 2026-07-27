@@ -4,7 +4,7 @@
 
 对 Go 项目，统一入口为：
 
-- 使用 [`pkg/sdk`](../pkg/sdk) 接入
+- 使用 [`apps/registry/pkg/sdk`](../apps/registry/pkg/sdk) 接入
 
 其他接入路径是补充方案：
 
@@ -13,7 +13,7 @@
 - Consul 兼容接入
 - Nacos 兼容接入
 
-对于新项目，`pkg/sdk` 作为主要接入路径；兼容层保留用于迁移场景。
+对于新项目，`eden-microservice/apps/registry/pkg/sdk` 作为主要接入路径；兼容层保留用于迁移场景。
 
 ## Go SDK 接入
 
@@ -123,7 +123,7 @@ curl -X POST http://127.0.0.1:8500/v1/catalog/register \
 
 协议定义：
 
-- Proto：[`api/proto/registry/v1/registry.proto`](../api/proto/registry/v1/registry.proto)
+- Proto：[`apps/registry/api/proto/registry/v1/registry.proto`](../apps/registry/api/proto/registry/v1/registry.proto)
 - Service：`eden.registry.v1.RegistryService`
 
 核心方法：
@@ -140,7 +140,7 @@ curl -X POST http://127.0.0.1:8500/v1/catalog/register \
 ```bash
 grpcurl -plaintext \
   -H "x-consumer-service: order-center" \
-  -import-path ./api/proto \
+  -import-path ./apps/registry/api/proto \
   -proto registry/v1/registry.proto \
   -d '{
     "namespace": "default",
@@ -173,9 +173,9 @@ grpcurl -plaintext \
 
 可先参考以下示例：
 
-- [Consul 兼容示例说明](../examples/service-discovery/consul/README.md)
-- [Consul 示例启动脚本](../examples/service-discovery/consul/start.bat)
-- [服务发现示例总览](../examples/service-discovery/README.md)
+- [Consul 兼容示例说明](../apps/registry/examples/service-discovery/consul/README.md)
+- [Consul 示例启动脚本](../apps/registry/examples/service-discovery/consul/start.bat)
+- [服务发现示例总览](../apps/registry/examples/service-discovery/README.md)
 
 ### Nacos 兼容
 
@@ -196,9 +196,9 @@ grpcurl -plaintext \
 
 可先参考以下示例：
 
-- [Nacos 兼容示例说明](../examples/service-discovery/nacos/README.md)
-- [Nacos 示例启动脚本](../examples/service-discovery/nacos/start.bat)
-- [服务发现示例总览](../examples/service-discovery/README.md)
+- [Nacos 兼容示例说明](../apps/registry/examples/service-discovery/nacos/README.md)
+- [Nacos 示例启动脚本](../apps/registry/examples/service-discovery/nacos/start.bat)
+- [服务发现示例总览](../apps/registry/examples/service-discovery/README.md)
 
 ### 自定义协议接入
 
@@ -214,16 +214,16 @@ grpcurl -plaintext \
 
 阅读顺序如下：
 
-1. [服务发现示例总览](../examples/service-discovery/README.md)
-2. [自定义协议示例说明](../examples/service-discovery/custom/README.md)
-3. [`api/proto/registry/v1/registry.proto`](../api/proto/registry/v1/registry.proto)
+1. [服务发现示例总览](../apps/registry/examples/service-discovery/README.md)
+2. [自定义协议示例说明](../apps/registry/examples/service-discovery/custom/README.md)
+3. [`apps/registry/api/proto/registry/v1/registry.proto`](../apps/registry/api/proto/registry/v1/registry.proto)
 
 ## 接入选型
 
 | 场景 | 主要路径 |
 | --- | --- |
-| 新 Go 服务 | `pkg/sdk + grpc` |
-| Go 服务但受限于网络环境 | `pkg/sdk + http` 或 `pkg/sdk + quic` |
+| 新 Go 服务 | `apps/registry/pkg/sdk + grpc` |
+| Go 服务但受限于网络环境 | `apps/registry/pkg/sdk + http` 或 `apps/registry/pkg/sdk + quic` |
 | 非 Go 服务 | 优先 gRPC，其次 HTTP |
 | 旧系统迁移 | Consul / Nacos 兼容接入 |
 

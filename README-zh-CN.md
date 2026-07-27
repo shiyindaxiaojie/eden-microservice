@@ -256,7 +256,7 @@ sequenceDiagram
 启动服务端：
 
 ```bash
-go run ./cmd/server/main.go
+go run ./apps/server/cmd/server
 ```
 
 默认 API 地址：
@@ -268,13 +268,15 @@ http://127.0.0.1:8500
 显式指定配置：
 
 ```bash
-go run ./cmd/server/main.go -config config/config.yaml.example
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
 ```
 
 运行测试：
 
 ```bash
-go test ./...
+go work sync
+go test ./packages/...
+go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...
 ```
 
 ## 部署模式
@@ -330,13 +332,13 @@ server:
 ## 客户端集成
 
 - Focalors SDK：面向 Go 服务，作为主要接入路径。
-  对应示例：[Focalors 集成示例](./examples/service-discovery/native/README.md)
+  对应示例：[Focalors 集成示例](./apps/registry/examples/service-discovery/native/README.md)
 - Nacos 兼容：面向 Nacos Naming 存量系统，尽量少改业务代码。
-  对应示例：[Nacos 迁移示例](./examples/service-discovery/nacos/README.md)
+  对应示例：[Nacos 迁移示例](./apps/registry/examples/service-discovery/nacos/README.md)
 - Consul 兼容：面向 Consul HTTP / SDK 存量系统，保留原有调用模型。
-  对应示例：[Consul 迁移示例](./examples/service-discovery/consul/README.md)
+  对应示例：[Consul 迁移示例](./apps/registry/examples/service-discovery/consul/README.md)
 - 自定义 gRPC / HTTP：面向外部项目，直接对接公开协议。
-  对应示例：[自定义协议示例](./examples/service-discovery/custom/README.md)
+  对应示例：[自定义协议示例](./apps/registry/examples/service-discovery/custom/README.md)
 
 ## 开发说明
 
@@ -344,57 +346,48 @@ server:
 
 | 开发任务 | 入口目录 |
 | --- | --- |
-| 服务端启动与运行时装配 | `cmd/server` |
-| 注册、发现、健康、拓扑核心逻辑 | `internal/catalog` |
-| AP / CP 集群运行时 | `internal/cluster` |
-| HTTP / gRPC / QUIC 接口 | `internal/transport` |
-| Nacos / Consul 兼容适配 | `internal/adapter` |
-| 认证、权限、系统设置 | `internal/auth`、`internal/settings` |
-| 告警与通知 | `internal/alert`、`internal/notify` |
-| 对外 Go SDK | `pkg/sdk` |
-| 协议定义 | `api/proto` |
-| 接入与迁移验证 | `examples` |
+| 聚合服务启动与运行时装配 | `apps/server` |
+| 注册、发现、兼容适配与 Go SDK | `apps/registry` |
+| 配置中心 | `apps/config` |
+| 网关控制面与数据面 | `apps/gateway` |
+| 登录、权限与 API Key | `apps/auth` |
+| AP / CP、成员管理与运行设置 | `apps/cluster` |
+| 共享进程与传输基础包 | `packages` |
+| 控制台 | `apps/ui` |
 
 目录结构图：
 
 ```text
-eden-registry
-├─ cmd
-│  └─ server                 # 服务端启动入口与运行时装配
-├─ api
-│  └─ proto                  # gRPC / protobuf 协议定义
-├─ internal
-│  ├─ catalog                # 注册、发现、健康、拓扑核心逻辑
-│  ├─ cluster                # AP / CP 集群运行时
-│  ├─ transport
-│  │  ├─ http                # 原生 HTTP 接口
-│  │  ├─ rpc                 # gRPC 接口
-│  │  └─ quic                # QUIC 传输入口
-│  ├─ adapter                # Nacos / Consul 兼容适配层
-│  ├─ auth                   # 认证、用户、API Key
-│  ├─ settings               # 系统设置与运行时控制
-│  ├─ alert                  # 告警规则与事件评估
-│  └─ notify                 # 通知发送
-├─ pkg
-│  └─ sdk                    # 对外 Go SDK
-├─ examples                  # 接入与迁移示例
-└─ docs                      # 架构、部署、集成文档
+eden-microservice
+├─ go.work                   # Go workspace
+├─ apps
+│  ├─ registry              # 注册中心、兼容适配、SDK
+│  ├─ config                # 配置中心
+│  ├─ gateway               # 网关路由与代理
+│  ├─ auth                  # 权限控制
+│  ├─ cluster               # 集群管理
+│  ├─ server                # 默认聚合进程
+│  └─ ui                    # Vue 控制台
+├─ packages                 # 本地共享包
+├─ configs                  # 运行配置示例
+└─ docs                     # 架构、部署、集成文档
 ```
 
 常用开发命令：
 
 ```bash
-go run ./cmd/server/main.go
-go run ./cmd/server/main.go -config config/config.yaml.example
-go test ./...
+go work sync
+go run ./apps/server/cmd/server
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go test ./apps/registry/... ./apps/config/... ./apps/gateway/... ./apps/auth/... ./apps/cluster/... ./apps/server/... ./packages/...
 ```
 
 开发建议：
 
-- 改注册发现行为，优先看 `internal/catalog`，不要先从兼容层改起。
-- 改 AP / CP 一致性或节点协同，优先看 `internal/cluster`。
-- 改外部协议，原生接口看 `internal/transport`，兼容接口看 `internal/adapter`。
-- 改 SDK 或接入体验时，同时检查 `pkg/sdk` 和 `examples`，确保示例与 SDK 保持一致。
+- 改注册发现行为，优先看 `apps/registry/internal/catalog`，不要先从兼容层改起。
+- 改 AP / CP 一致性或节点协同，优先看 `apps/cluster/internal/cluster`。
+- 改统一传输装配看 `apps/server/internal/transport`；兼容接口归所属领域模块。
+- 改 SDK 或接入体验时，同时检查 `apps/registry/pkg/sdk` 和模块内示例。
 
 ## 文档索引
 

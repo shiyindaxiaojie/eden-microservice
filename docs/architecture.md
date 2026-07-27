@@ -62,21 +62,22 @@ graph TB
 
 ## Repository Areas
 
-| Area | Responsibility |
-| --- | --- |
-| `cmd/server` | process bootstrap and runtime composition |
-| `internal/catalog` | registry, discovery, lifecycle, topology |
-| `internal/cluster/ap` | AP replication and member coordination |
-| `internal/cluster/cp` | CP consensus and state machine |
-| `internal/transport/http` | HTTP control APIs |
-| `internal/transport/rpc` | gRPC service APIs |
-| `internal/transport/quic` | QUIC listener for RPC transport |
-| `internal/auth` | login, users, API keys, RBAC-oriented control |
-| `internal/settings` | runtime settings and system controls |
-| `internal/alert` | event evaluation and alert policies |
-| `internal/notify` | notification delivery |
-| `pkg/sdk` | public Go SDK |
-| `api/proto` | protobuf contracts |
+The repository is a Go workspace. Each control-plane domain has its own module and
+may expose only `api`, `module`, `pkg`, or protocol packages to another module.
+
+| Area | Module identity | Responsibility |
+| --- | --- | --- |
+| `apps/registry` | `eden-microservice/apps/registry` | registry, discovery, compatibility adapters, registry SDK |
+| `apps/config` | `eden-microservice/apps/config` | configuration resources, history, watches, Nacos Config compatibility |
+| `apps/gateway` | `eden-microservice/apps/gateway` | route definitions, publication, matching, and proxy runtime |
+| `apps/auth` | `eden-microservice/apps/auth` | login, users, API keys, and RBAC |
+| `apps/cluster` | `eden-microservice/apps/cluster` | AP replication, CP consensus, node and runtime governance |
+| `apps/server` | `eden-microservice/apps/server` | aggregate process and unified HTTP/gRPC transports |
+| `apps/ui` | — | Vue administration console |
+| `packages` | `eden-microservice/packages` | repository-local shared foundations |
+
+`apps/server/cmd/server` remains the default all-in-one deployment. Domain-owned
+commands under `apps/<domain>/cmd` are independent build boundaries.
 
 ## Runtime Modes
 
@@ -105,7 +106,7 @@ Key decisions:
 
 - QUIC is not a separate business protocol.
 - HTTP remains the widest access surface, but not the preferred data plane for Go services.
-- The primary public programming boundary is `pkg/sdk`.
+- The primary public programming boundary is `apps/registry/pkg/sdk`.
 
 ## Data Flow
 
@@ -132,7 +133,7 @@ Key decisions:
 
 Focalors defines one primary Go entry point:
 
-- `pkg/sdk`
+- `apps/registry/pkg/sdk`
 
 HTTP and gRPC remain supported protocol surfaces. Nacos and Consul adapters remain migration tools, not the long-term product boundary.
 

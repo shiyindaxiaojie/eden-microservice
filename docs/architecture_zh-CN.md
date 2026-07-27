@@ -75,23 +75,22 @@ graph TB
 
 ## 代码分区
 
-按职责划分，仓库主要分为以下模块：
+仓库使用 Go workspace。每个控制面领域都是独立模块；跨模块只能依赖对方的
+`api`、`module`、`pkg` 或协议包，不能引用其他模块的 `internal`。
 
-| 模块 | 职责 |
-| --- | --- |
-| `cmd/server` | 进程入口与运行时装配 |
-| `internal/catalog` | 注册、发现、实例状态、拓扑核心领域 |
-| `internal/cluster/ap` | AP 模式复制与节点协作 |
-| `internal/cluster/cp` | CP 模式 Raft 共识与状态机 |
-| `internal/transport/http` | HTTP API 出口 |
-| `internal/transport/rpc` | gRPC 服务出口 |
-| `internal/transport/quic` | QUIC 监听入口 |
-| `internal/auth` | 登录、用户、API Key、RBAC |
-| `internal/settings` | 运行时设置与系统配置 |
-| `internal/alert` | 事件评估与告警规则 |
-| `internal/notify` | 通知渠道与发送 |
-| `pkg/sdk` | 对外统一的 Go SDK 入口 |
-| `api/proto` | gRPC 协议定义 |
+| 目录 | 模块标识 | 职责 |
+| --- | --- | --- |
+| `apps/registry` | `eden-microservice/apps/registry` | 注册、发现、兼容适配器、注册中心 SDK |
+| `apps/config` | `eden-microservice/apps/config` | 配置资源、历史、监听、Nacos Config 兼容 |
+| `apps/gateway` | `eden-microservice/apps/gateway` | 路由定义、发布、匹配与代理运行时 |
+| `apps/auth` | `eden-microservice/apps/auth` | 登录、用户、API Key、RBAC |
+| `apps/cluster` | `eden-microservice/apps/cluster` | AP 复制、CP 共识、节点与运行时治理 |
+| `apps/server` | `eden-microservice/apps/server` | 聚合进程与统一 HTTP/gRPC 传输层 |
+| `apps/ui` | — | Vue 管理控制台 |
+| `packages` | `eden-microservice/packages` | 仓库内共享基础包 |
+
+默认部署入口仍是 `apps/server/cmd/server`。各领域的 `apps/<domain>/cmd`
+提供独立构建边界。
 
 ## 运行模式
 
@@ -147,7 +146,7 @@ graph TB
 
 - QUIC 不是独立业务协议，而是 gRPC 的传输补充。
 - HTTP 是最通用的入口，但不是主数据面。
-- Go 业务优先通过 `pkg/sdk + grpc` 接入。
+- Go 业务优先通过 `apps/registry/pkg/sdk + grpc` 接入。
 
 ## 关键数据流
 
@@ -193,7 +192,7 @@ graph TB
 
 芙卡洛斯当前明确的对外策略是：
 
-- `pkg/` 下只保留 `pkg/sdk` 作为对外 Go API
+- 注册中心模块通过 `apps/registry/pkg/sdk` 提供对外 Go API
 - 协议接入仍然保留 HTTP 和 gRPC
 - 兼容层存在，但不作为新项目的优先路径
 
@@ -201,13 +200,14 @@ graph TB
 
 - 对外编程模型应该尽量收敛
 - 内部实现可以继续演进
-- 文档和示例都应该围绕 `pkg/sdk` 建立主路径
+- 文档和示例都应该围绕 `apps/registry/pkg/sdk` 建立主路径
 
 ## 架构取舍
 
-### 为什么不是拆成多个独立服务
+### 为什么独立模块仍保留聚合部署
 
-因为当前系统优先解决的是“能运行、能接入、能治理”的完整闭环，而不是服务拆分本身。过早拆分会引入更多部署和一致性复杂度。
+模块边界解决代码所有权、依赖方向和独立构建问题；`apps/server` 保留默认聚合部署，
+避免小规模环境必须承担多进程部署成本。需要独立部署时可从各领域命令入口继续演进。
 
 ### 为什么既支持 AP 又支持 CP
 

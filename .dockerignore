@@ -10,9 +10,9 @@ data
 logs
 coverage.txt
 coverage.html
-web/node_modules
-web/dist
-web/.vite
+apps/ui/node_modules
+apps/ui/dist
+apps/ui/.vite
 
 .codex
 .cache
@@ -21,8 +21,8 @@ web/.vite
 vendor
 .env
 .env.*
-web/tsconfig.tsbuildinfo
-web/*.tsbuildinfo
-web/npm-debug.log*
-web/yarn-debug.log*
-web/yarn-error.log*
+apps/ui/tsconfig.tsbuildinfo
+apps/ui/*.tsbuildinfo
+apps/ui/npm-debug.log*
+apps/ui/yarn-debug.log*
+apps/ui/yarn-error.log*

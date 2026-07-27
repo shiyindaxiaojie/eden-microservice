@@ -13,13 +13,13 @@ Focalors supports three operating shapes:
 Use the default configuration:
 
 ```bash
-go run ./cmd/server/main.go
+go run ./apps/server/cmd/server
 ```
 
 Specify a configuration file explicitly:
 
 ```bash
-go run ./cmd/server/main.go -config config/config.yaml
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
 ```
 
 Common flags:
@@ -35,8 +35,8 @@ Common flags:
 
 Relevant files:
 
-- [`config/config.yaml`](../config/config.yaml)
-- [`config/config.yaml.example`](../config/config.yaml.example)
+- local override: `configs/eden-microservice.yaml`
+- [versioned example](../configs/eden-microservice.yaml.example)
 
 Key sections:
 
@@ -112,7 +112,7 @@ Operational differences:
 Frontend development commands:
 
 ```bash
-cd web
+cd apps/ui
 npm install
 npm run dev
 ```

@@ -1,0 +1,15 @@
+go 1.25.8
+
+use (
+	./apps/auth
+	./apps/cluster
+	./apps/config
+	./apps/gateway
+	./apps/registry
+	./apps/server
+	./packages
+)
+
+// The legacy Nacos dependency still requests the pre-split genproto module.
+// Pin its parent module when all local modules are composed in this workspace.
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217

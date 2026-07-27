@@ -54,51 +54,43 @@ rename itself.
 
 ## Current Architecture
 
-Existing production code is centered on service registration and control-plane
-management:
+The repository is a `go.work` monorepo. Business modules own implementation under
+`apps/<domain>/internal`, expose stable contracts from `api` and composition from `module`, and
+must not import another module's `internal` packages.
 
 | Area | Current location | Responsibility |
 | --- | --- | --- |
-| Server bootstrap | `cmd/server` | process startup and runtime wiring |
-| Runtime config | `internal/config` | YAML/env process configuration |
-| Registry domain | `internal/catalog` | service registry, discovery, health, topology, events |
-| AP/CP cluster | `internal/cluster` | AP replication, CP Raft, shared runtime state |
-| HTTP API | `internal/transport/http` | console API, native HTTP API, compatibility routes |
-| gRPC API | `internal/transport/rpc` | native registry RPC and cluster RPC |
-| Compatibility | `internal/adapter/nacos`, `internal/adapter/consul` | Nacos Naming and Consul HTTP compatibility |
-| Auth/settings | `internal/auth`, `internal/settings` | login, RBAC, API keys, runtime settings |
-| Console | `web/src` | Vue 3 + Element Plus admin console |
-| SDK | `pkg/sdk` | Go client API |
+| Workspace | `go.work` | local module composition |
+| Shared foundations | `packages/{config,crypto,metrics,replication,transport}` | repository-local process, replication, and transport support |
+| Registry | `apps/registry` | service registry, discovery, health, topology, compatibility adapters, Go SDK |
+| Config center | `apps/config` | config resources, storage, history, watch, Nacos Config compatibility |
+| Gateway | `apps/gateway` | route control plane, validation, publication, proxy runtime |
+| Permission control | `apps/auth` | login, users, RBAC roles, API keys |
+| Cluster management | `apps/cluster` | AP replication, CP Raft, membership and runtime settings |
+| Aggregate server | `apps/server/cmd/server`, `apps/server/module` | runtime wiring and unified HTTP/gRPC transports |
+| Console | `apps/ui/src` | Vue 3 + Element Plus admin console |
 
-Target new domains:
-
-| Area | Recommended location | Responsibility |
-| --- | --- | --- |
-| Config center | `internal/configcenter` | Config resource model, storage, history, watch, Nacos Config compatibility |
-| Gateway control | `internal/gateway` | route definitions, validation, publication, admin APIs |
-| Gateway data plane | `internal/gateway/proxy` or `internal/transport/gateway` | HTTP reverse proxy, matching, load balancing, filters |
-| Config UI | `web/src/views/configs.vue` | configuration management |
-| Route UI | `web/src/views/routes.vue` | gateway route management |
-
-Use `internal/configcenter` rather than `internal/config` for the config center;
-`internal/config` already owns process configuration.
+Use `apps/config/internal/configcenter` for control-plane configuration resources and
+`packages/config` for process YAML/environment configuration.
 
 ## Build And Test Commands
 
 ```bash
-go test ./...
-go run ./cmd/server/main.go
-go run ./cmd/server/main.go -config config/config.yaml.example
+go work sync
+go test ./packages/...
+go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...
+go run ./apps/server/cmd/server
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
 ```
 
 ```bash
-cd web
+cd apps/ui
 npm run check:i18n
 npm run build
 ```
 
-For targeted work, run the smallest relevant Go test package first, then run
-`go test ./...` before completion when the change touches shared behavior.
+For targeted work, enter the owning module and run the smallest relevant package first, then
+`go test ./...` for that module. Verify every affected module when shared behavior changes.
 
 ## API Standards
 
@@ -156,6 +148,7 @@ Read the relevant spec before changing a domain:
 - API gateway: [`specs/zh-CN/gateway/README.md`](./specs/zh-CN/gateway/README.md)
 - HTTP APIs: [`specs/zh-CN/http-api/api-spec.md`](./specs/zh-CN/http-api/api-spec.md)
 - Console: [`specs/zh-CN/console/console-spec.md`](./specs/zh-CN/console/console-spec.md)
+- Module boundaries: [`specs/zh-CN/modules/README.md`](./specs/zh-CN/modules/README.md)
 
 ## Focused Skills
 

@@ -18,13 +18,13 @@
 使用默认配置启动：
 
 ```bash
-go run ./cmd/server/main.go
+go run ./apps/server/cmd/server
 ```
 
 显式指定配置文件：
 
 ```bash
-go run ./cmd/server/main.go -config config/config.yaml
+go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
 ```
 
 常用命令行参数：
@@ -46,8 +46,8 @@ go run ./cmd/server/main.go -config config/config.yaml
 
 配置文件见：
 
-- [`config/config.yaml`](../config/config.yaml)
-- [`config/config.yaml.example`](../config/config.yaml.example)
+- 本地覆盖文件：`configs/eden-microservice.yaml`
+- [版本化示例](../configs/eden-microservice.yaml.example)
 
 关键配置项分为四类：
 
@@ -153,7 +153,7 @@ server:
 启动前端开发环境：
 
 ```bash
-cd web
+cd apps/ui
 npm install
 npm run dev
 ```

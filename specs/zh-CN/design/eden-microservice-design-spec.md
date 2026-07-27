@@ -48,22 +48,25 @@ Nacos Config、Nacos Naming、Consul Registry 的兼容 API 用于迁移存量�
 
 Standalone 写入本地持久化。AP 集群允许写入后向 peers 扩散并最终一致。CP 集群中的关键持久资源写入必须通过 Leader 和 Raft 提交。
 
-## 5. 目标模块
+## 5. Monorepo 模块
 
 ```text
-internal
-├─ catalog              # 已有注册中心领域
-├─ configcenter         # 新增配置中心领域
-├─ gateway              # 新增网关路由、匹配、转发领域
-├─ adapter
-│  ├─ nacos             # Nacos Naming + Config 兼容
-│  └─ consul            # Consul Registry 兼容
-├─ transport
-│  ├─ http              # 控制台和原生 HTTP API
-│  ├─ rpc               # gRPC API
-│  └─ gateway           # 可选的网关数据面监听装配
-└─ cluster              # AP/CP 复制和共识
+go.work
+├─ apps
+│  ├─ registry          # 注册中心、Naming/Consul 兼容、Go SDK
+│  ├─ config            # 配置中心与 Nacos Config 兼容
+│  ├─ gateway           # 网关路由控制面和数据面
+│  ├─ auth              # 登录、用户、RBAC 与 API Key
+│  ├─ cluster           # AP/CP、成员关系与运行设置
+│  ├─ server            # 默认聚合进程与统一传输装配
+│  └─ ui                # Vue 控制台
+└─ packages             # 本地共享的进程配置、加密、指标、复制和传输基础包
 ```
+
+Go module 使用 `eden-microservice/apps/<domain>` 和 `eden-microservice/packages` 作为工作区内
+逻辑路径。各领域实现放在自身 `internal`，对外契约放在 `api`，组合入口放在 `module`；跨模块
+不得 import 其他模块的 `internal`。默认部署仍由 `apps/server/cmd/server` 聚合为单进程，领域
+模块同时保留 `cmd/eden-<domain>` 独立入口。
 
 ## 6. 控制台导航
 
