@@ -268,7 +268,7 @@ http://127.0.0.1:8500
 显式指定配置：
 
 ```bash
-go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 ```
 
 运行测试：
@@ -378,7 +378,7 @@ eden-microservice
 ```bash
 go work sync
 go run ./apps/server/cmd/server
-go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 go test ./apps/registry/... ./apps/config/... ./apps/gateway/... ./apps/auth/... ./apps/cluster/... ./apps/server/... ./packages/...
 ```
 

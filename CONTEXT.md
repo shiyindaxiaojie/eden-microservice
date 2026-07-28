@@ -4,6 +4,7 @@ Read this compact glossary only when a task uses unfamiliar or ambiguous domain 
 
 Registry: service registration, discovery, health, topology, and events.
 Config center: versioned configuration resources, history, and watches; not process configuration.
+Process configuration: YAML and environment settings owned by the executable; the aggregate server example lives under `apps/server/config`.
 Gateway control plane: route definitions, validation, publication, and admin APIs.
 Gateway data plane: proxy matching, load balancing, and filters.
 Compatibility adapter: Nacos or Consul protocol boundary, not native domain model.

@@ -270,7 +270,7 @@ http://127.0.0.1:8500
 Specify a configuration file explicitly:
 
 ```bash
-go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 ```
 
 Run tests:
@@ -378,7 +378,7 @@ Common development commands:
 ```bash
 go work sync
 go run ./apps/server/cmd/server
-go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 go test ./apps/registry/... ./apps/config/... ./apps/gateway/... ./apps/auth/... ./apps/cluster/... ./apps/server/... ./packages/...
 ```
 

@@ -26,11 +26,12 @@ apps/<domain>
 ├─ api                 # 允许其他 module import 的稳定类型和协议
 ├─ module              # 容器、构造函数和组合入口
 ├─ internal            # 仅本 module 可见的领域实现
-└─ cmd/eden-<domain>   # 独立进程入口
+└─ cmd/<domain>        # 独立进程入口
 ```
 
 聚合入口固定为 `apps/server/cmd/server`，运行时装配属于 `apps/server/module`。物理目录不重复
-`eden-` 前缀；命令目录保留该前缀，以便在部署产物中识别运行单元。
+领域名或产品名前缀。聚合进程的 YAML 配置由 `apps/server/config` 持有；配置中心领域代码仍归
+`apps/config`，共享的进程配置解析代码仍归 `packages/config`。
 
 ## 3. 依赖方向
 

@@ -19,7 +19,7 @@ go run ./apps/server/cmd/server
 Specify a configuration file explicitly:
 
 ```bash
-go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 ```
 
 Common flags:
@@ -33,10 +33,14 @@ Common flags:
 
 ## Configuration Baseline
 
+`apps/server` is currently the only application that reads process YAML, so it owns the
+configuration file. Other domain entry points use flags under `cmd/<domain>` and do not keep
+duplicate YAML files that their binaries would not read.
+
 Relevant files:
 
-- local override: `configs/eden-microservice.yaml`
-- [versioned example](../configs/eden-microservice.yaml.example)
+- local override: `apps/server/config/eden-microservice.yaml`
+- [versioned example](../apps/server/config/eden-microservice.yaml.example)
 
 Key sections:
 

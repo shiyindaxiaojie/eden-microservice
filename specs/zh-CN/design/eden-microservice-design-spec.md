@@ -66,7 +66,7 @@ go.work
 Go module 使用 `eden-microservice/apps/<domain>` 和 `eden-microservice/packages` 作为工作区内
 逻辑路径。各领域实现放在自身 `internal`，对外契约放在 `api`，组合入口放在 `module`；跨模块
 不得 import 其他模块的 `internal`。默认部署仍由 `apps/server/cmd/server` 聚合为单进程，领域
-模块同时保留 `cmd/eden-<domain>` 独立入口。
+模块同时保留 `cmd/<domain>` 独立入口。聚合进程的示例配置归 `apps/server/config` 所有。
 
 ## 6. 控制台导航
 

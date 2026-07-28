@@ -44,7 +44,7 @@ import (
 // Run starts the aggregate Eden Microservice process.
 func Run() {
 	var (
-		cfgFile         = flag.String("config", "configs/eden-microservice.yaml", "Path to configuration file")
+		cfgFile         = flag.String("config", "apps/server/config/eden-microservice.yaml", "Path to configuration file")
 		dataDir         = flag.String("data-dir", "", "Override data directory")
 		nodeID          = flag.String("node-id", "", "Override node ID")
 		httpAddr        = flag.String("http-addr", "", "Override HTTP listen address")

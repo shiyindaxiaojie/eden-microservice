@@ -22,10 +22,9 @@
 *.log
 logs/
 
-# 配置文件（排除示例配置）
-configs/*.yaml
-!configs/*.yaml.example
-config/config.yaml
+# 聚合服务本地配置（保留版本化示例）
+apps/server/config/*.yaml
+!apps/server/config/*.yaml.example
 
 # 环境变量文件
 .env

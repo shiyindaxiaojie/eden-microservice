@@ -76,8 +76,9 @@ may expose only `api`, `module`, `pkg`, or protocol packages to another module.
 | `apps/ui` | — | Vue administration console |
 | `packages` | `eden-microservice/packages` | repository-local shared foundations |
 
-`apps/server/cmd/server` remains the default all-in-one deployment. Domain-owned
-commands under `apps/<domain>/cmd` are independent build boundaries.
+`apps/server/cmd/server` remains the default all-in-one deployment and owns its process
+configuration under `apps/server/config`. Domain-owned commands under
+`apps/<domain>/cmd/<domain>` are independent build boundaries.
 
 ## Runtime Modes
 

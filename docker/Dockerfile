@@ -30,7 +30,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 
 COPY --from=builder /out/eden-registry /usr/local/bin/eden-registry
-COPY configs/eden-microservice.yaml.example /app/config/config.yaml.example
+COPY apps/server/config/eden-microservice.yaml.example /app/config/config.yaml.example
 
 USER eden
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "eden-microservice-diagnose"
-  short_description: "Focused engineering workflow"
-  default_prompt: "Use $eden-microservice-diagnose for this repository task."

@@ -24,7 +24,7 @@ go run ./apps/server/cmd/server
 显式指定配置文件：
 
 ```bash
-go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
+go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 ```
 
 常用命令行参数：
@@ -44,10 +44,13 @@ go run ./apps/server/cmd/server -config configs/eden-microservice.yaml.example
 
 ## 配置基线
 
+`apps/server` 是当前唯一读取进程 YAML 的应用，因此配置文件由它独立持有。其他领域入口使用
+`cmd/<domain>` 下的命令行参数启动，不维护不会被读取的重复 YAML。
+
 配置文件见：
 
-- 本地覆盖文件：`configs/eden-microservice.yaml`
-- [版本化示例](../configs/eden-microservice.yaml.example)
+- 本地覆盖文件：`apps/server/config/eden-microservice.yaml`
+- [版本化示例](../apps/server/config/eden-microservice.yaml.example)
 
 关键配置项分为四类：
 

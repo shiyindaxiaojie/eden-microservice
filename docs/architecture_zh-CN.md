@@ -89,8 +89,8 @@ graph TB
 | `apps/ui` | — | Vue 管理控制台 |
 | `packages` | `eden-microservice/packages` | 仓库内共享基础包 |
 
-默认部署入口仍是 `apps/server/cmd/server`。各领域的 `apps/<domain>/cmd`
-提供独立构建边界。
+默认部署入口仍是 `apps/server/cmd/server`，其进程配置归 `apps/server/config`。各领域的
+`apps/<domain>/cmd/<domain>` 提供独立构建边界。
 
 ## 运行模式
 

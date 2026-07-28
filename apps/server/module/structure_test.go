@@ -43,11 +43,29 @@ func TestMonorepoModuleLayout(t *testing.T) {
 	}
 
 	for _, domain := range []string{"registry", "config", "gateway", "auth", "cluster"} {
-		for _, child := range []string{"internal", "module", filepath.Join("cmd", "eden-"+domain)} {
+		for _, child := range []string{"internal", "module", filepath.Join("cmd", domain)} {
 			path := filepath.Join(repoRoot, "apps", domain, child)
 			if info, err := os.Stat(path); err != nil || !info.IsDir() {
 				t.Errorf("domain module directory is missing: %s", path)
 			}
+		}
+	}
+
+	serverConfig := filepath.Join(repoRoot, "apps", "server", "config", "eden-microservice.yaml.example")
+	if info, err := os.Stat(serverConfig); err != nil || info.IsDir() {
+		t.Errorf("aggregate server example config is missing: %s", serverConfig)
+	}
+	for _, obsolete := range []string{
+		"config",
+		"configs",
+		"internal",
+		"plugins",
+		"web",
+		filepath.Join("docs", "superpowers"),
+	} {
+		path := filepath.Join(repoRoot, obsolete)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("obsolete repository directory must not exist: %s", path)
 		}
 	}
 }

@@ -135,10 +135,10 @@ const content = computed(() => {
           a: '优先检查客户端连接的是不是正确的 gRPC 地址，其次检查命名空间、服务名、实例健康状态和订阅是否建立成功。',
         },
       ] satisfies FaqItem[],
-      serverCommand: `go run ./cmd/server
+      serverCommand: `go run ./apps/server/cmd/server
 
 # or specify config
-go run ./cmd/server -config ./configs/standalone.yaml`,
+go run ./apps/server/cmd/server -config ./apps/server/config/eden-microservice.yaml.example`,
       sdkCommand: `client, err := registry.NewClient(registry.Config{
     Endpoints: []string{"127.0.0.1:9000"},
     Namespace: "default",
@@ -254,10 +254,10 @@ go run ./cmd/server -config ./configs/standalone.yaml`,
           a: 'まずクライアントの gRPC 接続先を確認し、次に名前空間、サービス名、インスタンスのヘルス状態、サブスクリプション確立を確認してください。',
         },
       ] satisfies FaqItem[],
-      serverCommand: `go run ./cmd/server
+      serverCommand: `go run ./apps/server/cmd/server
 
 # or specify config
-go run ./cmd/server -config ./configs/standalone.yaml`,
+go run ./apps/server/cmd/server -config ./apps/server/config/eden-microservice.yaml.example`,
       sdkCommand: `client, err := registry.NewClient(registry.Config{
     Endpoints: []string{"127.0.0.1:9000"},
     Namespace: "default",
@@ -372,10 +372,10 @@ go run ./cmd/server -config ./configs/standalone.yaml`,
         a: 'Check the client gRPC endpoint first, then verify the namespace, service name, instance health state, and whether the subscription was established successfully.',
       },
     ] satisfies FaqItem[],
-    serverCommand: `go run ./cmd/server
+    serverCommand: `go run ./apps/server/cmd/server
 
 # or specify config
-go run ./cmd/server -config ./configs/standalone.yaml`,
+go run ./apps/server/cmd/server -config ./apps/server/config/eden-microservice.yaml.example`,
     sdkCommand: `client, err := registry.NewClient(registry.Config{
     Endpoints: []string{"127.0.0.1:9000"},
     Namespace: "default",

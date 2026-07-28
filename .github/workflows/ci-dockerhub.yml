@@ -26,16 +26,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+          go-version-file: go.work
+          cache-dependency-path: go.work.sum
 
       - name: Run Go tests
-        run: go test ./...
+        run: |
+          go test ./packages/...
+          go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...
 
       - name: Build server binary
         run: |
           mkdir -p dist
-          go build -trimpath -o dist/eden-registry ./cmd/server
+          go build -trimpath -o dist/eden-registry ./apps/server/cmd/server
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
@@ -48,21 +50,25 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: apps/ui/package-lock.json
 
       - name: Install frontend dependencies
-        working-directory: web
+        working-directory: apps/ui
         run: npm ci
 
+      - name: Check frontend translations
+        working-directory: apps/ui
+        run: npm run check:i18n
+
       - name: Build frontend
-        working-directory: web
+        working-directory: apps/ui
         run: npm run build
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
         with:
           name: eden-registry-web
-          path: web/dist
+          path: apps/ui/dist
 
   docker:
     name: Build and Push Image
