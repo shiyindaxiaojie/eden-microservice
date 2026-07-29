@@ -9,9 +9,10 @@ import { getGuideStatus, updateGuideStatus } from './api/registry'
 import logo from './assets/logo.png'
 
 const GUIDE_STORAGE_KEY = 'registry-ui-guide-completed-v1'
-const FIXED_DOCUMENT_TITLE = '微服务平台'
+const CHINESE_DOCUMENT_TITLE = '微服务平台'
+const NON_CHINESE_DOCUMENT_TITLE = 'Eden* Microservice'
 
-const { locale, t, toggleLocale, text, nextLocaleTitle, shortLocaleLabel } = useI18n()
+const { locale, t, toggleLocale, text, isLocale, nextLocaleTitle, shortLocaleLabel } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -198,10 +199,24 @@ const currentTitle = computed(() => {
   return t.value.common.title
 })
 
+const currentKicker = computed(() => {
+  if (route.path === '/') return 'SYSTEM OVERVIEW'
+  if (route.path.startsWith('/services')) return 'SERVICE REGISTRY'
+  if (route.path.startsWith('/configs')) return 'CONFIGURATION CENTER'
+  if (route.path.startsWith('/routes')) return 'API GATEWAY'
+  if (route.path.startsWith('/namespaces')) return 'NAMESPACE MANAGEMENT'
+  if (route.path.startsWith('/cluster')) return 'CLUSTER MANAGEMENT'
+  if (route.path.startsWith('/rbac')) return 'ACCESS CONTROL'
+  if (route.path.startsWith('/settings')) return 'SYSTEM SETTINGS'
+  if (route.path.startsWith('/docs')) return 'DOCUMENTATION'
+  if (route.path.startsWith('/profile')) return 'ACCOUNT'
+  return NON_CHINESE_DOCUMENT_TITLE.toUpperCase()
+})
+
 watch(
   [() => route.fullPath, locale],
   () => {
-    document.title = FIXED_DOCUMENT_TITLE
+    document.title = isLocale('zh') ? CHINESE_DOCUMENT_TITLE : NON_CHINESE_DOCUMENT_TITLE
   },
   { immediate: true },
 )
@@ -297,9 +312,12 @@ onBeforeUnmount(() => {
       <div class="sidebar-header">
         <div class="sidebar-logo">
           <div class="logo-icon">
-            <img :src="logo" alt="Logo" style="width: 36px; height: 36px;" />
+            <img :src="logo" :alt="CHINESE_DOCUMENT_TITLE" class="sidebar-logo-image" />
           </div>
-          <span class="logo-text">{{ t.common.title }}</span>
+          <div class="sidebar-brand-copy">
+            <span class="logo-text">{{ CHINESE_DOCUMENT_TITLE }}</span>
+            <span class="logo-subtitle">{{ NON_CHINESE_DOCUMENT_TITLE }}</span>
+          </div>
         </div>
       </div>
       <nav class="sidebar-nav" data-guide="sidebar-nav">
@@ -319,7 +337,7 @@ onBeforeUnmount(() => {
     <div class="main-content">
       <header class="main-header">
         <div class="header-title-group">
-          <span class="header-kicker">{{ text('微服务控制面', 'MICROSERVICE CONTROL PLANE') }}</span>
+          <span class="header-kicker">{{ currentKicker }}</span>
           <div class="header-title-row">
             <span class="header-signal" aria-hidden="true"></span>
             <h1>{{ currentTitle }}</h1>

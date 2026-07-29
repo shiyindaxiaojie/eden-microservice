@@ -8,7 +8,8 @@ const baseURL = process.env.UI_BASE_URL || 'http://localhost:2019'
 const chromePath = process.env.CHROME_PATH || findChromePath()
 const viewport = { width: 1440, height: 900 }
 const remotePort = Number(process.env.CHROME_DEBUG_PORT || 9227)
-const expectedDocumentTitle = '微服务平台'
+const chineseDocumentTitle = '微服务平台'
+const nonChineseDocumentTitle = 'Eden* Microservice'
 
 function assert(condition, message, details) {
   if (!condition) {
@@ -180,6 +181,9 @@ async function main() {
       const inputWrapper = panel?.querySelector('.input-wrapper')
       const panelRect = panel?.getBoundingClientRect()
       const subtitle = document.querySelector('.game-subtitle')
+      const brandSubtitle = document.querySelector('.brand-subtitle')
+      const brandTitle = document.querySelector('.logo-text')
+      const heroTitle = document.querySelector('.game-title')
       const bubbles = Array.from(document.querySelectorAll('.bubble'))
       const bubblesInLoginBand = bubbles.filter((bubble) => {
         const left = Number.parseFloat(bubble.style.left || '0')
@@ -232,6 +236,9 @@ async function main() {
         panelWidth: panelRect?.width || 0,
         panelTitle: panel?.querySelector('.hero-login-title, .tab-btn.active')?.textContent?.trim() || '',
         subtitleText: subtitle?.textContent?.trim() || '',
+        brandSubtitleText: brandSubtitle?.textContent?.trim() || '',
+        brandTitleText: brandTitle?.textContent?.trim() || '',
+        heroTitleText: heroTitle?.textContent?.trim() || '',
         pageText: document.body.textContent || '',
         panelBackground: panelStyle?.backgroundColor || '',
         formBackgroundImage: formStyle?.backgroundImage || '',
@@ -261,7 +268,7 @@ async function main() {
 
     assert(loginBackground.width >= viewport.width, 'login background does not cover viewport width', loginBackground)
     assert(loginBackground.height >= viewport.height, 'login background does not cover viewport height', loginBackground)
-    assert(loginBackground.documentTitle === expectedDocumentTitle, 'browser title should stay fixed on the login page', loginBackground)
+    assert(loginBackground.documentTitle === nonChineseDocumentTitle, 'browser title should use the Eden name in English mode', loginBackground)
     assert(loginBackground.imageLoaded, 'login background image did not load', loginBackground)
     assert(loginBackground.layerBackground !== 'none', 'login background has no fallback background', loginBackground)
     assert(loginBackground.overlayBackground.includes('gradient'), 'login background overlay is missing gradient depth', loginBackground)
@@ -312,7 +319,10 @@ async function main() {
       loginBackground,
     )
     assert(loginBackground.panelTitle === '', 'inline login panel should not render the username/password label copy', loginBackground)
-    assert(loginBackground.subtitleText === '', 'login hero should not render the lightweight control-plane subtitle copy', loginBackground)
+    assert(loginBackground.subtitleText === 'Eden* Microservice', 'login hero should render the Eden product subtitle', loginBackground)
+    assert(loginBackground.brandSubtitleText === 'Eden* Microservice', 'login brand should render the Eden product subtitle', loginBackground)
+    assert(loginBackground.brandTitleText === '微服务平台', 'login brand title should stay fixed in Chinese', loginBackground)
+    assert(loginBackground.heroTitleText === '微服务平台', 'login hero title should stay fixed in Chinese', loginBackground)
     assert(!loginBackground.pageText.includes('用户密码输入'), 'login page should not render 用户密码输入 copy', loginBackground)
     assert(!loginBackground.pageText.includes('轻量级微服务控制面'), 'login page should not render lightweight control-plane subtitle copy', loginBackground)
     assert(!loginBackground.pageText.includes('Username / Password'), 'login page should not render username/password label copy', loginBackground)
@@ -322,6 +332,26 @@ async function main() {
       `login main content should not paint over the background, got ${loginBackground.mainBackground}`,
       loginBackground,
     )
+
+    await evaluate(client, `document.querySelector('button.header-icon-btn:not(.theme-toggle-btn)').click()`)
+    await wait(120)
+    const titlesAfterLocaleToggle = await evaluate(client, `(() => ({
+      documentTitle: document.title,
+      brandTitleText: document.querySelector('.logo-text')?.textContent?.trim() || '',
+      heroTitleText: document.querySelector('.game-title')?.textContent?.trim() || '',
+      brandSubtitleText: document.querySelector('.brand-subtitle')?.textContent?.trim() || '',
+      heroSubtitleText: document.querySelector('.game-subtitle')?.textContent?.trim() || '',
+    }))()`)
+    assert(titlesAfterLocaleToggle.brandTitleText === '微服务平台', 'locale toggle should not translate the login brand title', titlesAfterLocaleToggle)
+    assert(titlesAfterLocaleToggle.heroTitleText === '微服务平台', 'locale toggle should not translate the login hero title', titlesAfterLocaleToggle)
+    assert(titlesAfterLocaleToggle.brandSubtitleText === 'Eden* Microservice', 'locale toggle should not change the brand subtitle', titlesAfterLocaleToggle)
+    assert(titlesAfterLocaleToggle.heroSubtitleText === 'Eden* Microservice', 'locale toggle should not change the hero subtitle', titlesAfterLocaleToggle)
+    assert(titlesAfterLocaleToggle.documentTitle === chineseDocumentTitle, 'browser title should use the Chinese product name in Chinese mode', titlesAfterLocaleToggle)
+
+    await evaluate(client, `document.querySelector('button.header-icon-btn:not(.theme-toggle-btn)').click()`)
+    await wait(120)
+    const titleInJapaneseMode = await evaluate(client, `document.title`)
+    assert(titleInJapaneseMode === nonChineseDocumentTitle, 'browser title should use the Eden name in non-Chinese mode', { titleInJapaneseMode })
 
     await evaluate(client, `document.querySelector('.theme-toggle-btn').click()`)
     await wait(120)
@@ -334,7 +364,7 @@ async function main() {
     }))()`)
 
     assert(darkLoginBanner.dataTheme === 'dark', 'login theme toggle should set dark theme', darkLoginBanner)
-    assert(darkLoginBanner.documentTitle === expectedDocumentTitle, 'browser title should not change after login theme toggle', darkLoginBanner)
+    assert(darkLoginBanner.documentTitle === nonChineseDocumentTitle, 'browser title should not change after login theme toggle', darkLoginBanner)
     assert(!darkLoginBanner.navBackground.includes('rgba(255, 255, 255'), 'dark login banner should not use translucent white', darkLoginBanner)
     assert(darkLoginBanner.navBackground.includes('rgba(') && !darkLoginBanner.navBackground.includes('rgb('), 'dark login banner should stay translucent', darkLoginBanner)
     assert(!darkLoginBanner.imageFilter.includes('brightness(0.5'), 'dark login background image should not be overly dimmed', darkLoginBanner)
@@ -366,7 +396,7 @@ async function main() {
     }))()`)
 
     assert(beforeToggle.dataTheme === 'light', 'home should start in light theme from persisted preference', beforeToggle)
-    assert(beforeToggle.documentTitle === expectedDocumentTitle, 'browser title should stay fixed on the home page', beforeToggle)
+    assert(beforeToggle.documentTitle === nonChineseDocumentTitle, 'browser title should follow the persisted non-Chinese locale on the home page', beforeToggle)
     assert(beforeToggle.localTheme === 'light', 'home should preserve light theme in localStorage', beforeToggle)
     assert(!beforeToggle.classList.includes('dark'), 'light theme should not keep Element Plus dark class', beforeToggle)
 
@@ -376,10 +406,28 @@ async function main() {
       publicLayout: Boolean(document.querySelector('.public-layout')),
       themeToggle: Boolean(document.querySelector('[data-theme-toggle]')),
       headerButtonCount: document.querySelectorAll('.header-actions .header-btn').length,
+      sidebarLogoWidth: document.querySelector('.sidebar-logo-image')?.getBoundingClientRect().width || 0,
+      sidebarLogoHeight: document.querySelector('.sidebar-logo-image')?.getBoundingClientRect().height || 0,
+      sidebarBrandTitle: document.querySelector('.sidebar-logo .logo-text')?.textContent?.trim() || '',
+      sidebarBrandSubtitle: document.querySelector('.sidebar-logo .logo-subtitle')?.textContent?.trim() || '',
+      headerKicker: document.querySelector('.header-kicker')?.textContent?.trim() || '',
       token: localStorage.getItem('token'),
       storageKeys: Object.keys(localStorage),
     }))()`)
     assert(homeState.themeToggle, 'home theme toggle button was not rendered', homeState)
+    assert(homeState.sidebarLogoWidth >= 52 && homeState.sidebarLogoHeight >= 52, 'sidebar brand logo should use the larger display size', homeState)
+    assert(homeState.sidebarBrandTitle === '微服务平台', 'sidebar brand title should stay fixed in Chinese', homeState)
+    assert(homeState.sidebarBrandSubtitle === 'Eden* Microservice', 'sidebar brand should render the Eden product subtitle', homeState)
+    assert(homeState.headerKicker === 'SYSTEM OVERVIEW', 'dashboard header should use a page-specific subtitle', homeState)
+
+    await navigate(client, `${baseURL}/configs`)
+    const configHeader = await evaluate(client, `(() => ({
+      kicker: document.querySelector('.header-kicker')?.textContent?.trim() || '',
+      pageText: document.querySelector('.main-header')?.textContent || '',
+    }))()`)
+    assert(configHeader.kicker === 'CONFIGURATION CENTER', 'config header should use the configuration-center subtitle', configHeader)
+    assert(!configHeader.pageText.includes('微服务控制面'), 'page header should not render the generic control-plane copy', configHeader)
+    await navigate(client, `${baseURL}/`)
 
     await evaluate(client, `document.querySelector('[data-theme-toggle]').click()`)
     await wait(120)
@@ -392,7 +440,7 @@ async function main() {
     }))()`)
 
     assert(afterDarkToggle.dataTheme === 'dark', 'home theme toggle should set html data-theme to dark')
-    assert(afterDarkToggle.documentTitle === expectedDocumentTitle, 'browser title should not change after home theme toggle', afterDarkToggle)
+    assert(afterDarkToggle.documentTitle === nonChineseDocumentTitle, 'browser title should not change after home theme toggle', afterDarkToggle)
     assert(afterDarkToggle.classList.includes('dark'), 'home theme toggle should set Element Plus dark class')
     assert(afterDarkToggle.localTheme === 'dark', 'home theme toggle should persist dark theme to localStorage')
     assert(afterDarkToggle.cookieTheme === 'dark', 'home theme toggle should persist dark theme to cookie')
@@ -429,7 +477,7 @@ async function main() {
     }))()`)
 
     assert(afterLightToggle.dataTheme === 'light', 'home theme toggle should return html data-theme to light')
-    assert(afterLightToggle.documentTitle === expectedDocumentTitle, 'browser title should remain fixed after returning to light theme', afterLightToggle)
+    assert(afterLightToggle.documentTitle === nonChineseDocumentTitle, 'browser title should remain fixed after returning to light theme', afterLightToggle)
     assert(!afterLightToggle.classList.includes('dark'), 'light theme should remove Element Plus dark class')
     assert(afterLightToggle.localTheme === 'light', 'home theme toggle should persist light theme to localStorage')
     assert(afterLightToggle.cookieTheme === 'light', 'home theme toggle should persist light theme to cookie')

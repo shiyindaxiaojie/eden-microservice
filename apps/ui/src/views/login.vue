@@ -9,6 +9,8 @@ import { sha256 } from '../utils/crypto'
 import { useI18n } from '../utils/i18n'
 import { applyTheme, persistTheme, readStoredTheme, type AppTheme } from '../utils/theme'
 
+const LOGIN_PRODUCT_TITLE = '微服务平台'
+
 const { t, text, toggleLocale, nextLocaleTitle } = useI18n()
 const router = useRouter()
 const loading = ref(false)
@@ -127,9 +129,12 @@ onMounted(() => {
     <header class="top-nav">
       <div class="nav-container">
         <div class="nav-left">
-          <a href="#" class="brand-link" :aria-label="t.common.title" @click.prevent>
-            <img :src="logo" :alt="t.common.title" class="logo-icon" />
-            <span class="logo-text">{{ t.common.title }}</span>
+          <a href="#" class="brand-link" :aria-label="LOGIN_PRODUCT_TITLE" @click.prevent>
+            <img :src="logo" :alt="LOGIN_PRODUCT_TITLE" class="logo-icon" />
+            <span class="brand-copy">
+              <span class="logo-text">{{ LOGIN_PRODUCT_TITLE }}</span>
+              <span class="brand-subtitle">Eden* Microservice</span>
+            </span>
           </a>
           <span class="nav-divider" aria-hidden="true"></span>
           <nav class="nav-menu" :aria-label="text('\u9876\u90e8\u5bfc\u822a', 'Top navigation')">
@@ -205,10 +210,11 @@ onMounted(() => {
       <section class="game-info-section">
         <div class="game-logo">
           <div class="logo-symbol">
-            <img :src="logo" :alt="t.common.title" class="game-logo-img" />
+            <img :src="logo" :alt="LOGIN_PRODUCT_TITLE" class="game-logo-img" />
           </div>
         </div>
-        <h2 class="game-title">{{ t.common.title }}</h2>
+        <h2 class="game-title">{{ LOGIN_PRODUCT_TITLE }}</h2>
+        <p class="game-subtitle">Eden* Microservice</p>
 
         <div class="hero-login-panel" role="form" :aria-label="text('\u767b\u5f55', 'Login')">
           <div class="hero-login-form">
@@ -547,6 +553,23 @@ onMounted(() => {
   filter: var(--login-brand-shadow);
 }
 
+.brand-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.brand-subtitle {
+  color: var(--login-nav-text);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .nav-divider {
   width: 1px;
   height: 32px;
@@ -693,7 +716,7 @@ onMounted(() => {
 
 .game-title {
   max-width: 100%;
-  margin: 0 0 28px;
+  margin: 0 0 8px;
   color: var(--login-hero-title-color);
   font-size: clamp(34px, 2.7vw, 48px);
   line-height: 1.12;
@@ -702,6 +725,16 @@ onMounted(() => {
   text-shadow: var(--login-hero-title-shadow);
   opacity: 0;
   animation: magicItemReveal 0.72s cubic-bezier(0.19, 1, 0.22, 1) 0.34s both;
+}
+
+.game-subtitle {
+  margin: 0 0 28px;
+  color: var(--login-hero-title-color);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  opacity: 0.78;
 }
 
 @keyframes magicItemReveal {

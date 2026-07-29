@@ -166,7 +166,7 @@ body,
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   cursor: default;
   user-select: none;
 }
@@ -175,9 +175,15 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 54px;
+  height: 54px;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-logo-image {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
 }
 
 .sidebar-logo:hover .logo-icon {
@@ -192,6 +198,24 @@ body,
   font-weight: 760;
   letter-spacing: -0.02em;
   -webkit-text-fill-color: transparent;
+}
+
+.sidebar-brand-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.sidebar-logo .logo-subtitle {
+  color: var(--text-muted);
+  font-family: Inter, sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -1023,7 +1047,7 @@ body,
     padding: 0 12px;
   }
 
-  .sidebar-logo .logo-text,
+  .sidebar-logo .sidebar-brand-copy,
   .app-layout .nav-item span {
     display: none;
   }
