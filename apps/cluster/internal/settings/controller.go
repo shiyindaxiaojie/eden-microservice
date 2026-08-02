@@ -267,6 +267,8 @@ func toReplicatedUser(user *auth.User) *replication.User {
 		Remark:    user.Remark,
 		Role:      user.Role,
 		IsBuiltIn: user.IsBuiltIn,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
 	}
 }
 

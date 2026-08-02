@@ -30,6 +30,11 @@
   --active-shadow: rgba(215, 165, 65, 0.14);
   --active-text: #e7bd68;
   --signal-color: #d7a541;
+  --toolbar-active-bg: rgba(150, 137, 230, 0.18);
+  --toolbar-active-hover-bg: rgba(150, 137, 230, 0.1);
+  --toolbar-active-text: #b9aff2;
+  --toolbar-action-bg: #665bc0;
+  --toolbar-action-hover-bg: #7469cb;
   --el-color-primary: #6d9ec1;
 }
 
@@ -53,6 +58,11 @@
   --active-shadow: rgba(14, 165, 233, 0.16);
   --active-text: #0078c8;
   --signal-color: #38a9e8;
+  --toolbar-active-bg: rgba(81, 70, 168, 0.11);
+  --toolbar-active-hover-bg: rgba(81, 70, 168, 0.06);
+  --toolbar-active-text: #5146a8;
+  --toolbar-action-bg: #5146a8;
+  --toolbar-action-hover-bg: #44399b;
   --el-color-primary: #409eff;
 }
 

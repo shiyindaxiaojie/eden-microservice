@@ -1057,10 +1057,10 @@ onBeforeUnmount(() => {
 .pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 4px;
+  padding: 0;
   border-radius: 6px;
-  background: var(--control-muted-bg);
+  background: transparent;
 }
 
 .pill-group button {
@@ -1082,7 +1082,7 @@ onBeforeUnmount(() => {
 
 .pill-group button:hover {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--toolbar-active-hover-bg);
 }
 
 .pill-count {
@@ -1093,8 +1093,8 @@ onBeforeUnmount(() => {
 }
 
 .pill-group button.active {
-  background: rgba(59, 130, 246, 0.12);
-  color: var(--accent-blue);
+  background: var(--toolbar-active-bg);
+  color: var(--toolbar-active-text);
   font-weight: 600;
 }
 
@@ -1111,7 +1111,9 @@ onBeforeUnmount(() => {
 }
 
 .icon-pills button {
-  padding: 4px 7px;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
 }
 
 .refresh-btn {

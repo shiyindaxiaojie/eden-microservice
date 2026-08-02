@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Delete, EditPen, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   deleteRbacUser,
   getRbacUsers,
@@ -22,6 +22,7 @@ interface UserRow {
   phone: string
   remark: string
   isBuiltIn: boolean
+  updatedAt: string
 }
 
 interface QueryForm {
@@ -148,6 +149,14 @@ const roleLabel = (role: string) => {
 const getErrorMessage = (error: any, fallbackZh: string, fallbackEn: string) =>
   error?.response?.data?.error || text(fallbackZh, fallbackEn)
 
+const formatUserUpdatedAt = (value?: number) => {
+  if (!value) return '-'
+  const date = new Date(value * 1000)
+  if (Number.isNaN(date.getTime())) return '-'
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 const mapUser = (user: RbacUser): UserRow => ({
   username: user.username,
   nickname: user.nickname || '',
@@ -156,6 +165,7 @@ const mapUser = (user: RbacUser): UserRow => ({
   phone: user.phone || '',
   remark: user.remark || '',
   isBuiltIn: !!user.is_builtin,
+  updatedAt: formatUserUpdatedAt(user.updated_at),
 })
 
 const displayNickname = (row: UserRow) => row.nickname || '-'
@@ -420,6 +430,11 @@ onMounted(() => {
                   {{ row.phone || '-' }}
                 </template>
               </el-table-column>
+              <el-table-column :label="text('更新时间', 'Updated')" width="180">
+                <template #default="{ row }">
+                  {{ row.updatedAt }}
+                </template>
+              </el-table-column>
               <el-table-column :label="text('操作', 'Actions')" width="180" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
@@ -462,10 +477,33 @@ onMounted(() => {
                     <p class="card-subtitle">{{ displayNickname(row) }}</p>
                   </div>
                 </div>
-                <div class="role-pill">
-                  <el-tag :type="getRoleTag(row.role)" size="small" effect="light">
-                    {{ roleLabel(row.role) }}
-                  </el-tag>
+                <div class="card-head-side">
+                  <div class="role-pill">
+                    <el-tag :type="getRoleTag(row.role)" size="small" effect="light">
+                      {{ roleLabel(row.role) }}
+                    </el-tag>
+                  </div>
+                  <div class="card-actions card-head-actions">
+                    <el-button
+                      class="card-action-btn"
+                      link
+                      type="primary"
+                      :icon="EditPen"
+                      :title="text('编辑', 'Edit')"
+                      :aria-label="text('编辑', 'Edit')"
+                      @click.stop="handleEdit(row)"
+                    />
+                    <el-button
+                      v-if="!row.isBuiltIn"
+                      class="card-action-btn"
+                      link
+                      type="danger"
+                      :icon="Delete"
+                      :title="text('删除', 'Delete')"
+                      :aria-label="text('删除', 'Delete')"
+                      @click.stop="handleDelete(row)"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -478,23 +516,12 @@ onMounted(() => {
                   <span class="compact-label">{{ text('电话', 'Phone') }}</span>
                   <span class="compact-value" :title="row.phone || '-'">{{ row.phone || '-' }}</span>
                 </div>
-              </div>
-
-              <div class="card-footer">
-                <div class="card-actions">
-                  <el-button link type="primary" @click="handleEdit(row)">
-                    {{ text('编辑', 'Edit') }}
-                  </el-button>
-                  <el-button
-                    v-if="!row.isBuiltIn"
-                    link
-                    type="danger"
-                    @click="handleDelete(row)"
-                  >
-                    {{ text('删除', 'Delete') }}
-                  </el-button>
+                <div class="compact-meta-row">
+                  <span class="compact-label">{{ text('更新', 'Updated') }}</span>
+                  <span class="compact-value" :title="row.updatedAt">{{ row.updatedAt }}</span>
                 </div>
               </div>
+
             </article>
           </div>
 
@@ -685,17 +712,17 @@ onMounted(() => {
 .pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 6px;
-  background: var(--control-muted-bg);
+  gap: 4px;
+  padding: 0;
+  background: transparent;
 }
 
 .pill-group button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  height: 32px;
+  padding: 0 10px;
   border: 0;
   border-radius: 4px;
   background: transparent;
@@ -710,12 +737,12 @@ onMounted(() => {
 
 .pill-group button:hover {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--toolbar-active-hover-bg);
 }
 
 .pill-group button.active {
-  background: rgba(59, 130, 246, 0.12);
-  color: var(--accent-blue);
+  background: var(--toolbar-active-bg);
+  color: var(--toolbar-active-text);
   font-weight: 600;
 }
 
@@ -731,13 +758,23 @@ onMounted(() => {
 }
 
 .icon-pills button {
-  padding: 6px 10px;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
 }
 
 .add-btn {
   height: 32px;
   border-radius: 8px;
   padding: 0 16px;
+  border-color: var(--toolbar-action-bg);
+  background: var(--toolbar-action-bg);
+}
+
+.add-btn:hover,
+.add-btn:focus {
+  border-color: var(--toolbar-action-hover-bg);
+  background: var(--toolbar-action-hover-bg);
 }
 
 .svc-content {
@@ -874,10 +911,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
-  min-height: 160px;
-  border-radius: 10px;
-  background: var(--bg-secondary);
+  padding: 12px 12px 11px 15px;
+  min-height: 132px;
+  border-radius: 8px;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   box-shadow: none;
   overflow: hidden;
@@ -886,30 +923,30 @@ onMounted(() => {
 
 .info-card:hover {
   border-color: rgba(59, 130, 246, 0.28);
-  background: rgba(59, 130, 246, 0.03);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+  background: var(--bg-card);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.055);
 }
 
 .info-card:focus-within,
 .info-card:active {
   border-color: rgba(59, 130, 246, 0.52);
-  background: rgba(59, 130, 246, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.11);
 }
 
 .info-card.is-selected {
   border-color: rgba(59, 130, 246, 0.52);
-  background: rgba(59, 130, 246, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.11);
 }
 
 .card-accent {
   position: absolute;
-  inset: 0 auto auto 0;
-  width: 84px;
-  height: 3px;
+  inset: 12px auto 12px 0;
+  width: 3px;
+  height: auto;
   background: rgba(59, 130, 246, 0.35);
-  border-radius: 0 0 999px 0;
+  border-radius: 0 3px 3px 0;
 }
 
 .builtin-card .card-accent {
@@ -921,6 +958,13 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+.card-head-side {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
 }
 
 .title-row {
@@ -940,7 +984,7 @@ onMounted(() => {
 .identity-avatar {
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -1049,24 +1093,21 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
-}
-
 .card-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
+.card-head-actions {
+  flex: 0 0 auto;
+}
+
 :deep(.card-actions .el-button) {
+  width: 24px;
+  height: 24px;
   min-height: 24px;
-  padding: 2px 4px;
+  padding: 0;
   font-size: 12px !important;
   font-weight: 600;
   line-height: 1.35;

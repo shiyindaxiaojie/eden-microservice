@@ -167,6 +167,8 @@ export interface RbacUser {
   remark?: string
   role: string
   is_builtin?: boolean
+  created_at?: number
+  updated_at?: number
 }
 
 export const getServices = (namespace = '') => api.get<ServiceSummary[]>(`/v1/catalog/services${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`)

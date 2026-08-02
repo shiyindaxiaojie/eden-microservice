@@ -47,8 +47,10 @@ func (h *Handler) saveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existingUser, exists := h.settings.GetUser(u.Username)
+	now := time.Now().Unix()
 	if exists {
 		u.IsBuiltIn = existingUser.IsBuiltIn
+		u.CreatedAt = existingUser.CreatedAt
 		if u.Password == "" {
 			u.Password = existingUser.Password
 		} else if u.Password != existingUser.Password {
@@ -57,12 +59,16 @@ func (h *Handler) saveUser(w http.ResponseWriter, r *http.Request) {
 				u.Password = string(hashed)
 			}
 		}
-	} else if u.Password != "" {
-		hashed, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-		if err == nil {
-			u.Password = string(hashed)
+	} else {
+		u.CreatedAt = now
+		if u.Password != "" {
+			hashed, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+			if err == nil {
+				u.Password = string(hashed)
+			}
 		}
 	}
+	u.UpdatedAt = now
 
 	if err := h.settings.AddUser(&u); err != nil {
 		h.writeLeaderRedirect(w, err)

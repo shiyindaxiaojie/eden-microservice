@@ -69,6 +69,7 @@ must not import another module's `internal` packages.
 | Cluster management | `apps/cluster` | AP replication, CP Raft, membership and runtime settings |
 | Aggregate server | `apps/server/cmd/server`, `apps/server/module` | runtime wiring and unified HTTP/gRPC transports |
 | Console | `apps/ui/src` | Vue 3 + Element Plus admin console |
+| Examples | `examples` | runnable integration and migration examples |
 
 Use `apps/config/internal/configcenter` for control-plane configuration resources and
 `packages/config` for process YAML/environment configuration.
@@ -79,6 +80,7 @@ Use `apps/config/internal/configcenter` for control-plane configuration resource
 go work sync
 go test ./packages/...
 go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...
+go test ./examples/...
 go run ./apps/server/cmd/server
 go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
 ```

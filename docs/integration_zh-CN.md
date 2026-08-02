@@ -173,9 +173,9 @@ grpcurl -plaintext \
 
 可先参考以下示例：
 
-- [Consul 兼容示例说明](../apps/registry/examples/service-discovery/consul/README.md)
-- [Consul 示例启动脚本](../apps/registry/examples/service-discovery/consul/start.bat)
-- [服务发现示例总览](../apps/registry/examples/service-discovery/README.md)
+- [Consul 兼容示例说明](../examples/service-discovery/consul/README.md)
+- [Consul 示例启动脚本](../examples/service-discovery/consul/start.bat)
+- [服务发现示例总览](../examples/service-discovery/README.md)
 
 ### Nacos 兼容
 
@@ -196,9 +196,9 @@ grpcurl -plaintext \
 
 可先参考以下示例：
 
-- [Nacos 兼容示例说明](../apps/registry/examples/service-discovery/nacos/README.md)
-- [Nacos 示例启动脚本](../apps/registry/examples/service-discovery/nacos/start.bat)
-- [服务发现示例总览](../apps/registry/examples/service-discovery/README.md)
+- [Nacos 兼容示例说明](../examples/service-discovery/nacos/README.md)
+- [Nacos 示例启动脚本](../examples/service-discovery/nacos/start.bat)
+- [服务发现示例总览](../examples/service-discovery/README.md)
 
 ### 自定义协议接入
 
@@ -214,8 +214,8 @@ grpcurl -plaintext \
 
 阅读顺序如下：
 
-1. [服务发现示例总览](../apps/registry/examples/service-discovery/README.md)
-2. [自定义协议示例说明](../apps/registry/examples/service-discovery/custom/README.md)
+1. [服务发现示例总览](../examples/service-discovery/README.md)
+2. [自定义协议示例说明](../examples/service-discovery/custom/README.md)
 3. [`apps/registry/api/proto/registry/v1/registry.proto`](../apps/registry/api/proto/registry/v1/registry.proto)
 
 ## 接入选型

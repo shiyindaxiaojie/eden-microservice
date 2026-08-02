@@ -26,6 +26,25 @@ func TestLoadConfigAppliesGatewayDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadConfigUsesDefaultsWhenFileDoesNotExist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.yaml")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DataDir != "./data" {
+		t.Fatalf("DataDir = %q, want ./data", cfg.DataDir)
+	}
+	if len(cfg.Auth.Users) != 1 {
+		t.Fatalf("Auth.Users = %#v, want one default user", cfg.Auth.Users)
+	}
+	user := cfg.Auth.Users[0]
+	if user.Username != "admin" || user.Password != "admin" || user.Role != "admin" {
+		t.Fatalf("default user = %#v, want admin/admin with admin role", user)
+	}
+}
+
 func TestLoadConfigReadsGatewayListenerAndTrustedProxies(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "gateway.yaml")
 	content := []byte("gateway:\n  enabled: true\n  http: ':9080'\n  trusted_proxy_cidrs:\n    - '10.0.0.0/8'\n")

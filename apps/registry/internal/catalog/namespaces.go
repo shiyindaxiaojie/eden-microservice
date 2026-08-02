@@ -24,10 +24,12 @@ func NewNamespaceRegistry(dataPath string) *NamespaceRegistry {
 	s.load()
 	// Ensure default namespace always exists
 	if _, ok := s.namespaces[DefaultNamespace]; !ok {
+		now := time.Now().Format(time.RFC3339)
 		s.namespaces[DefaultNamespace] = &Namespace{
 			Name:        DefaultNamespace,
 			Description: "Default namespace",
-			CreatedAt:   time.Now().Format(time.RFC3339),
+			CreatedAt:   now,
+			UpdatedAt:   now,
 		}
 		s.saveNoLock()
 	}
@@ -67,7 +69,9 @@ func (s *NamespaceRegistry) Create(ns *Namespace) bool {
 	if _, exists := s.namespaces[ns.Name]; exists {
 		return false
 	}
-	ns.CreatedAt = time.Now().Format(time.RFC3339)
+	now := time.Now().Format(time.RFC3339)
+	ns.CreatedAt = now
+	ns.UpdatedAt = now
 	s.namespaces[ns.Name] = ns
 	s.saveNoLock()
 	return true
@@ -127,10 +131,12 @@ func (s *NamespaceRegistry) Restore(namespaces []*Namespace) {
 		s.namespaces[cp.Name] = &cp
 	}
 	if _, ok := s.namespaces[DefaultNamespace]; !ok {
+		now := time.Now().Format(time.RFC3339)
 		s.namespaces[DefaultNamespace] = &Namespace{
 			Name:        DefaultNamespace,
 			Description: "Default namespace",
-			CreatedAt:   time.Now().Format(time.RFC3339),
+			CreatedAt:   now,
+			UpdatedAt:   now,
 		}
 	}
 	s.saveNoLock()

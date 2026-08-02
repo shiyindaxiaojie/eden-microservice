@@ -200,6 +200,8 @@ func fromReplicatedUser(user *replication.User) *auth.User {
 		Remark:    user.Remark,
 		Role:      user.Role,
 		IsBuiltIn: user.IsBuiltIn,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
 	}
 }
 

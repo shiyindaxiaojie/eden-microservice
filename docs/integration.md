@@ -97,8 +97,8 @@ Constraints:
 
 References:
 
-- [Consul example](../apps/registry/examples/service-discovery/consul/README.md)
-- [Service discovery example index](../apps/registry/examples/service-discovery/README.md)
+- [Consul example](../examples/service-discovery/consul/README.md)
+- [Service discovery example index](../examples/service-discovery/README.md)
 
 ### Nacos Compatibility
 
@@ -111,8 +111,8 @@ Constraints:
 
 References:
 
-- [Nacos example](../apps/registry/examples/service-discovery/nacos/README.md)
-- [Service discovery example index](../apps/registry/examples/service-discovery/README.md)
+- [Nacos example](../examples/service-discovery/nacos/README.md)
+- [Service discovery example index](../examples/service-discovery/README.md)
 
 ### Custom Protocol Access
 
@@ -120,8 +120,8 @@ Applicable when an external project integrates only through the published HTTP o
 
 Reading order:
 
-1. [Service discovery examples](../apps/registry/examples/service-discovery/README.md)
-2. [Custom protocol example](../apps/registry/examples/service-discovery/custom/README.md)
+1. [Service discovery examples](../examples/service-discovery/README.md)
+2. [Custom protocol example](../examples/service-discovery/custom/README.md)
 3. [`apps/registry/api/proto/registry/v1/registry.proto`](../apps/registry/api/proto/registry/v1/registry.proto)
 
 ## Selection Guidance

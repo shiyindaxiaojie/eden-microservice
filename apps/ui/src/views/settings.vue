@@ -2957,10 +2957,10 @@ onMounted(() => {
 .pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 10px;
-  background: rgba(148, 163, 184, 0.12);
+  gap: 4px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
 }
 
 .pill-group button {
@@ -2972,7 +2972,7 @@ onMounted(() => {
   height: 32px;
   padding: 0 9px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
   font-weight: 500;
@@ -2983,17 +2983,17 @@ onMounted(() => {
 
 .pill-group button:hover {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--toolbar-active-hover-bg);
 }
 
 .pill-group button.active {
-  background: var(--accent-blue);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.22);
+  background: var(--toolbar-active-bg);
+  color: var(--toolbar-active-text);
 }
 
 .icon-pills button {
-  width: 42px;
+  width: 32px;
+  padding: 0;
 }
 
 .key-grid {

@@ -54,6 +54,22 @@ func newTestController(t *testing.T, startup StartupState, runtimeStorage Runtim
 	return NewController(profile, store, nil, nil, events, metrics, runtimeStorage, startup)
 }
 
+func TestToReplicatedUserPreservesTimestamps(t *testing.T) {
+	t.Parallel()
+
+	user := &auth.User{Username: "alice", Role: "developer", CreatedAt: 1722600000, UpdatedAt: 1722603600}
+	replicated := toReplicatedUser(user)
+	if replicated == nil {
+		t.Fatal("toReplicatedUser() = nil")
+	}
+	if replicated.CreatedAt != user.CreatedAt {
+		t.Fatalf("CreatedAt = %d, want %d", replicated.CreatedAt, user.CreatedAt)
+	}
+	if replicated.UpdatedAt != user.UpdatedAt {
+		t.Fatalf("UpdatedAt = %d, want %d", replicated.UpdatedAt, user.UpdatedAt)
+	}
+}
+
 func TestControllerSetStorageModesStandaloneUpdatesRuntimeStorage(t *testing.T) {
 	t.Parallel()
 

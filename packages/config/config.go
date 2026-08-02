@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	logger "github.com/shiyindaxiaojie/eden-go-logger"
@@ -177,7 +178,7 @@ func LoadConfig(path string) (*Config, error) {
 	})
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("read config error: %w", err)
 		}
 		// It's ok if config file is not found, we use defaults or env vars

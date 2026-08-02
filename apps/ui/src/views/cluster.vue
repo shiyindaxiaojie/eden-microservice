@@ -258,6 +258,14 @@ function roleChipClass(role: string) {
   return 'neutral'
 }
 
+function nodeToneClass(member: ClusterMember) {
+  const numericSuffix = member.id.match(/\d+$/)
+  const seed = numericSuffix
+    ? Math.max(0, Number(numericSuffix[0]) - 1)
+    : [...member.id].reduce((value, character) => value + character.charCodeAt(0), 0)
+  return `tone-${seed % 8}`
+}
+
 onMounted(fetchCluster)
 </script>
 
@@ -426,69 +434,63 @@ onMounted(fetchCluster)
             @click="selectedMemberID = member.id"
             @keydown.enter.prevent="selectedMemberID = member.id"
             @keydown.space.prevent="selectedMemberID = member.id"
-            :class="{
-              'is-local': member.is_local,
-              'is-offline': member.status !== 'Online',
-              'is-selected': selectedMemberID === member.id,
-            }"
+            :class="[
+              {
+                'is-local': member.is_local,
+                'is-offline': member.status !== 'Online',
+                'is-selected': selectedMemberID === member.id,
+              },
+              nodeToneClass(member),
+            ]"
           >
-            <div class="card-accent"></div>
+            <div class="card-accent" aria-hidden="true"></div>
 
             <div class="card-head">
               <div class="card-identity">
-                <div class="card-symbol">
-                  <el-icon><Connection /></el-icon>
-                </div>
                 <div class="card-copy">
                   <div class="card-title-row">
                     <strong class="card-title">{{ member.id }}</strong>
-                    <span v-if="member.is_local" class="card-current-mark">{{ text('本机节点', 'Local node') }}</span>
+                    <span v-if="member.is_local" class="card-current-mark">{{ text('本机', 'Local') }}</span>
                   </div>
-                  <p class="card-hostline">{{ getMemberPrimaryHost(member) }}</p>
+                  <div class="node-address">
+                    <el-icon class="address-icon"><Connection /></el-icon>
+                    <span class="address-value" :title="getMemberPrimaryHost(member)">{{ getMemberPrimaryHost(member) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node-state">
+                <div class="node-state-row">
+                  <span class="status-label" :class="member.status === 'Online' ? 'online' : 'offline'">
+                    <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
+                    {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
+                  </span>
+                  <span class="role-label" :class="roleChipClass(member.role)">{{ getRoleName(member.role) }}</span>
+                  <el-button
+                    v-if="canRemoveMember(member)"
+                    class="node-remove"
+                    type="danger"
+                    link
+                    :icon="Delete"
+                    :title="t.common.delete"
+                    :aria-label="t.common.delete"
+                    @click.stop="handleRemove(member)"
+                  />
                 </div>
               </div>
             </div>
 
             <div class="card-body">
-              <div class="compact-meta-row">
-                <span class="compact-label">{{ text('状态', 'Status') }}</span>
-                <div class="node-meta-pills">
-                  <span class="meta-chip" :class="member.status === 'Online' ? 'online' : 'offline'">
-                    <span class="status-dot" :class="member.status === 'Online' ? 'active' : 'inactive'"></span>
-                    {{ member.status === 'Online' ? t.cluster.online : t.cluster.offline }}
-                  </span>
-                  <span class="meta-chip role" :class="roleChipClass(member.role)">{{ getRoleName(member.role) }}</span>
-                </div>
-              </div>
-
-              <div class="protocol-grid">
+              <div class="endpoint-list">
                 <div
                   v-for="endpoint in getMemberPortItems(member)"
                   :key="`${member.id}-${endpoint.key}`"
-                  class="protocol-card"
+                  class="endpoint-item"
                   :class="endpoint.className"
                 >
-                  <span class="protocol-name">{{ endpoint.label }}</span>
-                  <span class="protocol-port" :title="endpoint.port">{{ endpoint.port }}</span>
+                  <span class="endpoint-kind">{{ endpoint.label }}</span>
+                  <span class="endpoint-value" :title="endpoint.port">{{ endpoint.port }}</span>
                 </div>
-              </div>
-            </div>
-
-            <div class="card-footer">
-              <span class="card-footnote">
-                {{ member.is_local ? t.cluster.currentNode : (text('集群节点', 'Cluster node')) }}
-              </span>
-              <div class="card-actions">
-                <el-button
-                  v-if="canRemoveMember(member)"
-                  type="danger"
-                  size="small"
-                  link
-                  :icon="Delete"
-                  @click="handleRemove(member)"
-                >
-                  {{ t.common.delete }}
-                </el-button>
               </div>
             </div>
           </article>
@@ -661,10 +663,10 @@ onMounted(fetchCluster)
 .pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 4px;
+  padding: 0;
   border-radius: 6px;
-  background: var(--control-muted-bg);
+  background: transparent;
 }
 
 .pill-group button {
@@ -686,7 +688,7 @@ onMounted(fetchCluster)
 
 .pill-group button:hover {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--toolbar-active-hover-bg);
 }
 
 .pill-count {
@@ -697,8 +699,8 @@ onMounted(fetchCluster)
 }
 
 .pill-group button.active {
-  background: rgba(59, 130, 246, 0.12);
-  color: var(--accent-blue);
+  background: var(--toolbar-active-bg);
+  color: var(--toolbar-active-text);
   font-weight: 600;
 }
 
@@ -707,7 +709,9 @@ onMounted(fetchCluster)
 }
 
 .icon-pills button {
-  padding: 6px 10px;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
 }
 
 /* ── Content ── */
@@ -759,6 +763,14 @@ onMounted(fetchCluster)
   height: 32px;
   border-radius: 8px;
   padding: 0 16px;
+  border-color: var(--toolbar-action-bg);
+  background: var(--toolbar-action-bg);
+}
+
+.add-btn:hover,
+.add-btn:focus {
+  border-color: var(--toolbar-action-hover-bg);
+  background: var(--toolbar-action-hover-bg);
 }
 
 .table-wrap {
@@ -1078,6 +1090,7 @@ onMounted(fetchCluster)
 
 
 </style>
+
 
 <style scoped lang="scss">
 .card-grid {
@@ -3262,75 +3275,129 @@ onMounted(fetchCluster)
 </style>
 
 <style scoped lang="scss">
-/* Node card redesign override: final layer. */
+/* Active node-card composition. */
 .card-grid.card-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  justify-content: stretch;
+  grid-auto-rows: max-content;
   align-content: start;
-  gap: 14px;
-  padding: 2px 0 12px;
+  gap: 12px;
+  padding: 2px 0 10px;
+  overflow-y: hidden;
 }
 
 .node-card.node-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 132px;
-  padding: 18px 18px 14px 20px;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: var(--bg-secondary);
-  box-shadow: none;
+  gap: 0;
+  height: 146px;
+  min-width: 0;
+  min-height: 146px;
+  padding: 0;
   overflow: hidden;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  border: 1px solid var(--node-border, var(--border-color));
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+  opacity: 1;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .node-card.node-card:hover {
-  transform: none;
-  border-color: rgba(59, 130, 246, 0.32);
-  background: var(--bg-secondary);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+  transform: translateY(-1px);
+  border-color: var(--node-hover-border, rgba(59, 130, 246, 0.36));
+  background: var(--bg-card);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.055);
 }
 
+.node-card.node-card:focus-visible,
 .node-card.node-card:focus-within,
-.node-card.node-card:active {
-  border-color: rgba(59, 130, 246, 0.52);
-  background: rgba(59, 130, 246, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
-}
-
 .node-card.node-card.is-selected {
-  border-color: rgba(59, 130, 246, 0.52);
-  background: rgba(59, 130, 246, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  outline: none;
+  border-color: var(--node-hover-border, rgba(59, 130, 246, 0.48));
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px var(--node-focus-ring, rgba(59, 130, 246, 0.12));
 }
 
 .node-card.node-card.is-local {
-  border-color: rgba(16, 185, 129, 0.28);
+  border-color: var(--node-border, rgba(16, 185, 129, 0.24));
 }
 
 .node-card.node-card.is-local:hover {
-  border-color: rgba(16, 185, 129, 0.36);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.1);
+  border-color: var(--node-hover-border, rgba(16, 185, 129, 0.46));
+}
+
+.node-card.node-card.tone-0 {
+  --node-tone: #10b981;
+  --node-border: rgba(16, 185, 129, 0.24);
+  --node-hover-border: rgba(16, 185, 129, 0.46);
+  --node-focus-ring: rgba(16, 185, 129, 0.12);
+}
+
+.node-card.node-card.tone-1 {
+  --node-tone: #3b82f6;
+  --node-border: rgba(59, 130, 246, 0.22);
+  --node-hover-border: rgba(59, 130, 246, 0.44);
+  --node-focus-ring: rgba(59, 130, 246, 0.12);
+}
+
+.node-card.node-card.tone-2 {
+  --node-tone: #f59e0b;
+  --node-border: rgba(245, 158, 11, 0.24);
+  --node-hover-border: rgba(245, 158, 11, 0.46);
+  --node-focus-ring: rgba(245, 158, 11, 0.12);
+}
+
+.node-card.node-card.tone-3 {
+  --node-tone: #06b6d4;
+  --node-border: rgba(6, 182, 212, 0.24);
+  --node-hover-border: rgba(6, 182, 212, 0.46);
+  --node-focus-ring: rgba(6, 182, 212, 0.12);
+}
+
+.node-card.node-card.tone-4 {
+  --node-tone: #f43f5e;
+  --node-border: rgba(244, 63, 94, 0.22);
+  --node-hover-border: rgba(244, 63, 94, 0.44);
+  --node-focus-ring: rgba(244, 63, 94, 0.11);
+}
+
+.node-card.node-card.tone-5 {
+  --node-tone: #6366f1;
+  --node-border: rgba(99, 102, 241, 0.22);
+  --node-hover-border: rgba(99, 102, 241, 0.44);
+  --node-focus-ring: rgba(99, 102, 241, 0.11);
+}
+
+.node-card.node-card.tone-6 {
+  --node-tone: #14b8a6;
+  --node-border: rgba(20, 184, 166, 0.22);
+  --node-hover-border: rgba(20, 184, 166, 0.44);
+  --node-focus-ring: rgba(20, 184, 166, 0.11);
+}
+
+.node-card.node-card.tone-7 {
+  --node-tone: #f97316;
+  --node-border: rgba(249, 115, 22, 0.22);
+  --node-hover-border: rgba(249, 115, 22, 0.44);
+  --node-focus-ring: rgba(249, 115, 22, 0.11);
 }
 
 .node-card.node-card.is-offline {
-  border-color: rgba(148, 163, 184, 0.2);
-  opacity: 0.78;
+  opacity: 0.74;
 }
 
 .node-card.node-card .card-accent {
   position: absolute;
-  inset: 16px auto 16px 0;
+  inset: 12px auto 12px 0;
   width: 3px;
   height: auto;
-  border-radius: 0 999px 999px 0;
-  background: var(--accent-blue);
+  border-radius: 0 3px 3px 0;
+  background: var(--node-tone, var(--accent-blue));
 }
 
 .node-card.node-card.is-local .card-accent {
-  background: var(--accent-green);
+  background: var(--node-tone, var(--accent-green));
 }
 
 .node-card.node-card.is-offline .card-accent {
@@ -3339,45 +3406,17 @@ onMounted(fetchCluster)
 
 .node-card.node-card .card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   margin: 0;
-  padding: 0 150px 0 0;
+  padding: 13px 12px 11px 17px;
 }
 
 .node-card.node-card .card-identity {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
   min-width: 0;
   flex: 1;
-}
-
-.node-card.node-card .card-symbol {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  border: 1px solid rgba(59, 130, 246, 0.16);
-  background: rgba(59, 130, 246, 0.08);
-  color: var(--accent-blue);
-  font-size: 20px;
-}
-
-.node-card.node-card.is-local .card-symbol {
-  border-color: rgba(16, 185, 129, 0.18);
-  background: rgba(16, 185, 129, 0.1);
-  color: var(--accent-green);
-}
-
-.node-card.node-card.is-offline .card-symbol {
-  border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(148, 163, 184, 0.09);
-  color: var(--text-muted);
 }
 
 .node-card.node-card .card-copy {
@@ -3391,19 +3430,19 @@ onMounted(fetchCluster)
   align-items: center;
   gap: 8px;
   min-width: 0;
-  margin: 0 0 4px;
-  flex-wrap: wrap;
+  margin: 0 0 5px;
+  flex-wrap: nowrap;
 }
 
 .node-card.node-card .card-title {
   min-width: 0;
+  overflow: hidden;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 17px;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
   letter-spacing: 0;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3411,148 +3450,193 @@ onMounted(fetchCluster)
 .node-card.node-card .card-current-mark {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.1);
+  flex: 0 0 auto;
+  gap: 7px;
   color: var(--accent-green);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .node-card.node-card .card-current-mark::before {
-  display: none;
+  width: 1px;
+  height: 10px;
+  background: rgba(16, 185, 129, 0.32);
+  content: '';
 }
 
-.node-card.node-card .card-hostline {
-  margin: 0;
+.node-card.node-card .node-address {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.node-card.node-card .address-icon {
+  flex: 0 0 auto;
+  color: var(--node-tone, var(--text-muted));
+  font-size: 12px;
+}
+
+.node-card.node-card .address-value {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-secondary);
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
   font-size: 12px;
-  line-height: 1.45;
-  overflow: hidden;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.node-card.node-card .card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  margin: 0 0 0 56px;
+.node-card.node-card .node-state {
+  flex: 0 0 auto;
 }
 
-.node-card.node-card .compact-meta-row:first-child {
-  position: absolute;
-  top: 17px;
-  right: 18px;
-  z-index: 2;
-  display: block;
-}
-
-.node-card.node-card .compact-meta-row:first-child .compact-label {
-  display: none;
-}
-
-.node-card.node-card .compact-meta-row:first-child .node-meta-pills {
+.node-card.node-card .node-state-row {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 10px;
 }
 
-.node-card.node-card .meta-chip {
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(148, 163, 184, 0.08);
+:deep(.node-card.node-card .node-remove) {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.node-card.node-card .status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--text-secondary);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 650;
   line-height: 1;
+  white-space: nowrap;
 }
 
-.node-card.node-card .meta-chip.online {
-  border-color: rgba(16, 185, 129, 0.2);
-  background: rgba(16, 185, 129, 0.1);
+.node-card.node-card .status-label.online {
   color: var(--accent-green);
 }
 
-.node-card.node-card .meta-chip.offline {
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(148, 163, 184, 0.12);
+.node-card.node-card .status-label.offline {
   color: var(--text-muted);
 }
 
-.node-card.node-card .meta-chip.role.leader {
-  border-color: rgba(248, 113, 113, 0.2);
-  background: rgba(248, 113, 113, 0.1);
-  color: var(--accent-red);
-}
-
-.node-card.node-card .meta-chip.role.follower {
-  border-color: rgba(59, 130, 246, 0.2);
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--accent-blue);
-}
-
-.node-card.node-card .meta-chip.role.candidate {
-  border-color: rgba(245, 158, 11, 0.22);
-  background: rgba(245, 158, 11, 0.11);
-  color: var(--accent-orange);
-}
-
-.node-card.node-card .meta-chip .status-dot {
-  width: 7px;
-  height: 7px;
+.node-card.node-card .status-label .status-dot {
+  width: 6px;
+  height: 6px;
   box-shadow: none;
 }
 
-.node-card.node-card .protocol-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
+.node-card.node-card .role-label {
+  padding-left: 0;
+  border-left: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.node-card.node-card .protocol-card {
+.node-card.node-card .role-label.leader {
+  color: var(--accent-red);
+}
+
+.node-card.node-card .role-label.candidate {
+  color: var(--accent-orange);
+}
+
+.node-card.node-card .card-body {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 12px 9px 17px;
+  border-top: 0;
+  background: transparent;
+}
+
+.node-card.node-card .endpoint-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  min-height: 56px;
+  min-width: 0;
+  align-content: center;
+}
+
+.node-card.node-card .endpoint-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(148, 163, 184, 0.055);
-  box-shadow: none;
+  min-height: 25px;
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  background: transparent;
 }
 
-.node-card.node-card .protocol-card.http {
-  border-color: rgba(59, 130, 246, 0.16);
+.node-card.node-card .endpoint-kind {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-.node-card.node-card .protocol-card.grpc {
-  border-color: rgba(16, 185, 129, 0.16);
+.node-card.node-card .endpoint-item.http {
+  border-color: rgba(59, 130, 246, 0.18);
+  background: rgba(59, 130, 246, 0.045);
 }
 
-.node-card.node-card .protocol-name {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+.node-card.node-card .endpoint-item.http .endpoint-kind {
+  color: var(--accent-blue);
 }
 
-.node-card.node-card .protocol-port {
+.node-card.node-card .endpoint-item.grpc {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(16, 185, 129, 0.045);
+}
+
+.node-card.node-card .endpoint-item.grpc .endpoint-kind {
+  color: var(--accent-green);
+}
+
+.node-card.node-card .endpoint-item.raft {
+  border-color: rgba(251, 146, 60, 0.2);
+  background: rgba(251, 146, 60, 0.05);
+}
+
+.node-card.node-card .endpoint-item.raft .endpoint-kind {
+  color: var(--accent-orange);
+}
+
+.node-card.node-card .endpoint-item.quic {
+  border-color: rgba(6, 182, 212, 0.2);
+  background: rgba(6, 182, 212, 0.05);
+}
+
+.node-card.node-card .endpoint-item.quic .endpoint-kind {
+  color: #0891b2;
+}
+
+.node-card.node-card .endpoint-value {
   min-width: 0;
+  overflow: hidden;
   color: var(--text-primary);
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
-  font-size: 13px;
-  font-weight: 800;
-  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3560,9 +3644,9 @@ onMounted(fetchCluster)
 .node-card.node-card .card-footer {
   display: none;
   justify-content: flex-end;
-  padding: 2px 0 0;
-  margin: 0 0 0 56px;
-  border: 0;
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-color);
 }
 
 :deep(.card-actions .el-button) {
@@ -3581,45 +3665,35 @@ onMounted(fetchCluster)
   display: none;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1320px) {
   .card-grid.card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    justify-content: stretch;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 980px) {
+  .card-grid.card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 640px) {
   .card-grid.card-grid {
     grid-template-columns: 1fr;
-  }
-
-  .node-card.node-card {
-    gap: 12px;
-    padding: 16px;
   }
 
   .node-card.node-card .card-head {
-    padding-right: 0;
+    align-items: flex-start;
+    gap: 8px;
   }
 
-  .node-card.node-card .compact-meta-row:first-child {
-    position: static;
-    margin-left: 52px;
+  .node-card.node-card .node-state {
+    width: auto;
   }
 
-  .node-card.node-card .compact-meta-row:first-child .node-meta-pills {
-    justify-content: flex-start;
-  }
-
-  .node-card.node-card .card-body,
-  .node-card.node-card .card-footer {
-    margin-left: 52px;
-  }
-}
-
-@media (max-width: 520px) {
-  .node-card.node-card .protocol-grid {
-    grid-template-columns: 1fr;
+  .node-card.node-card .card-body {
+    padding-right: 12px;
   }
 }
 </style>

@@ -615,7 +615,7 @@ onMounted(fetchConfigs)
   padding: 0 10px;
   border: 0;
   border-radius: 4px;
-  background: var(--control-muted-bg);
+  background: transparent;
   color: var(--text-muted);
   font-family: inherit;
   font-size: 13px;
@@ -624,8 +624,8 @@ onMounted(fetchConfigs)
 }
 
 .pill-group button.active {
-  color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.12);
+  background: var(--toolbar-active-bg);
+  color: var(--toolbar-active-text);
 }
 
 .pill-group span {

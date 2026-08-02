@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { FolderOpened, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Delete, EditPen, FolderOpened, Grid, List as ListIcon, Plus, RefreshLeft, Search } from '@element-plus/icons-vue'
 import {
   createNamespace,
   deleteNamespace,
@@ -318,21 +318,24 @@ onMounted(() => {
           <div v-if="viewMode === 'list'" class="table-wrap">
             <el-table :data="pagedRows" height="100%" style="width: 100%; font-size: 14px;">
               <el-table-column type="index" :label="text('序号', 'No.')" width="60" align="center" />
-              <el-table-column prop="name" :label="text('名称', 'Name')" min-width="160" />
-              <el-table-column :label="text('描述', 'Description')" min-width="260" show-overflow-tooltip>
+              <el-table-column prop="name" :label="text('名称', 'Name')" min-width="130" />
+              <el-table-column :label="text('描述', 'Description')" min-width="180" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ displayDescription(row) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="text('类型', 'Type')" width="120">
+              <el-table-column :label="text('类型', 'Type')" width="90">
                 <template #default="{ row }">
                   <el-tag :type="namespaceType(row) === 'system' ? 'warning' : 'success'" size="small" effect="plain">
                     {{ namespaceTypeLabel(row) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="createdAt" :label="text('创建时间', 'Created At')" width="190" />
-              <el-table-column :label="text('操作', 'Actions')" width="150" fixed="right">
+              <el-table-column prop="createdAt" :label="text('创建时间', 'Created At')" width="168" />
+              <el-table-column :label="text('更新时间', 'Updated At')" width="168">
+                <template #default="{ row }">{{ displayUpdatedAt(row) }}</template>
+              </el-table-column>
+              <el-table-column :label="text('操作', 'Actions')" width="120" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
                   <el-button
@@ -376,6 +379,27 @@ onMounted(() => {
                     <p class="card-subtitle">{{ displayDescription(row) }}</p>
                   </div>
                 </div>
+                <div class="card-actions card-head-actions">
+                  <el-button
+                    class="card-action-btn"
+                    link
+                    type="primary"
+                    :icon="EditPen"
+                    :title="text('编辑', 'Edit')"
+                    :aria-label="text('编辑', 'Edit')"
+                    @click.stop="handleEdit(row)"
+                  />
+                  <el-button
+                    v-if="row.name !== 'default'"
+                    class="card-action-btn"
+                    link
+                    type="danger"
+                    :icon="Delete"
+                    :title="text('删除', 'Delete')"
+                    :aria-label="text('删除', 'Delete')"
+                    @click.stop="handleDelete(row)"
+                  />
+                </div>
               </div>
 
               <div class="card-body">
@@ -389,19 +413,6 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="card-footer">
-                <div class="card-actions">
-                  <el-button link type="primary" @click="handleEdit(row)">{{ text('编辑', 'Edit') }}</el-button>
-                  <el-button
-                    v-if="row.name !== 'default'"
-                    link
-                    type="danger"
-                    @click="handleDelete(row)"
-                  >
-                    {{ text('删除', 'Delete') }}
-                  </el-button>
-                </div>
-              </div>
             </article>
           </div>
 
@@ -549,10 +560,10 @@ onMounted(() => {
 .pill-group {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 4px;
+  padding: 0;
   border-radius: 6px;
-  background: var(--control-muted-bg);
+  background: transparent;
 }
 
 .pill-group button {
@@ -574,12 +585,12 @@ onMounted(() => {
 
 .pill-group button:hover {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--toolbar-active-hover-bg);
 }
 
 .pill-group button.active {
-  background: rgba(59, 130, 246, 0.12);
-  color: var(--accent-blue);
+  background: var(--toolbar-active-bg);
+  color: var(--toolbar-active-text);
   font-weight: 600;
 }
 
@@ -595,13 +606,23 @@ onMounted(() => {
 }
 
 .icon-pills button {
-  padding: 6px 10px;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
 }
 
 .add-btn {
   height: 32px;
   border-radius: 8px;
   padding: 0 16px;
+  border-color: var(--toolbar-action-bg);
+  background: var(--toolbar-action-bg);
+}
+
+.add-btn:hover,
+.add-btn:focus {
+  border-color: var(--toolbar-action-hover-bg);
+  background: var(--toolbar-action-hover-bg);
 }
 
 .svc-content {
@@ -726,11 +747,11 @@ onMounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  min-height: 160px;
-  border-radius: 10px;
-  background: var(--bg-secondary);
+  gap: 8px;
+  padding: 12px 12px 11px 15px;
+  min-height: 132px;
+  border-radius: 8px;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   box-shadow: none;
   overflow: hidden;
@@ -739,30 +760,30 @@ onMounted(() => {
 
 .info-card:hover {
   border-color: rgba(59, 130, 246, 0.32);
-  background: rgba(59, 130, 246, 0.03);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+  background: var(--bg-card);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.055);
 }
 
 .info-card:focus-within,
 .info-card:active {
   border-color: rgba(59, 130, 246, 0.52);
-  background: rgba(59, 130, 246, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.11);
 }
 
 .info-card.is-selected {
   border-color: rgba(59, 130, 246, 0.52);
-  background: rgba(59, 130, 246, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.11);
 }
 
 .card-accent {
   position: absolute;
-  inset: 0 auto auto 0;
-  width: 84px;
-  height: 3px;
+  inset: 12px auto 12px 0;
+  width: 3px;
+  height: auto;
   background: rgba(59, 130, 246, 0.35);
-  border-radius: 0 0 999px 0;
+  border-radius: 0 3px 3px 0;
 }
 
 .system-card {
@@ -776,6 +797,10 @@ onMounted(() => {
 .card-head {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .card-identity {
@@ -786,17 +811,17 @@ onMounted(() => {
 }
 
 .card-symbol {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(59, 130, 246, 0.12);
   border: 1px solid rgba(59, 130, 246, 0.12);
   color: var(--accent-blue);
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .system-card .card-symbol {
@@ -868,15 +893,6 @@ onMounted(() => {
   word-break: break-word;
 }
 
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color);
-}
-
 .card-actions {
   display: flex;
   align-items: center;
@@ -884,9 +900,15 @@ onMounted(() => {
   margin-left: auto;
 }
 
+.card-head-actions {
+  flex: 0 0 auto;
+}
+
 :deep(.card-actions .el-button) {
+  width: 24px;
+  height: 24px;
   min-height: 24px;
-  padding: 2px 4px;
+  padding: 0;
   font-size: 12px !important;
   font-weight: 600;
   line-height: 1.35;

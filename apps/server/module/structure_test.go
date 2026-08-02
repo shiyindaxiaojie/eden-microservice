@@ -14,6 +14,7 @@ func TestMonorepoModuleLayout(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
 	wantModules := map[string]string{
 		"packages":      "eden-microservice/packages",
+		"examples":      "eden-microservice/examples",
 		"apps/registry": "eden-microservice/apps/registry",
 		"apps/config":   "eden-microservice/apps/config",
 		"apps/gateway":  "eden-microservice/apps/gateway",
@@ -66,6 +67,23 @@ func TestMonorepoModuleLayout(t *testing.T) {
 		path := filepath.Join(repoRoot, obsolete)
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("obsolete repository directory must not exist: %s", path)
+		}
+	}
+
+	for _, category := range []string{"cluster", "config", "service-discovery"} {
+		path := filepath.Join(repoRoot, "examples", category)
+		if info, err := os.Stat(path); err != nil || !info.IsDir() {
+			t.Errorf("root example category is missing: %s", path)
+		}
+	}
+
+	legacyExamples, err := filepath.Glob(filepath.Join(repoRoot, "apps", "*", "examples"))
+	if err != nil {
+		t.Fatalf("find legacy application example directories: %v", err)
+	}
+	for _, path := range legacyExamples {
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			t.Errorf("application examples must live under the repository root: %s", path)
 		}
 	}
 }

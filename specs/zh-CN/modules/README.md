@@ -2,7 +2,7 @@
 
 ## 1. 工作区
 
-根目录 `go.work` 组合六个后端 module 和一个共享 module：
+根目录 `go.work` 组合六个后端 module、一个共享 module 和一个独立示例 module：
 
 | 模块 | Go module | 责任 |
 | --- | --- | --- |
@@ -13,8 +13,12 @@
 | 集群管理 | `eden-microservice/apps/cluster` | AP 复制、CP Raft、成员关系与运行设置 |
 | 聚合服务 | `eden-microservice/apps/server` | 组合领域模块，装配统一 HTTP、gRPC、QUIC 和网关监听器 |
 | 共享包 | `eden-microservice/packages` | 进程配置、加密、指标、复制协议和通用传输基础设施 |
+| 示例 | `eden-microservice/examples` | 可独立编译运行的集成与迁移示例，不承载生产领域实现 |
 
 控制台位于 `apps/ui`，不单独加入 Go workspace。
+
+可运行示例统一位于根目录 `examples`，以便从仓库首页直接发现。示例使用独立 Go module，
+可以依赖领域 module 的公开 API 或 SDK，但不得依赖任何 `internal` 包。
 
 ## 2. 目录约定
 
@@ -44,6 +48,6 @@ apps/<domain>
 
 ## 4. 构建与验证
 
-根目录先执行 `go work sync`。每个 Go module 必须能在自身目录运行 `go test ./...`；共享包变更
+根目录先执行 `go work sync`。每个 Go module（包括 `examples`）必须能在自身目录运行 `go test ./...`；共享包变更
 需要验证全部业务 module。结构契约测试必须确认 module 清单完整，并拒绝跨 module 的
 `internal` import。

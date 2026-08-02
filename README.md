@@ -333,12 +333,14 @@ For full deployment details, see [Deployment Guide](./docs/deployment.md).
 
 ## Client Integration
 
+Browse every runnable scenario from the [examples index](./examples/README.md), including cluster and configuration-center examples.
+
 | Integration path | Best fit | Example |
 | --- | --- | --- |
-| Focalors SDK | Go services, primary integration path | [Native integration example](./apps/registry/examples/service-discovery/native/README.md) |
-| Nacos compatibility | Existing Nacos Naming systems with minimal business code changes | [Nacos migration example](./apps/registry/examples/service-discovery/nacos/README.md) |
-| Consul compatibility | Existing Consul HTTP / SDK systems while keeping the original call model | [Consul migration example](./apps/registry/examples/service-discovery/consul/README.md) |
-| Custom gRPC / HTTP | External systems that integrate directly through public protocols | [Custom protocol example](./apps/registry/examples/service-discovery/custom/README.md) |
+| Focalors SDK | Go services, primary integration path | [Native integration example](./examples/service-discovery/native/README.md) |
+| Nacos compatibility | Existing Nacos Naming systems with minimal business code changes | [Nacos migration example](./examples/service-discovery/nacos/README.md) |
+| Consul compatibility | Existing Consul HTTP / SDK systems while keeping the original call model | [Consul migration example](./examples/service-discovery/consul/README.md) |
+| Custom gRPC / HTTP | External systems that integrate directly through public protocols | [Custom protocol example](./examples/service-discovery/custom/README.md) |
 
 ## Development Guide
 

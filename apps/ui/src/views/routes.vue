@@ -727,9 +727,9 @@ onMounted(() => {
 .toolbar-spacer { flex: 1; }
 .icon-btn { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; cursor: pointer; }
 .icon-btn:hover { color: var(--accent-blue); background: rgba(59, 130, 246, .08); }
-.pill-group { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: rgba(148, 163, 184, .1); }
+.pill-group { display: inline-flex; gap: 4px; padding: 0; border-radius: 6px; background: transparent; }
 .pill-group button { height: 30px; padding: 0 9px; border: 0; border-radius: 4px; color: var(--text-muted); background: transparent; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.pill-group button.active { color: var(--accent-blue); background: rgba(59, 130, 246, .12); }
+.pill-group button.active { background: var(--toolbar-active-bg); color: var(--toolbar-active-text); }
 .route-list { display: flex; flex: 1; flex-direction: column; padding-top: 18px; overflow: hidden; }
 :deep(.el-table) { flex: 1; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: transparent; --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); }
 :deep(.el-table th.el-table__cell), :deep(.el-table td.el-table__cell), :deep(.el-table__fixed-right), :deep(.el-table__fixed-right-patch) { background: transparent !important; }

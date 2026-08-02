@@ -67,6 +67,17 @@ func (s *Store) GetAPIKey(key string) (*APIKey, bool) {
 func (s *Store) AddUser(u *User) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now().Unix()
+	if u.CreatedAt == 0 {
+		if existing, ok := s.users[u.Username]; ok {
+			u.CreatedAt = existing.CreatedAt
+		} else {
+			u.CreatedAt = now
+		}
+	}
+	if u.UpdatedAt == 0 {
+		u.UpdatedAt = now
+	}
 	s.users[u.Username] = u
 }
 
@@ -167,16 +178,31 @@ func (s *Store) SeedBuiltInUsers(builtin []User) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	changed := false
+	now := time.Now().Unix()
 	for _, u := range builtin {
 		u := u
 		u.IsBuiltIn = true
+		if u.CreatedAt == 0 {
+			u.CreatedAt = now
+		}
+		if u.UpdatedAt == 0 {
+			u.UpdatedAt = now
+		}
 		if existing, ok := s.users[u.Username]; !ok {
 			s.users[u.Username] = &u
 			changed = true
 		} else {
+			updated := false
 			if existing.Role != u.Role {
 				existing.Role = u.Role
+				updated = true
+			}
+			if !existing.IsBuiltIn {
 				existing.IsBuiltIn = true
+				updated = true
+			}
+			if updated {
+				existing.UpdatedAt = now
 				changed = true
 			}
 		}
