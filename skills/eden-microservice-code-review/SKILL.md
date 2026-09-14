@@ -1,13 +1,14 @@
 ---
 name: eden-microservice-code-review
-description: Review a diff or change for contract fidelity and engineering risk. Use when working on Eden Microservice.
+description: Review diffs and implementations for contract fidelity and engineering risk.
 ---
 
-# Eden Microservice Code Review
+# eden-microservice-code-review
 
-Review is read-only unless fixes are requested.
+Follow root `AGENTS.md`; review is read-only unless fixes are requested.
 
-1. Contract pass: check the governing specification, identity, authorization, configuration, and cross-layer alignment.
-2. Engineering pass: inspect scoped diff and tests for regressions, boundary violations, unsafe defaults, incomplete errors, and needless complexity.
-3. Report only actionable findings with file/line evidence and a concrete failure mode.
-4. State remaining verification gaps instead of inventing findings.
+1. Contract pass: check behavior, identity, authorization, configuration, and cross-layer alignment.
+2. Engineering pass: check scoped diff/tests for regressions, boundary violations, unsafe defaults,
+   incomplete errors, validation gaps, and needless complexity.
+3. Report supported, actionable findings by impact with file/line evidence and a concrete failure
+   mode. State verification gaps; do not invent findings or turn style preferences into defects.

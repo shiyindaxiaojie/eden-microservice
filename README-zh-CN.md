@@ -253,6 +253,23 @@ sequenceDiagram
 
 ## 快速启动
 
+Windows 可使用根目录的 PowerShell 入口统一管理前后端（需要 Go、Node.js 和 npm）：
+
+```powershell
+./entrypoint.ps1 build
+./entrypoint.ps1 start
+./entrypoint.ps1 stop
+./entrypoint.ps1 restart
+```
+
+`start` 在后端产物缺失时自动构建；`restart` 停止后重新启动现有产物，源码变更后请先 `stop`、`build`。
+首次需要前端依赖时执行 `npm ci`；可用 `-SkipInstall` 禁止自动安装，用 `-NodeExe` 指定 Node 可执行文件。
+后端沿用默认配置文件 `apps/server/config/eden-microservice.yaml`；前端默认地址为 `http://127.0.0.1:2019`，
+可通过 `VITE_PORT` 和 `VITE_PROXY_TARGET` 调整前端端口及后端代理目标。
+脚本后台启动进程，检查后端 `/health` 和前端页面，并输出实际监听地址。
+构建产物、PID 和日志保存在 `.tmp/eden-microservice/`；后端业务数据仍按服务端配置保存。
+`stop` 仅管理 PID 文件指向且进程身份匹配的实例。入口回归检查：`pwsh -NoProfile -File scripts/test-entrypoint.ps1`。
+
 启动服务端：
 
 ```bash

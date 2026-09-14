@@ -255,6 +255,25 @@ sequenceDiagram
 
 ## Quick Start
 
+On Windows, use the root PowerShell entrypoint to manage the server and UI (requires Go, Node.js, and npm):
+
+```powershell
+./entrypoint.ps1 build
+./entrypoint.ps1 start
+./entrypoint.ps1 stop
+./entrypoint.ps1 restart
+```
+
+`start` builds automatically when the server binary is missing. `restart` stops and starts existing artifacts;
+after source changes, run `stop` and `build` first. Missing UI dependencies are installed with `npm ci`.
+Use `-SkipInstall` to disable installation or `-NodeExe` to select the Node executable.
+The server uses its default configuration file, `apps/server/config/eden-microservice.yaml`.
+The UI defaults to `http://127.0.0.1:2019`; set `VITE_PORT` and `VITE_PROXY_TARGET` to override its port and backend proxy target.
+Processes run in the background. The script checks server `/health` and the UI page, then prints actual listening addresses.
+Build artifacts, PID files, and logs live in `.tmp/eden-microservice/`; server data follows server configuration.
+`stop` only manages instances whose PID files and process identities match.
+Run entrypoint regression checks with `pwsh -NoProfile -File scripts/test-entrypoint.ps1`.
+
 Start the server:
 
 ```bash

@@ -1,13 +1,13 @@
 ---
 name: eden-microservice-tdd
-description: Implement behavior changes and bug fixes test-first. Use when working on Eden Microservice.
+description: Implement observable behavior changes and fixes test-first, excluding documentation-only edits.
 ---
 
-# Eden Microservice Test-Driven Development
+# eden-microservice-tdd
 
-1. Read the governing specification, implementation/tests, and pitfalls.
-2. Choose the highest existing public seam; prefer an existing boundary over a new abstraction.
-3. Write and run one focused failing behavior test.
-4. Make the smallest production change that turns it green.
-5. Refactor only while green, then run required module-level verification.
-6. Align API, types, routes, storage, and UI when the behavior crosses layers.
+Follow root `AGENTS.md`.
+
+1. Choose the highest existing public test boundary; avoid a new abstraction when one exists.
+2. Write and run a focused failing behavior test, then make the smallest change to pass it.
+3. Refactor only while green; run required verification. Test observable outcomes, not private calls.
+4. Align contracts, API, types, routes, storage, and UI for cross-layer changes.

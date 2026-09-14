@@ -1,56 +1,40 @@
 # AGENTS.md
 
-This file guides Codex, Claude Code, and compatible agents working in the
-`eden-microservice` repository. Human-facing product docs live in `README.md` and
-`docs/`; behavior contracts for agents live in `specs/`.
-`CLAUDE.md` references this file; do not create conflicting root-level instructions.
-Do not send optional process narration. Keep this file under 200 lines.
+Shared instructions for Codex, Claude Code, and compatible agents. `CLAUDE.md` references
+this file; keep it tool-neutral, under 200 lines, without duplicate root instructions.
 
 ## Start Every Task
 
-1. Read this file, the applicable specification, `skills/eden-microservice/SKILL.md`, and relevant
-   entries in `specs/zh-CN/engineering/agent-pitfalls.md`. Read `CONTEXT.md` only when
-   terminology is relevant or ambiguous.
-2. Run `git status --short`; preserve user changes outside the task.
-3. Read affected implementation and tests before proposing or editing.
-4. Keep explanation, review, and diagnosis read-only by default; start behavior changes with a
-   focused test.
-5. For failures, establish a stable reproduction and test one falsifiable hypothesis at a time.
+1. Run `git status --short`; preserve unrelated user changes.
+2. Follow `skills/eden-microservice/SKILL.md`. Read the applicable contract and affected code/tests;
+   search relevant entries in `specs/zh-CN/engineering/agent-pitfalls.md`. Read `CONTEXT.md`
+   only for relevant or ambiguous terminology. Reuse already-read, unchanged context.
+3. Explanation, review, and diagnosis are read-only unless changes are requested. Complete
+   authorized work with routine in-scope decisions; ask only when a missing choice materially
+   changes behavior or authority.
 
-## AI Contribution Guidelines
+## Engineering Loop
 
-- Spec-first coding is mandatory. Before changing behavior, APIs, SDKs,
-  storage, runtime flow, compatibility adapters, or console semantics, read the
-  related files under [`specs/`](./specs/README.md).
-- If code and specs disagree, do not silently make the code the source of
-  truth. Update the spec in the same change or call out the mismatch before
-  implementation.
-- Keep changes scoped to the touched domain. Avoid broad package renames,
-  unrelated UI restyling, or storage rewrites unless the requested work needs
-  them.
-- Respect existing user changes in the working tree. Do not revert files you did
-  not intentionally change.
-- Prefer tests before implementation for behavior changes. For Go, add focused
-  tests near the package under change; for the web UI, run type checking and
-  build when views or API contracts change.
-- Put temporary artifacts, screenshots, logs, and drafts in `.tmp/`; never commit secrets or
-  local runtime configuration.
+- Specifications govern behavior, APIs, storage, runtime, and console semantics. Resolve
+  code/spec mismatches explicitly; update the contract in the same change when it changes.
+- Keep changes in the affected domain; no unrelated renames, restyling, or rewrites.
+- Reproduce failures before source edits; test one falsifiable hypothesis at a time.
+- Behavior changes start with a focused failing test. Run required verification once;
+  broaden or repeat only for changes, failures, or unresolved risk. Documentation-only edits
+  use document checks, not application builds.
+- Use scoped searches and relevant sections; do not load entire spec trees or pitfall registers.
+- Skip optional process narration. Report the scoped result and verification commands/results
+  concisely, with evidence for success and any remaining gaps.
+- Record pitfalls only for reusable causes/prevention confirmed by user correction, test,
+  or review; exclude exploratory failures, transient issues, and personal settings.
+- Put temporary artifacts, screenshots, logs, and drafts in `.tmp/`; never commit secrets
+  or local runtime configuration.
 
 ## Product Boundary
 
-`eden-microservice` is a lightweight microservice control plane. The target
-scope is to replace these common dependencies in small and medium deployments:
-
-- Nacos Naming registry
-- Nacos Config configuration center
-- Spring Cloud Gateway style API gateway
-- ZooKeeper registry usage
-- Consul registry usage
-
-The project currently contains historical `eden-registry` / `Focalors` naming in
-module paths, docs, and UI text. Do not mass-rename these as a drive-by change.
-Treat product renaming as a separate migration unless the current task is the
-rename itself.
+`eden-microservice` is a lightweight control plane replacing Nacos Naming/Config,
+Spring Cloud Gateway-style routing, and ZooKeeper/Consul registry usage in small/medium deployments.
+Historical `eden-registry` / `Focalors` names require a separate migration; no drive-by mass renames.
 
 ## Current Architecture
 
@@ -76,23 +60,13 @@ Use `apps/config/internal/configcenter` for control-plane configuration resource
 
 ## Build And Test Commands
 
-```bash
-go work sync
-go test ./packages/...
-go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...
-go test ./examples/...
-go run ./apps/server/cmd/server
-go run ./apps/server/cmd/server -config apps/server/config/eden-microservice.yaml.example
-```
-
-```bash
-cd apps/ui
-npm run check:i18n
-npm run build
-```
-
-For targeted work, enter the owning module and run the smallest relevant package first, then
-`go test ./...` for that module. Verify every affected module when shared behavior changes.
+Run the owning Go package first, then `go test ./...` from that module; shared changes require
+every affected module. Workspace-wide checks, when needed: `go test ./packages/...`,
+`go test ./apps/auth/... ./apps/cluster/... ./apps/config/... ./apps/gateway/... ./apps/registry/... ./apps/server/...`,
+and `go test ./examples/...`. Use `go work sync` for workspace dependency synchronization.
+Startup: `go run ./apps/server/cmd/server` (optional
+`-config apps/server/config/eden-microservice.yaml.example`).
+For UI views/API changes, run `npm run check:i18n` and `npm run build` in `apps/ui`.
 
 ## API Standards
 
@@ -125,43 +99,13 @@ client ecosystem, even when that differs from native APIs.
 
 ## Console Menu Direction
 
-The control plane should expose configuration and gateway routing as first-class
-modules:
+Keep first-level Overview, Services, Configs, Routes, Namespaces, Nodes, RBAC, and Settings.
+Configs and Routes are separate control-plane domains; do not nest them under Services.
 
-1. `概览` / Overview
-2. `服务列表` / Services
-3. `配置管理` / Configs
-4. `路由管理` / Routes
-5. `命名空间` / Namespaces
-6. `节点管理` / Nodes
-7. `访问控制` / RBAC
-8. `系统设置` / Settings
+## Specifications and Skills
 
-`配置管理` and `路由管理` should not be nested under Services. They are separate
-control-plane domains.
-
-## Authoritative Specs
-
-Read the relevant spec before changing a domain:
-
-- Top-level design: [`specs/zh-CN/design/eden-microservice-design-spec.md`](./specs/zh-CN/design/eden-microservice-design-spec.md)
-- Resource model: [`specs/zh-CN/design/resource-model-spec.md`](./specs/zh-CN/design/resource-model-spec.md)
-- Config center: [`specs/zh-CN/config/README.md`](./specs/zh-CN/config/README.md)
-- API gateway: [`specs/zh-CN/gateway/README.md`](./specs/zh-CN/gateway/README.md)
-- HTTP APIs: [`specs/zh-CN/http-api/api-spec.md`](./specs/zh-CN/http-api/api-spec.md)
-- Console: [`specs/zh-CN/console/console-spec.md`](./specs/zh-CN/console/console-spec.md)
-- Module boundaries: [`specs/zh-CN/modules/README.md`](./specs/zh-CN/modules/README.md)
-
-## Focused Skills
-
-- [`eden-microservice-diagnose`](./skills/eden-microservice-diagnose/SKILL.md): reproduce and isolate failures before fixes.
-- [`eden-microservice-tdd`](./skills/eden-microservice-tdd/SKILL.md): implement behavior at a tested public seam.
-- [`eden-microservice-code-review`](./skills/eden-microservice-code-review/SKILL.md): review contract fidelity and engineering risk separately.
-- [`eden-microservice-domain-modeling`](./skills/eden-microservice-domain-modeling/SKILL.md): resolve ownership and terminology before cross-domain changes.
-
-## Specifications / 规范
-
-- Choose the specification language requested by the task; never infer it from the operating system.
-- [English index](./specs/en/README.md) · [简体中文索引](./specs/zh-CN/README.md)
-- Keep parallel contracts aligned when both exist. Current product contracts are Chinese-canonical; do
-  not introduce partial English translations in unrelated changes.
+Use [specs](./specs/README.md) to locate the governing document only when unknown.
+Follow the requested language, never the OS: [English](./specs/en/README.md),
+[简体中文](./specs/zh-CN/README.md). Product contracts are Chinese-canonical;
+align existing parallel contracts, without partial translations in unrelated changes.
+The repository router selects diagnosis, TDD, review, or domain modeling as needed.

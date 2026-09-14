@@ -1,17 +1,20 @@
 ---
 name: eden-microservice
-description: Route repository engineering tasks to focused workflows. Use when working on Eden Microservice.
+description: Route eden-microservice engineering work to relevant contracts and focused skills.
 ---
 
-# Eden Microservice Router
+# eden-microservice Router
 
-Read `AGENTS.md`, applicable specifications, affected code/tests, and matching pitfalls. Preserve unrelated changes.
+Follow root `AGENTS.md`; reuse unchanged context. Read only the matching
+`skills/<name>/SKILL.md` or plugin copy, not both. For fixes, diagnose then use TDD;
+documentation-only work needs no extra engineering skill.
 
-| Request | Use |
+| Task | Skill |
 | --- | --- |
-| Failure, regression, incorrect output, or slowness | `eden-microservice-diagnose` |
-| Behavior change or bug fix | `eden-microservice-tdd` |
+| Failure or slowness | `eden-microservice-diagnose` |
+| Behavior change or authorized fix | `eden-microservice-tdd` |
 | Review or safety assessment | `eden-microservice-code-review` |
-| New concept, ownership conflict, or ambiguous vocabulary | `eden-microservice-domain-modeling` |
+| New concept, ownership, ambiguous term | `eden-microservice-domain-modeling` |
 
-Use the smallest matching skill. Make routine in-scope decisions without a clarification loop; ask only when a missing choice changes behavior or authority.
+Use `specs/README.md` only to locate an unknown contract. Read relevant sections and
+dependencies in the selected language; search scoped pitfalls instead of loading all entries.

@@ -1,12 +1,13 @@
 ---
 name: eden-microservice-domain-modeling
-description: Clarify domain language, ownership, identity, and durable decisions. Use when working on Eden Microservice.
+description: Resolve new or ambiguous terms, ownership, identity, and durable design decisions.
 ---
 
-# Eden Microservice Domain Modeling
+# eden-microservice-domain-modeling
 
-1. Read `CONTEXT.md`, relevant specifications, and affected code.
-2. Define one canonical term, owner, source of truth, identity fields, lifecycle, and external interactions.
-3. Reject ambiguous aliases and preserve existing API, storage, and console vocabulary.
-4. Prefer owned behavior and a clear public interface over cross-module implementation imports.
-5. Update `CONTEXT.md` only for confirmed reusable terms; update specifications when a contract changes.
+Follow root `AGENTS.md`; read relevant `CONTEXT.md`, contract sections, and code.
+
+1. Define one canonical term, owner, source of truth, identity, lifecycle, and external interactions.
+2. Reject ambiguous aliases; preserve API/storage/console vocabulary. Prefer owned behavior and
+   explicit public interfaces over cross-module implementation imports.
+3. Update `CONTEXT.md` only for confirmed reusable terms and specifications for contract changes.
